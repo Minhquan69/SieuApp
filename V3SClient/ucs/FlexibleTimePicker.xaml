@@ -1,0 +1,116 @@
+<UserControl x:Class="V3SClient.ucs.FlexibleTimePicker" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" mc:Ignorable="d" d:DesignHeight="400" d:DesignWidth="700">
+    <UserControl.Resources><ResourceDictionary><ResourceDictionary.MergedDictionaries><ResourceDictionary Source="/styles/flexible_time_picker_styles.xaml" /></ResourceDictionary.MergedDictionaries>
+        <!-- Sidebar Button style -->
+        
+
+        <!-- Day Button Style -->
+        
+    </ResourceDictionary></UserControl.Resources>
+
+    <Border Background="#121212" BorderBrush="#333" BorderThickness="1" CornerRadius="8">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="160" /> <!-- Sidebar -->
+                <ColumnDefinition Width="*" />   <!-- Calendars -->
+            </Grid.ColumnDefinitions>
+
+            <!-- Sidebar -->
+            <Border Grid.Column="0" BorderBrush="#222" BorderThickness="0,0,1,0" Padding="5">
+                <StackPanel>
+                    <Button Content="7 ngày qua" Style="{StaticResource FlexibleTimePickerSidebarButtonStyle}" Click="Preset_Click" Tag="7d" />
+                    <Button Content="14 ngày qua" Style="{StaticResource FlexibleTimePickerSidebarButtonStyle}" Click="Preset_Click" Tag="14d" />
+                    <Button Content="30 ngày qua" Style="{StaticResource FlexibleTimePickerSidebarButtonStyle}" Click="Preset_Click" Tag="30d" />
+                    <Button Content="Tháng trước" Style="{StaticResource FlexibleTimePickerSidebarButtonStyle}" Click="Preset_Click" Tag="last_month" />
+                    <Button Content="Năm trước" Style="{StaticResource FlexibleTimePickerSidebarButtonStyle}" Click="Preset_Click" Tag="last_year" />
+                    <Button Content="Tùy chọn" Style="{StaticResource FlexibleTimePickerSidebarButtonStyle}" Click="Preset_Click" Tag="custom" />
+                </StackPanel>
+            </Border>
+
+            <!-- Calendars Container -->
+            <Grid Grid.Column="1" Margin="10">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" /> <!-- Header with selected range -->
+                    <RowDefinition Height="*" />    <!-- Calendars -->
+                    <RowDefinition Height="Auto" /> <!-- Time selection/Footer -->
+                </Grid.RowDefinitions>
+
+                <!-- Range Header -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,15">
+                    <TextBlock x:Name="txtStartDisplay" Text="Ngày bắt đầu" Foreground="#3D85C6" FontSize="14" FontWeight="Bold" />
+                    <TextBlock Text=" → " Foreground="#555" Margin="10,0" FontSize="14" />
+                    <TextBlock x:Name="txtEndDisplay" Text="Ngày kết thúc" Foreground="#3D85C6" FontSize="14" FontWeight="Bold" />
+                </StackPanel>
+
+                <Grid Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="20" /> <!-- Spacer -->
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Left Calendar -->
+                    <StackPanel Grid.Column="0">
+                        <Grid Margin="0,0,0,10">
+                            <Button Style="{StaticResource FlexibleTimePickerSidebarButtonStyle}" Content="&lt;" HorizontalAlignment="Left" Width="30" Click="PrevMonth_Click" />
+                            <TextBlock x:Name="txtMonthLeft" Text="Tháng 2 2024" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" />
+                        </Grid>
+                        <UniformGrid Columns="7" Margin="0,5">
+                            <TextBlock Text="CN" Foreground="#555" HorizontalAlignment="Center" />
+                            <TextBlock Text="T2" Foreground="#555" HorizontalAlignment="Center" />
+                            <TextBlock Text="T3" Foreground="#555" HorizontalAlignment="Center" />
+                            <TextBlock Text="T4" Foreground="#555" HorizontalAlignment="Center" />
+                            <TextBlock Text="T5" Foreground="#555" HorizontalAlignment="Center" />
+                            <TextBlock Text="T6" Foreground="#555" HorizontalAlignment="Center" />
+                            <TextBlock Text="T7" Foreground="#555" HorizontalAlignment="Center" />
+                        </UniformGrid>
+                        <ItemsControl x:Name="gridLeft">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <UniformGrid Columns="7" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </StackPanel>
+
+                    <!-- Right Calendar -->
+                    <StackPanel Grid.Column="2">
+                        <Grid Margin="0,0,0,10">
+                            <TextBlock x:Name="txtMonthRight" Text="Tháng 3 2024" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" />
+                            <Button Style="{StaticResource FlexibleTimePickerSidebarButtonStyle}" Content="&gt;" HorizontalAlignment="Right" Width="30" Click="NextMonth_Click" />
+                        </Grid>
+                        <UniformGrid Columns="7" Margin="0,5">
+                            <TextBlock Text="CN" Foreground="#555" HorizontalAlignment="Center" />
+                            <TextBlock Text="T2" Foreground="#555" HorizontalAlignment="Center" />
+                            <TextBlock Text="T3" Foreground="#555" HorizontalAlignment="Center" />
+                            <TextBlock Text="T4" Foreground="#555" HorizontalAlignment="Center" />
+                            <TextBlock Text="T5" Foreground="#555" HorizontalAlignment="Center" />
+                            <TextBlock Text="T6" Foreground="#555" HorizontalAlignment="Center" />
+                            <TextBlock Text="T7" Foreground="#555" HorizontalAlignment="Center" />
+                        </UniformGrid>
+                        <ItemsControl x:Name="gridRight">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <UniformGrid Columns="7" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Time & Footer -->
+                <Grid Grid.Row="2" Margin="0,15,0,0">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
+                        <TextBlock Text="Giờ:" Foreground="#777" VerticalAlignment="Center" Margin="0,0,10,0" />
+                        <TextBox x:Name="txtHour" Text="00" Width="30" Background="#222" Foreground="White" BorderBrush="#333" HorizontalContentAlignment="Center" />
+                        <TextBlock Text=":" Foreground="White" VerticalAlignment="Center" Margin="2,0" />
+                        <TextBox x:Name="txtMinute" Text="00" Width="30" Background="#222" Foreground="White" BorderBrush="#333" HorizontalContentAlignment="Center" />
+                    </StackPanel>
+                    
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Content="Đặt lại" Click="Reset_Click" Style="{StaticResource FlexibleTimePickerSidebarButtonStyle}" Foreground="#888" Margin="0,0,10,0" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Grid>
+    </Border>
+</UserControl>

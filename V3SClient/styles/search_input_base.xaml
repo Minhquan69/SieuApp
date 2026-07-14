@@ -1,0 +1,27 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:xctk="http://schemas.xceed.com/wpf/xaml/toolkit">
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="/styles/GradientBorder.xaml" />
+    </ResourceDictionary.MergedDictionaries>
+
+    <Style x:Key="DateTimeSpinnerBase" TargetType="xctk:ButtonSpinner">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="xctk:ButtonSpinner">
+                    <Border BorderThickness="1" CornerRadius="3,0,0,3" BorderBrush="#252830">
+                        <Grid>
+                            <ContentPresenter x:Name="Content" HorizontalAlignment="Left" VerticalAlignment="Center" />
+                            <StackPanel Orientation="Vertical" HorizontalAlignment="Right">
+                                <RepeatButton x:Name="PART_IncreaseButton" Content="+" Style="{StaticResource CustomizeRepeateButton}" />
+                                <RepeatButton x:Name="PART_DecreaseButton" Content="-" Style="{StaticResource CustomizeRepeateButton}" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="xctk:ButtonSpinner" BasedOn="{StaticResource DateTimeSpinnerBase}" />
+</ResourceDictionary>

@@ -1,0 +1,86 @@
+<Page x:Class="V3SClient.UI.Pages.ViewSearchCustom" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:xctk="http://schemas.xceed.com/wpf/xaml/toolkit" xmlns:local="clr-namespace:V3SClient.UI.Pages" xmlns:converters="clr-namespace:V3SClient.UI.Converters" mc:Ignorable="d" d:DesignHeight="800" d:DesignWidth="600" Title="ViewLogSearch">
+
+    <Page.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="../../styles/customize_textblock.xaml" />
+                <ResourceDictionary Source="../../styles/customize_combobox.xaml" />
+                <ResourceDictionary Source="../../styles/customize_datetimepicker.xaml" />
+                <ResourceDictionary Source="../../styles/gradientBorder.xaml" />
+                <ResourceDictionary Source="../../styles/customize_scrollviewer.xaml" />
+                
+            <ResourceDictionary Source="/styles/view_search_custom_styles.xaml" /></ResourceDictionary.MergedDictionaries>
+            <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+            
+        </ResourceDictionary>
+
+
+
+
+    </Page.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <!--where searching-->
+        <StackPanel Orientation="Vertical">
+            <StackPanel Orientation="Vertical" x:Name="panelContent1" Visibility="{Binding IsPanelContent1_Visible, Converter={StaticResource BoolToVisibilityConverter}}">
+                <TextBlock x:Name="lablel_Content_1" Text="Detect Type" Style="{StaticResource label_TextBlock }" />
+                <ComboBox Style="{StaticResource CustomComboBoxStyle}" Background="Transparent" Height="40" VerticalAlignment="Center" ItemContainerStyle="{StaticResource CustomComboBoxItemStyle}" x:Name="combox_Content_1" />
+            </StackPanel>
+            <StackPanel Orientation="Vertical" x:Name="panelContent2" Visibility="{Binding IsPanelContent2_Visible, Converter={StaticResource BoolToVisibilityConverter}}">
+                <TextBlock x:Name="lablel_Content_2" Text="Detect Type" Style="{StaticResource label_TextBlock }" />
+                <ComboBox Style="{StaticResource CustomComboBoxStyle}" Background="Transparent" Height="40" VerticalAlignment="Center" ItemContainerStyle="{StaticResource CustomComboBoxItemStyle}" x:Name="combox_Content_2" />
+            </StackPanel>
+            <StackPanel Margin="0,5,0,0" Orientation="Vertical" x:Name="panelContent3" Visibility="{Binding IsPanelContent3_Visible, Converter={StaticResource BoolToVisibilityConverter}}">
+                <TextBlock x:Name="lablel_Content_3" Text="ID search" Style="{StaticResource label_TextBlock }" />
+                <TextBox x:Name="txtIDSearch" Height="34" Margin="1,0,1,5" Background="Transparent" Foreground="#FFFFFF" CaretBrush="White" VerticalContentAlignment="Center" Opacity="0.8" BorderBrush="#252830" TextChanged="txtIDSearch_TextChanged" Text="*">
+                    <TextBox.Resources><ResourceDictionary Source="/styles/view_search_custom_scope01_styles.xaml" /></TextBox.Resources>
+                </TextBox>
+
+            </StackPanel>
+
+        </StackPanel>
+        <StackPanel Grid.Row="1">
+            <TextBlock Text="From" Style="{StaticResource label_TextBlock }" Margin="0,3,0,0" />
+            <xctk:DateTimePicker x:Name="datetimeFrom" Style="{StaticResource CustomizeDateTimePicker}" Opacity="0.6" />
+
+
+
+        </StackPanel>
+        <StackPanel Grid.Row="2">
+            <TextBlock Text="To" Style="{StaticResource label_TextBlock }" Margin="0,3,0,0" />
+            <xctk:DateTimePicker x:Name="datetimeTo" Style="{StaticResource CustomizeDateTimePicker}" Opacity="0.6" />
+        </StackPanel>
+
+        <Border Height="45" Grid.Row="3" Margin="0,6,0,3" Style="{StaticResource GrayBorder}" CornerRadius="5" x:Name="btnSearch" MouseLeftButtonDown="btnSearch_MouseLeftButtonDown" Opacity="0.95">
+            <TextBlock Text="Search" Style="{StaticResource label_TextBlock}" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="16" Foreground="#DDDDDD">
+
+            </TextBlock>
+        </Border>
+        <Grid Grid.Row="4" Margin="0,5,0,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="25" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="History" Grid.Row="0" Style="{StaticResource label_TextBlock }" VerticalAlignment="Bottom" />
+            <Border CornerRadius="3" Grid.Row="1" BorderBrush="#252830" BorderThickness="1" Margin="0,0,0,5" Padding="10" Opacity="0.8">
+                <ScrollViewer Style="{StaticResource CustomScrollViewerStyle}">
+                    <TextBlock x:Name="txtResultSearch" Style="{StaticResource label_TextBlock}" VerticalAlignment="Top" FontSize="12" />
+                </ScrollViewer>
+
+            </Border>
+            <Border Grid.Row="1" Width="60" Height="30" VerticalAlignment="Bottom" HorizontalAlignment="Right" Style="{StaticResource GrayBorder}" Margin="0,0,5,10" CornerRadius="5" x:Name="btnExportFiles" MouseLeftButtonDown="btnExportFiles_MouseLeftButtonDown">
+                <TextBlock Text="Export" Style="{StaticResource label_TextBlock}" VerticalAlignment="Center" HorizontalAlignment="Center" Background="Transparent" Foreground="#AAAAAA" />
+
+            </Border>
+
+        </Grid>
+
+    </Grid>
+</Page>

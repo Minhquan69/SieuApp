@@ -1,0 +1,34 @@
+﻿<Window x:Class="V3SClient.ucs.VideoPlayerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:V3SClient.ucs"
+        Title="Video Player Window"
+        Height="500"
+        Width="800"
+        WindowStartupLocation="CenterScreen"
+        Background="#FF1E1E1E">
+    <Grid>
+        <ContentControl x:Name="playerContainer"/>
+    </Grid>
+</Window>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

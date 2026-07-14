@@ -1,0 +1,235 @@
+<UserControl x:Class="V3SClient.ucs.ViewCamera"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:wf="clr-namespace:System.Windows.Forms;assembly=System.Windows.Forms"
+             xmlns:local="clr-namespace:V3SClient.ucs"
+             xmlns:wfi="clr-namespace:System.Windows.Forms.Integration;assembly=WindowsFormsIntegration"
+             d:DataContext="{d:DesignInstance Type=local:ViewCamera}"
+             mc:Ignorable="d"
+             d:DesignHeight="307"
+             d:DesignWidth="511">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="../styles/StyleCameraView.xaml" />
+                <ResourceDictionary Source="../styles/border_reseted.xaml" />
+                <ResourceDictionary Source="../styles/windowformhost.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <Border x:Name="DragOverlay" Style="{StaticResource Border_Reseted}"
+            BorderThickness="{Binding Path=CameraWarning}"
+            Background="Transparent"
+            Margin="0"
+            BorderBrush="OrangeRed" >
+        <Grid Margin="0.3">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="auto" />
+            </Grid.RowDefinitions>
+            <Grid Grid.Row="0">
+                <!-- Khu vực khai báo videoPanel-->
+                <Border Style="{StaticResource Border_Reseted}"
+                        IsHitTestVisible="False"
+                        Background="#0D0F12">
+                    <WindowsFormsHost x:Name="videoWindow"
+                                      Panel.ZIndex="1"
+                                      Background="{Binding ViewCamBackground}"
+                                      Margin="0"
+                                      IsHitTestVisible="False">
+                        <wf:Panel x:Name="VideoPanel"
+                                  Dock="Fill"
+                                  AutoSizeMode="GrowAndShrink" />
+                    </WindowsFormsHost>
+
+                </Border>
+                <!-- Hiển thị Kết nối button -->
+                <wfi:WindowsFormsHost Panel.ZIndex="2"
+                                      Background="Gray"
+                                      VerticalAlignment="Center"
+                                      HorizontalAlignment="Center"
+                                      Height="30"
+                                      Width="70"
+                                      x:Name="btnLive"
+                                      Visibility="{Binding ShowConnectButton}"
+                                      >
+
+                    <wfi:ElementHost AutoSize="True"
+                                     Dock="Fill">
+                        <Border Style="{StaticResource LiveButton}"
+                                CornerRadius="5"
+                                MouseDown="btnLive_MouseDown">
+
+                            <TextBlock Text="Kết nối"
+                                       x:Name="centerButton"
+                                       Foreground="White"
+                                       Style="{StaticResource General_TextBlock}"
+                                       FontSize="12" />
+
+                        </Border>
+
+
+
+                    </wfi:ElementHost>
+                </wfi:WindowsFormsHost>
+
+
+
+                <Grid Height="25"
+                      VerticalAlignment="Bottom">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="40" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="90" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Left column -->
+                    <wfi:WindowsFormsHost x:Name="LeftOnTopWindow"
+                                          Grid.Column="0"
+                                          Panel.ZIndex="3"
+                                          Style="{StaticResource ViewCameraOverlay}"
+                                          Margin="2,0,0,2">
+                        <wfi:ElementHost>
+                            <Border MouseDown="btnLive_MouseDown"
+                                    Padding="0">
+                                <Button Foreground="White"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Margin="0"
+                                        Click="btnPlayCamera_Click"
+                                        MouseLeftButtonDown="btnPlayCamera_MouseLeftButtonDown"
+                                        MouseMove="btnPlayCamera_MouseMove"
+                                        MouseLeftButtonUp="btnPlayCamera_MouseLeftButtonUp"
+                                        x:Name="btnPlay"
+                                        >
+
+                                    <StackPanel Orientation="Horizontal"
+                                                HorizontalAlignment="Left">
+                                        <TextBlock Text="&#xE768; "
+                                                   FontFamily="Segoe MDL2 Assets"
+                                                   HorizontalAlignment="Left"
+                                                   FontSize="10"
+                                                   VerticalAlignment="Center" />
+                                        <TextBlock x:Name="txtCameraName"
+                                                   Style="{StaticResource General_TextBlock}" />
+                                    </StackPanel>
+                                </Button>
+                            </Border>
+
+                        </wfi:ElementHost>
+                    </wfi:WindowsFormsHost>
+
+                    <!-- Right Column -->
+                    <WindowsFormsHost Panel.ZIndex="4"
+                                      Grid.Column="2"
+                                      x:Name="RighOnTopWindow"
+                                      Style="{StaticResource ViewCameraOverlay}"
+                                      Margin="0,0,2,2">
+                        <ElementHost>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Button Grid.Column="0"
+                                        x:Name="btn_Speaker"
+                                        Style="{StaticResource UCamera_Button}"
+                                        Click="btn_Speaker_Click"
+										ToolTip="Bật/tắt âm thanh"
+                                        Padding="0">
+                                    <Image x:Name="img_speaker"
+                                           Source="/images/speaker_off.png"
+                                           Stretch="UniformToFill"
+                                           VerticalAlignment="Center"
+                                           Margin="0" />
+                                </Button>
+
+                                <Button Grid.Column="1"
+                                        x:Name="btn_Zoom"
+                                        Style="{StaticResource UCamera_Button}"
+                                        Click="btn_Zoom_Click" 
+										ToolTip="Phóng to/thu nhỏ"
+                                        Padding="0">
+                                    <Image x:Name="img_zoom"
+                                           Source="/images/zoom_out.png"
+                                           Stretch="UniformToFill"
+                                           Margin="0"
+                                           VerticalAlignment="Center" />
+                                </Button>
+								<Button Grid.Column="2"
+                                        x:Name="btn_Close"
+                                        Style="{StaticResource UCamera_Button}"
+                                        Click="btn_Exit_Click"
+										ToolTip="Đóng camera"
+                                        Padding="0">
+                                    <Image x:Name="img_close"
+                                           Source="/images/close.png"
+                                           Stretch="UniformToFill"
+                                           Margin="0" Width="18" Height="18"
+                                           VerticalAlignment="Center" />
+                                </Button>
+
+                            </Grid>
+                        </ElementHost>
+                    </WindowsFormsHost>
+                </Grid>
+
+
+            </Grid>
+            
+            <Grid Grid.Row="1" Height="{Binding TimelineHeight}" x:Name="TimelineArea" Margin="0,0,0,0"
+                  Visibility="{Binding ShowVideoSlider}"
+                  Background="#111318">
+                <!-- Interaction Canvas -->
+                <Canvas x:Name="canvasMiniTimeline" Background="Transparent" ClipToBounds="True"
+                        MouseDown="canvasMiniTimeline_MouseDown"
+                        MouseMove="canvasMiniTimeline_MouseMove"
+                        MouseUp="canvasMiniTimeline_MouseUp"
+                        SizeChanged="canvasMiniTimeline_SizeChanged">
+                    <!-- Segments will be rendered here -->
+                    <Canvas.ContextMenu>
+                        <ContextMenu x:Name="timelineContextMenu">
+                            <MenuItem Header="Chọn điểm bắt đầu" Click="MenuSetStart_Click"/>
+                            <MenuItem Header="Chọn điểm kết thúc" Click="MenuSetEnd_Click"/>
+                            <Separator/>
+                            <MenuItem Header="Hủy vùng chọn" Click="MenuCancelSelection_Click"/>
+                            <Separator/>
+                            <MenuItem Header="Tải vùng video đã chọn" Click="MenuDownload_Click"/>
+                        </ContextMenu>
+                    </Canvas.ContextMenu>
+                </Canvas>
+
+                <!-- Selection Overlay Canvas -->
+                <Canvas IsHitTestVisible="False">
+                    <!-- Selection Area Highlight -->
+                    <Rectangle x:Name="rectSelection" Fill="#4400D2FF" Visibility="Collapsed" Height="{Binding TimelineHeight}" />
+                    
+                    <!-- Manual Selection Markers -->
+                    <TextBlock x:Name="txtStartMarker" Text="[" Foreground="#FF4CAF50" FontSize="26" FontWeight="Bold" Visibility="Collapsed" Panel.ZIndex="110"/>
+                    <TextBlock x:Name="txtEndMarker" Text="]" Foreground="#FFF44336" FontSize="26" FontWeight="Bold" Visibility="Collapsed" Panel.ZIndex="110"/>
+
+                    <!-- Selection Time Labels -->
+                    <Border x:Name="borderStart" Background="#FF4CAF50" CornerRadius="4" Padding="3,1" Visibility="Collapsed" Panel.ZIndex="100">
+                        <TextBlock x:Name="txtSelectionStart" Foreground="White" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center"/>
+                    </Border>
+                    <Border x:Name="borderEnd" Background="#FFF44336" CornerRadius="4" Padding="3,1" Visibility="Collapsed" Panel.ZIndex="100">
+                        <TextBlock x:Name="txtSelectionEnd" Foreground="White" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center"/>
+                    </Border>
+
+                    <!-- Playhead -->
+                    <Rectangle x:Name="miniPlayhead" Width="2" Fill="#00D2FF" VerticalAlignment="Stretch" Height="{Binding TimelineHeight}">
+                        <Rectangle.Effect>
+                            <DropShadowEffect Color="#00D2FF" BlurRadius="4" ShadowDepth="0" />
+                        </Rectangle.Effect>
+                    </Rectangle>
+                </Canvas>
+            </Grid>
+        </Grid>
+
+       
+    </Border>
+</UserControl>

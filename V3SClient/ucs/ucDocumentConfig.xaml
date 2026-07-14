@@ -1,0 +1,447 @@
+<UserControl x:Class="V3SClient.ucs.ucDocumentConfig"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:V3SClient.ucs"
+             xmlns:services="clr-namespace:V3SClient.Services"
+             mc:Ignorable="d" 
+             d:DesignHeight="1200" d:DesignWidth="1000"
+             Background="#0D0F12">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/styles/customize_button_v2.xaml" />
+                <ResourceDictionary Source="/styles/customize_textblock.xaml" />
+                <ResourceDictionary Source="/styles/customize_textbox.xaml" />
+                <ResourceDictionary Source="/styles/customize_combobox.xaml" />
+                <ResourceDictionary Source="/styles/customize_scrollviewer.xaml" />
+                <ResourceDictionary Source="/styles/document_config_styles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <BooleanToVisibilityConverter x:Key="BoolToVis" />
+            <Style x:Key="DocumentFolderBrowseButton" TargetType="Button">
+                <Setter Property="Background" Value="#181B24" />
+                <Setter Property="Foreground" Value="#8DBBF0" />
+                <Setter Property="BorderBrush" Value="#354050" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Border" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="4">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Border" Property="Background" Value="#243044" /></Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- String to Visibility Converter -->
+            <local:SegmentTypeToVisibilityConverter x:Key="SegmentTypeToVis" />
+
+            <!-- Naming Segment ItemTemplate -->
+            <DataTemplate x:Key="NamingSegmentTemplate">
+                <Border Background="#161920" BorderBrush="#252830" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,3">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{Binding DisplayName}" Foreground="#E8ECF1" VerticalAlignment="Center" />
+                            <Button Grid.Column="1" Content="▲" Command="{Binding DataContext.MovePlateSegmentUpCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}" Background="Transparent" Foreground="#4A9EFF" BorderThickness="0" Margin="5,0" Width="26" Height="26" />
+                            <Button Grid.Column="2" Content="▼" Command="{Binding DataContext.MovePlateSegmentDownCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}" Background="Transparent" Foreground="#4A9EFF" BorderThickness="0" Margin="0,0,5,0" Width="26" Height="26" />
+                            <Button Grid.Column="3" Content="✕" Command="{Binding DataContext.RemovePlateSegmentCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}" Background="Transparent" Foreground="#E06C65" BorderThickness="0" Width="26" Height="26" />
+                        </Grid>
+                        
+                        <StackPanel Margin="0,5,0,0" Visibility="{Binding SegmentType, Converter={StaticResource SegmentTypeToVis}}">
+                            <TextBlock Text="Quy tắc thay thế ký tự:" Foreground="Gray" FontSize="11" Margin="0,0,0,3"/>
+                            <ItemsControl ItemsSource="{Binding ReplacementRules}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" Margin="0,1">
+                                            <TextBlock Text="Xóa:" Foreground="Gray" VerticalAlignment="Center" FontSize="11" Margin="0,0,3,0"/>
+                                            <TextBox Text="{Binding SourceChars, UpdateSourceTrigger=PropertyChanged}" Width="70" Height="26" FontSize="11" Padding="3" Style="{StaticResource CustomTextBoxStyle}"/>
+                                            <TextBlock Text="→" Foreground="Gray" VerticalAlignment="Center" FontSize="11" Margin="5,0"/>
+                                            <TextBox Text="{Binding TargetChar, UpdateSourceTrigger=PropertyChanged}" Width="70" Height="26" FontSize="11" Padding="3" Style="{StaticResource CustomTextBoxStyle}"/>
+                                            <Button Content="✕" Background="Transparent" Foreground="#E06C65" BorderThickness="0" Width="26" Height="26" FontSize="10" Margin="4,0,0,0" Command="{Binding DataContext.RemoveReplacementRuleCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Button Content="+ Thêm quy tắc" Background="Transparent" Foreground="#4A9EFF" BorderThickness="0" HorizontalAlignment="Left" FontSize="11" Margin="0,2,0,0" Command="{Binding DataContext.AddReplacementRuleCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </DataTemplate>
+
+            <DataTemplate x:Key="DocumentNamingSegmentTemplate">
+                <Border Background="#161920" BorderBrush="#252830" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,3">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{Binding DisplayName}" Foreground="#E8ECF1" VerticalAlignment="Center" />
+                            <Button Grid.Column="1" Content="▲" Command="{Binding DataContext.MoveDocumentSegmentUpCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}" Background="Transparent" Foreground="#4A9EFF" BorderThickness="0" Margin="5,0" Width="26" Height="26" />
+                            <Button Grid.Column="2" Content="▼" Command="{Binding DataContext.MoveDocumentSegmentDownCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}" Background="Transparent" Foreground="#4A9EFF" BorderThickness="0" Margin="0,0,5,0" Width="26" Height="26" />
+                            <Button Grid.Column="3" Content="✕" Command="{Binding DataContext.RemoveDocumentSegmentCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}" Background="Transparent" Foreground="#E06C65" BorderThickness="0" Width="26" Height="26" />
+                        </Grid>
+
+                        <StackPanel Margin="0,5,0,0" Visibility="{Binding SegmentType, Converter={StaticResource SegmentTypeToVis}}">
+                            <TextBlock Text="Quy tắc thay thế ký tự:" Foreground="Gray" FontSize="11" Margin="0,0,0,3"/>
+                            <ItemsControl ItemsSource="{Binding ReplacementRules}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" Margin="0,1">
+                                            <TextBlock Text="Xóa:" Foreground="Gray" VerticalAlignment="Center" FontSize="11" Margin="0,0,3,0"/>
+                                            <TextBox Text="{Binding SourceChars, UpdateSourceTrigger=PropertyChanged}" Width="70" Height="26" FontSize="11" Padding="3" Style="{StaticResource CustomTextBoxStyle}"/>
+                                            <TextBlock Text="→" Foreground="Gray" VerticalAlignment="Center" FontSize="11" Margin="5,0"/>
+                                            <TextBox Text="{Binding TargetChar, UpdateSourceTrigger=PropertyChanged}" Width="70" Height="26" FontSize="11" Padding="3" Style="{StaticResource CustomTextBoxStyle}"/>
+                                            <Button Content="✕" Background="Transparent" Foreground="#E06C65" BorderThickness="0" Width="26" Height="26" FontSize="10" Margin="4,0,0,0" Command="{Binding DataContext.RemoveReplacementRuleCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Button Content="+ Thêm quy tắc" Background="Transparent" Foreground="#4A9EFF" BorderThickness="0" HorizontalAlignment="Left" FontSize="11" Margin="0,2,0,0" Command="{Binding DataContext.AddReplacementRuleCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </DataTemplate>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <ScrollViewer Margin="16" Padding="0,0,8,0"
+                  VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Auto"
+                  Style="{StaticResource CustomScrollViewerStyle}">
+        <StackPanel>
+            <TextBlock Text="Cấu hình Phân loại Tài liệu AI" Foreground="#4A9EFF" FontSize="18" FontWeight="Bold" Margin="0,0,0,20" />
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="360" />
+                    <ColumnDefinition Width="20" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Cột trái: Thư mục & AI -->
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Cấu hình Thư mục" Foreground="#4A9EFF" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                    
+                    <StackPanel Margin="0,0,0,12">
+                        <TextBlock Text="Chế độ xử lý" Foreground="AntiqueWhite" Margin="0,0,0,5" />
+                        <ComboBox SelectedValue="{Binding ProcessingMode}" SelectedValuePath="Tag"
+                                  Style="{StaticResource CustomComboBoxStyle}"
+                                  ItemContainerStyle="{StaticResource CustomComboBoxItemStyle}"
+                                  Height="30">
+                            <ComboBoxItem Content="Chỉ biển số xe" Tag="{x:Static services:ProcessingMode.PlateOnly}" />
+                            <ComboBoxItem Content="Chỉ giấy tờ xe" Tag="{x:Static services:ProcessingMode.DocumentOnly}" />
+                            <ComboBoxItem Content="Biển số xe và giấy tờ xe" Tag="{x:Static services:ProcessingMode.Combined}" />
+                        </ComboBox>
+                    </StackPanel>
+
+                    <StackPanel Margin="0,0,0,12" Visibility="{Binding IsCombinedMode, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="Cấu trúc thư mục đầu vào" Foreground="AntiqueWhite" Margin="0,0,0,5" />
+                        <ComboBox SelectedValue="{Binding InputLayout}" SelectedValuePath="Tag"
+                                  Style="{StaticResource CustomComboBoxStyle}"
+                                  ItemContainerStyle="{StaticResource CustomComboBoxItemStyle}"
+                                  Height="30">
+                            <ComboBoxItem Content="Dùng chung một thư mục" Tag="{x:Static services:InputLayout.Shared}" />
+                            <ComboBoxItem Content="Tách riêng hai thư mục" Tag="{x:Static services:InputLayout.Separate}" />
+                        </ComboBox>
+                        <TextBlock Text="Thư mục chung: folder có JSON được nhận là biển số; ảnh rời được AI phân loại."
+                                   Foreground="#8B95A5" FontSize="10" TextWrapping="Wrap" Margin="0,5,0,0" />
+                    </StackPanel>
+                    
+                    <StackPanel Margin="0,0,0,10" Visibility="{Binding ShowPlateInputDirectory, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="Thư mục Input (Biển số xe / Hoặc chung)" Foreground="AntiqueWhite" Margin="0,0,0,5" />
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="36"/></Grid.ColumnDefinitions>
+                            <TextBox Text="{Binding InputDirectoryPlate}" Style="{StaticResource CustomTextBoxStyle}" Height="30" />
+                            <Button Grid.Column="1" Content="&#xE8B7;" FontFamily="Segoe MDL2 Assets" Style="{StaticResource DocumentFolderBrowseButton}" Command="{Binding BrowseDirectoryCommand}" CommandParameter="InputDirectoryPlate" ToolTip="Chọn thư mục" Margin="5,0,0,0" />
+                        </Grid>
+                    </StackPanel>
+
+                    <StackPanel Margin="0,0,0,10" Visibility="{Binding ShowDocumentInputDirectory, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="Thư mục Input (Giấy tờ xe)" Foreground="AntiqueWhite" Margin="0,0,0,5" />
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="36"/></Grid.ColumnDefinitions>
+                            <TextBox Text="{Binding InputDirectoryDocument}" Style="{StaticResource CustomTextBoxStyle}" Height="30" />
+                            <Button Grid.Column="1" Content="&#xE8B7;" FontFamily="Segoe MDL2 Assets" Style="{StaticResource DocumentFolderBrowseButton}" Command="{Binding BrowseDirectoryCommand}" CommandParameter="InputDirectoryDocument" ToolTip="Chọn thư mục" Margin="5,0,0,0" />
+                        </Grid>
+                    </StackPanel>
+
+                    <StackPanel Margin="0,0,0,10" Visibility="{Binding IsDocumentModeEnabled, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="Link RTSP chup anh ho so" Foreground="AntiqueWhite" Margin="0,0,0,5" />
+                        <TextBox Text="{Binding DocumentRtspUrl, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource CustomTextBoxStyle}" Height="30" ToolTip="Vi du: rtsp://camera-ip:554/stream" />
+                    </StackPanel>
+
+                    <StackPanel Margin="0,0,0,10" Visibility="{Binding IsPlateModeEnabled, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="Thư mục Output (Biển số xe)" Foreground="AntiqueWhite" Margin="0,0,0,5" />
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="36"/></Grid.ColumnDefinitions>
+                            <TextBox Text="{Binding OutputDirectoryPlate}" Style="{StaticResource CustomTextBoxStyle}" Height="30" />
+                            <Button Grid.Column="1" Content="&#xE8B7;" FontFamily="Segoe MDL2 Assets" Style="{StaticResource DocumentFolderBrowseButton}" Command="{Binding BrowseDirectoryCommand}" CommandParameter="OutputDirectoryPlate" ToolTip="Chọn thư mục" Margin="5,0,0,0" />
+                        </Grid>
+                    </StackPanel>
+
+                    <StackPanel Margin="0,0,0,20" Visibility="{Binding IsDocumentModeEnabled, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="Thư mục Output (Giấy tờ xe)" Foreground="AntiqueWhite" Margin="0,0,0,5" />
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="36"/></Grid.ColumnDefinitions>
+                            <TextBox Text="{Binding OutputDirectoryDocument}" Style="{StaticResource CustomTextBoxStyle}" Height="30" />
+                            <Button Grid.Column="1" Content="&#xE8B7;" FontFamily="Segoe MDL2 Assets" Style="{StaticResource DocumentFolderBrowseButton}" Command="{Binding BrowseDirectoryCommand}" CommandParameter="OutputDirectoryDocument" ToolTip="Chọn thư mục" Margin="5,0,0,0" />
+                        </Grid>
+                    </StackPanel>
+
+                    <Border Background="#161920" BorderBrush="#252830" BorderThickness="1"
+                            Visibility="{Binding IsPlateModeEnabled, Converter={StaticResource BoolToVis}}"
+                            CornerRadius="6" Padding="10" Margin="0,0,0,20">
+                        <StackPanel>
+                            <CheckBox IsChecked="{Binding EnableImageSync}"
+                                      Content="Tự động đồng bộ ảnh biển số từ máy chủ"
+                                      Foreground="AntiqueWhite" FontWeight="SemiBold" />
+
+                            <StackPanel Margin="0,10,0,0"
+                                        IsEnabled="{Binding EnableImageSync}">
+                                <TextBlock Text="Địa chỉ dịch vụ đồng bộ"
+                                           Foreground="AntiqueWhite" Margin="0,0,0,5" />
+                                <TextBox Text="{Binding ImageSyncBaseUrl, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource CustomTextBoxStyle}" Height="30"
+                                         ToolTip="Ví dụ: http://server:port/api" />
+
+                                <TextBlock Text="Access token"
+                                           Foreground="AntiqueWhite" Margin="0,10,0,5" />
+                                <TextBox Text="{Binding ImageSyncToken, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource CustomTextBoxStyle}" Height="30" />
+
+                                <Grid Margin="0,10,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="10" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Chu kỳ đồng bộ (giây)" Foreground="AntiqueWhite" Margin="0,0,0,5" />
+                                        <TextBox Text="{Binding ImageSyncIntervalSeconds, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{StaticResource CustomTextBoxStyle}" Height="30" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Số bản ghi mỗi trang" Foreground="AntiqueWhite" Margin="0,0,0,5" />
+                                        <TextBox Text="{Binding ImageSyncPageSize, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{StaticResource CustomTextBoxStyle}" Height="30" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <StackPanel Margin="0,10,0,0">
+                                    <TextBlock Text="So file tai song song" Foreground="AntiqueWhite" Margin="0,0,0,5" />
+                                    <TextBox Text="{Binding ImageSyncDownloadParallelism, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource CustomTextBoxStyle}" Height="30" />
+                                </StackPanel>
+
+                                <TextBlock Text="Ảnh tải về được lưu theo cấu trúc thư mục của máy chủ vào Input biển số và tự động đưa vào hàng đợi xử lý."
+                                           Foreground="#8B95A5" FontSize="11" TextWrapping="Wrap" Margin="0,8,0,0" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="Cấu hình Hệ thống &amp; AI" Foreground="#4A9EFF" FontWeight="SemiBold" Margin="0,0,0,10"/>
+
+                    <StackPanel Margin="0,0,0,10">
+                        <CheckBox IsChecked="{Binding AutoStart}" Content="Tự động chạy khi khởi động" Foreground="AntiqueWhite" />
+                    </StackPanel>
+
+                    <StackPanel Margin="0,0,0,10">
+                        <CheckBox IsChecked="{Binding IsCopyMode}" Content="Chế độ Copy (Không xóa file gốc)" Foreground="AntiqueWhite" />
+                    </StackPanel>
+
+                    <StackPanel Margin="0,0,0,10">
+                        <TextBlock Text="Số lần thử lại tối đa (khi lỗi)" Foreground="AntiqueWhite" Margin="0,0,0,5" />
+                        <TextBox Text="{Binding MaxRetries}" Style="{StaticResource CustomTextBoxStyle}" Height="30" />
+                    </StackPanel>
+
+                    <StackPanel Margin="0,0,0,10">
+                        <TextBlock Text="Thời gian chờ giữa các lần thử lại (giây)" Foreground="AntiqueWhite" Margin="0,0,0,5" />
+                        <TextBox Text="{Binding RetryWaitTime}" Style="{StaticResource CustomTextBoxStyle}" Height="30" />
+                    </StackPanel>
+
+                    <StackPanel Margin="0,0,0,10">
+                        <TextBlock Text="So ho so xu ly dong thoi" Foreground="AntiqueWhite" Margin="0,0,0,5" />
+                        <TextBox Text="{Binding MaxParallelProcessingJobs}" Style="{StaticResource CustomTextBoxStyle}" Height="30" />
+                    </StackPanel>
+
+                    <StackPanel Margin="0,0,0,10">
+                        <TextBlock Text="AI URL" Foreground="AntiqueWhite" Margin="0,0,0,5" />
+                        <TextBox Text="{Binding ApiUrl}" Style="{StaticResource CustomTextBoxStyle}" Height="30" />
+                    </StackPanel>
+
+                    <StackPanel Margin="0,0,0,10">
+                        <TextBlock Text="API key" Foreground="AntiqueWhite" Margin="0,0,0,5" />
+                        <TextBox Text="{Binding ApiKey}" Style="{StaticResource CustomTextBoxStyle}" Height="30" />
+                    </StackPanel>
+
+                    <StackPanel Margin="0,0,0,20">
+                        <TextBlock Text="Model Name" Foreground="AntiqueWhite" Margin="0,0,0,5" />
+                        <TextBox Text="{Binding Model}" Style="{StaticResource CustomTextBoxStyle}" Height="30" />
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Cột phải: Rule Builders -->
+                <StackPanel Grid.Column="2">
+                    
+                    <!-- RULE 1: PLATE -->
+                    <Border Style="{StaticResource DocConfigRuleCardStyle}" Margin="0,0,0,20"
+                            Visibility="{Binding IsPlateModeEnabled, Converter={StaticResource BoolToVis}}">
+                        <StackPanel>
+                            <TextBlock Text="📌 QUY TẮC ĐẶT TÊN: ẢNH BIỂN SỐ XE" Foreground="#4A9EFF" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                            
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                <TextBlock Text="Ký tự phân tách:" Foreground="AntiqueWhite" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <ComboBox SelectedValue="{Binding PlateNamingRule.Separator}" SelectedValuePath="Content" Width="100" Height="28" Style="{StaticResource CustomComboBoxStyle}" ItemContainerStyle="{StaticResource CustomComboBoxItemStyle}">
+                                    <ComboBoxItem Content="_"/>
+                                    <ComboBoxItem Content="-"/>
+                                    <ComboBoxItem Content="."/>
+                                    <ComboBoxItem Content=" "/>
+                                </ComboBox>
+                            </StackPanel>
+
+                            <Grid Height="320" MinWidth="680">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="0.8*" MinWidth="220" />
+                                    <ColumnDefinition Width="14" />
+                                    <ColumnDefinition Width="1.2*" MinWidth="340" />
+                                </Grid.ColumnDefinitions>
+
+                                <!-- ListBox Left: Available Fields -->
+                                <DockPanel Grid.Column="0">
+                                    <TextBlock Text="Danh sách trường khả dụng" Foreground="Gray" DockPanel.Dock="Top" Margin="0,0,0,5"/>
+                                    <Button DockPanel.Dock="Bottom" Content="+ Thêm Trường ➤" Command="{Binding AddPlateFieldCommand}" Style="{StaticResource toolbarAddButton}" Height="30" Margin="0,5,0,0" />
+                                    <ListBox ItemsSource="{Binding AvailablePlateFields}" SelectedItem="{Binding SelectedPlateField}"
+                                             Style="{StaticResource DocConfigListBoxStyle}"
+                                             ItemContainerStyle="{StaticResource DocConfigListItemStyle}">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding DisplayName}" Foreground="AntiqueWhite" ToolTip="{Binding Description}" Padding="5"/>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </DockPanel>
+
+                                <!-- ListBox Right: Selected Segments -->
+                                <DockPanel Grid.Column="2">
+                                    <TextBlock Text="Template hiện tại (Kéo lên/xuống)" Foreground="Gray" DockPanel.Dock="Top" Margin="0,0,0,5"/>
+                                    
+                                    <Grid DockPanel.Dock="Bottom" Margin="0,5,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="5" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox Grid.Column="0" Text="{Binding PlateTextToAdd, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource CustomTextBoxStyle}" Height="30" />
+                                        <Button Grid.Column="2" Content="+ Thêm Text" Command="{Binding AddPlateTextCommand}" Style="{StaticResource toolbarAddButton}" Height="30" Width="100" />
+                                    </Grid>
+                                    
+                                    <ListBox ItemsSource="{Binding PlateNamingRule.Segments}"
+                                             ItemTemplate="{StaticResource NamingSegmentTemplate}"
+                                             Style="{StaticResource DocConfigListBoxStyle}"
+                                             ItemContainerStyle="{StaticResource DocConfigListItemStyle}" />
+                                </DockPanel>
+                            </Grid>
+                            
+                            <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                                <TextBlock Text="Preview: " Foreground="#4A9EFF" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding PlateNamingPreview}" Foreground="LightGreen" FontWeight="SemiBold" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+
+                    <!-- RULE 2: DOCUMENT -->
+                    <Border Style="{StaticResource DocConfigRuleCardStyle}"
+                            Visibility="{Binding IsDocumentModeEnabled, Converter={StaticResource BoolToVis}}">
+                        <StackPanel>
+                            <TextBlock Text="📌 QUY TẮC ĐẶT TÊN: GIẤY TỜ XE" Foreground="#4A9EFF" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                            
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                <TextBlock Text="Ký tự phân tách:" Foreground="AntiqueWhite" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <ComboBox SelectedValue="{Binding DocumentNamingRule.Separator}" SelectedValuePath="Content" Width="100" Height="28" Style="{StaticResource CustomComboBoxStyle}" ItemContainerStyle="{StaticResource CustomComboBoxItemStyle}">
+                                    <ComboBoxItem Content="_"/>
+                                    <ComboBoxItem Content="-"/>
+                                    <ComboBoxItem Content="."/>
+                                    <ComboBoxItem Content=" "/>
+                                </ComboBox>
+                            </StackPanel>
+
+                            <Grid Height="320" MinWidth="680">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="0.8*" MinWidth="220" />
+                                    <ColumnDefinition Width="14" />
+                                    <ColumnDefinition Width="1.2*" MinWidth="340" />
+                                </Grid.ColumnDefinitions>
+
+                                <!-- ListBox Left: Available Fields -->
+                                <DockPanel Grid.Column="0">
+                                    <TextBlock Text="Danh sách trường khả dụng" Foreground="Gray" DockPanel.Dock="Top" Margin="0,0,0,5"/>
+                                    <Button DockPanel.Dock="Bottom" Content="+ Thêm Trường ➤" Command="{Binding AddDocumentFieldCommand}" Style="{StaticResource toolbarAddButton}" Height="30" Margin="0,5,0,0" />
+                                    <ListBox ItemsSource="{Binding AvailableDocumentFields}" SelectedItem="{Binding SelectedDocumentField}"
+                                             Style="{StaticResource DocConfigListBoxStyle}"
+                                             ItemContainerStyle="{StaticResource DocConfigListItemStyle}">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding DisplayName}" Foreground="AntiqueWhite" ToolTip="{Binding Description}" Padding="5"/>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </DockPanel>
+
+                                <!-- ListBox Right: Selected Segments -->
+                                <DockPanel Grid.Column="2">
+                                    <TextBlock Text="Template hiện tại (Kéo lên/xuống)" Foreground="Gray" DockPanel.Dock="Top" Margin="0,0,0,5"/>
+                                    
+                                    <Grid DockPanel.Dock="Bottom" Margin="0,5,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="5" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox Grid.Column="0" Text="{Binding DocumentTextToAdd, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource CustomTextBoxStyle}" Height="30" />
+                                        <Button Grid.Column="2" Content="+ Thêm Text" Command="{Binding AddDocumentTextCommand}" Style="{StaticResource toolbarAddButton}" Height="30" Width="100" />
+                                    </Grid>
+                                    
+                                    <ListBox ItemsSource="{Binding DocumentNamingRule.Segments}"
+                                             ItemTemplate="{StaticResource DocumentNamingSegmentTemplate}"
+                                             Style="{StaticResource DocConfigListBoxStyle}"
+                                             ItemContainerStyle="{StaticResource DocConfigListItemStyle}" />
+                                </DockPanel>
+                            </Grid>
+                            
+                            <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                                <TextBlock Text="Preview: " Foreground="#4A9EFF" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding DocumentNamingPreview}" Foreground="LightGreen" FontWeight="SemiBold" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                    
+                </StackPanel>
+            </Grid>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+                <Button Content="Kiểm Tra Kết Nối" Command="{Binding TestConnectionCommand}" 
+                        Style="{StaticResource toolbarAddButton}" Width="150" Height="40" Margin="0,0,10,0" />
+                <Button Content="Lưu Cấu Hình" Command="{Binding SaveCommand}" 
+                        Style="{StaticResource toolbarAddButton}" Width="150" Height="40" />
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

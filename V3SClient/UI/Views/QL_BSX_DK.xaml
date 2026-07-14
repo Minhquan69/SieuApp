@@ -1,0 +1,936 @@
+﻿<Page x:Class="V3SClient.UI.Views.QL_BSX_DK" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:local="clr-namespace:V3SClient.UI.Views" xmlns:ucs="clr-namespace:V3SClient.ucs" xmlns:models="clr-namespace:V3SClient.models" xmlns:converters="clr-namespace:V3SClient.UI.Converters" mc:Ignorable="d" d:DesignHeight="700" d:DesignWidth="1200" Title="Quản lý Biển số Xe Đăng ký">
+
+    <Page.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/styles/border_reseted.xaml" />
+                <ResourceDictionary Source="/styles/customize_button_v2.xaml" />
+                <ResourceDictionary Source="/styles/customize_scrollviewer.xaml" />
+                <ResourceDictionary Source="/styles/customize_listbox.xaml" />
+                <ResourceDictionary Source="/styles/ql_bsx_dk_styles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <BooleanToVisibilityConverter x:Key="BoolToVis" />
+            <converters:NewFolderBadgeVisibilityConverter x:Key="NewFolderBadgeVisibility" />
+            <Style x:Key="JobHeaderCenterStyle" TargetType="DataGridColumnHeader" BasedOn="{StaticResource QlBsxJobColumnHeaderStyle}">
+                <Setter Property="HorizontalContentAlignment" Value="Center" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+            </Style>
+            <Style x:Key="JobHeaderLeftStyle" TargetType="DataGridColumnHeader" BasedOn="{StaticResource QlBsxJobColumnHeaderStyle}">
+                <Setter Property="HorizontalContentAlignment" Value="Left" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+            </Style>
+            <Style x:Key="JobCellTextCenterStyle" TargetType="TextBlock">
+                <Setter Property="HorizontalAlignment" Value="Center" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="TextAlignment" Value="Center" />
+            </Style>
+
+
+            
+        </ResourceDictionary>
+    </Page.Resources>
+
+    <Grid Background="#0D0F12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Header: Status Overview & Actions -->
+        <Border Grid.Row="0" Background="#111318" BorderBrush="#222630" BorderThickness="0,0,0,1" Padding="8,7">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Width="275" Margin="5,0,10,0" VerticalAlignment="Center">
+                    <TextBlock Text="iDK - VMS" Foreground="#E8ECF1" FontSize="32" FontWeight="Bold" />
+                    <TextBlock Text="AI tự động tạo hồ sơ ảnh theo biển số" Foreground="#6B7280" FontSize="14" Margin="0,5,0,0" TextWrapping="Wrap" />
+                </StackPanel>
+
+                <UniformGrid Grid.Column="1" Rows="1">
+                    <!-- Card 1: Tổng số xe -->
+                    <Border Style="{StaticResource QlBsxDkOverviewCardStyle}" Background="#161920">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Width="36" Height="36" CornerRadius="18" Background="#1E2230" Margin="0,0,10,0" VerticalAlignment="Center">
+                                <TextBlock Text="&#xE804;" FontFamily="Segoe MDL2 Assets" Foreground="#4A9EFF" FontSize="17" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="Tổng số xe" Foreground="#C0C8D4" FontSize="12" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding OverviewTotalProcessed}" Foreground="#E8ECF1" FontSize="23" FontWeight="Bold" Margin="0,1,0,0" />
+                                <TextBlock Text="" Foreground="#6B7280" FontSize="11" Margin="0,0,0,0" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- Card 2: Đang xử lý -->
+                    <Border Style="{StaticResource QlBsxDkOverviewCardStyle}" Background="#161920">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Width="36" Height="36" CornerRadius="18" Background="#1A2540" Margin="0,0,10,0" VerticalAlignment="Center">
+                                <TextBlock Text="&#xE895;" FontFamily="Segoe MDL2 Assets" Foreground="#7BA3C9" FontSize="17" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="Đang xử lý" Foreground="#C0C8D4" FontSize="12" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding ProcessingCount}" Foreground="#E8ECF1" FontSize="23" FontWeight="Bold" Margin="0,1,0,0" />
+                                <TextBlock Text="Hiện tại" Foreground="#6B7280" FontSize="11" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- Card 3: Hoàn thành -->
+                    <Border Style="{StaticResource QlBsxDkOverviewCardStyle}" Background="#161920">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Width="36" Height="36" CornerRadius="18" Background="#152520" Margin="0,0,10,0" VerticalAlignment="Center">
+                                <TextBlock Text="&#xE73E;" FontFamily="Segoe MDL2 Assets" Foreground="#4CAF50" FontSize="17" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="Hoàn thành" Foreground="#C0C8D4" FontSize="12" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding OverviewSuccessCount}" Foreground="#E8ECF1" FontSize="23" FontWeight="Bold" Margin="0,1,0,0" />
+                                <TextBlock Text="xe" Foreground="#6B7280" FontSize="11" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- Card 4: Lỗi / Không nhận diện -->
+                    <Border Style="{StaticResource QlBsxDkOverviewCardStyle}" Background="#161920">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Width="36" Height="36" CornerRadius="18" Background="#2A1520" Margin="0,0,10,0" VerticalAlignment="Center">
+                                <TextBlock Text="&#xE783;" FontFamily="Segoe MDL2 Assets" Foreground="#E57373" FontSize="17" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="Lỗi / Không nhận diện" Foreground="#C0C8D4" FontSize="12" FontWeight="SemiBold" />
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,0,0">
+                                    <TextBlock Text="{Binding OverviewIssueCount}" Foreground="#E57373" FontSize="23" FontWeight="Bold" />
+                                </StackPanel>
+                                <TextBlock Text="xe" Foreground="#6B7280" FontSize="11" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- Card 5: Trạng thái và điều khiển dịch vụ AI -->
+                    <Border Style="{StaticResource QlBsxDkOverviewCardStyle}" Background="#161920">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="TRẠNG THÁI HỆ THỐNG" Foreground="#8B95A5" FontSize="10" FontWeight="SemiBold" />
+                                <StackPanel Orientation="Horizontal" Margin="0,7,0,0">
+                                    <Ellipse Width="7" Height="7" Margin="0,0,6,0" VerticalAlignment="Center">
+                                        <Ellipse.Style>
+                                            <Style TargetType="Ellipse">
+                                                <Setter Property="Fill" Value="#E57373" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsServiceRunning}" Value="True"><Setter Property="Fill" Value="#4CAF50" /></DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Ellipse.Style>
+                                    </Ellipse>
+                                    <TextBlock FontSize="11" FontWeight="Bold">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="#E57373" />
+                                                <Setter Property="Text" Value="AI DỪNG" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsServiceRunning}" Value="True">
+                                                        <Setter Property="Foreground" Value="#4CAF50" />
+                                                        <Setter Property="Text" Value="AI HOẠT ĐỘNG" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
+                                <Button Command="{Binding ToggleServiceCommand}" Width="31" Height="31" MinWidth="31" Padding="0" Margin="0,0,5,0"
+                                        Style="{StaticResource QlBsxDkServiceActionStyle}" ToolTip="Start/Stop dịch vụ AI">
+                                    <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="13" Style="{StaticResource QlBsxDkTextBlock03Style}" />
+                                </Button>
+                                <Button Command="{Binding OpenConfigCommand}" Width="31" Height="31" MinWidth="31" Padding="0" Margin="0"
+                                        Style="{StaticResource QlBsxDkServiceActionStyle}" ToolTip="Cấu hình dịch vụ AI">
+                                    <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="13" Foreground="#95A0B0" />
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </UniformGrid>
+
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="0" Visibility="Collapsed" Background="#111318" BorderBrush="#1E2230" BorderThickness="0,0,0,1">
+            <Grid Margin="10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Orientation="Horizontal" Grid.Column="0" VerticalAlignment="Center">
+                    <TextBlock Text="ĐĂNG KÝ XE MỚI" Foreground="#EAB308" FontSize="20" FontWeight="Bold" Margin="0,0,20,0" VerticalAlignment="Center" />
+
+                    <!-- 5 Status Cards -->
+                    <Border Style="{StaticResource QlBsxDkOverviewCardStyle}" BorderBrush="#252830">
+                        <StackPanel>
+                            <TextBlock Text="Đang chờ xử lý" Style="{StaticResource QlBsxDkOverviewTitleStyle}" />
+                            <TextBlock Text="{Binding PendingCount}" Style="{StaticResource QlBsxDkOverviewValueStyle}" />
+                        </StackPanel>
+                    </Border>
+                    
+                    <Border Style="{StaticResource QlBsxDkOverviewCardStyle}" BorderBrush="#7BA3C9">
+                        <StackPanel>
+                            <TextBlock Text="Đang xử lý" Style="{StaticResource QlBsxDkOverviewTitleStyle}" />
+                            <TextBlock Text="{Binding ProcessingCount}" Style="{StaticResource QlBsxDkOverviewValueStyle}" Foreground="#7BA3C9" />
+                        </StackPanel>
+                    </Border>
+                    
+                    <Border Style="{StaticResource QlBsxDkOverviewCardStyle}" BorderBrush="#6BBF8E">
+                        <StackPanel>
+                            <TextBlock Text="Hoàn thành" Style="{StaticResource QlBsxDkOverviewTitleStyle}" />
+                            <TextBlock Text="{Binding SuccessCount}" Style="{StaticResource QlBsxDkOverviewValueStyle}" Foreground="#4CAF50" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource QlBsxDkOverviewCardStyle}" BorderBrush="#DDA456">
+                        <StackPanel>
+                            <TextBlock Text="Chưa nhận diện BS" Style="{StaticResource QlBsxDkOverviewTitleStyle}" />
+                            <TextBlock Text="{Binding UnknownPlateCount}" Style="{StaticResource QlBsxDkOverviewValueStyle}" Foreground="#DDA456" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource QlBsxDkOverviewCardStyle}" BorderBrush="#D9796A">
+                        <StackPanel>
+                            <TextBlock Text="Lỗi xử lý" Style="{StaticResource QlBsxDkOverviewTitleStyle}" />
+                            <TextBlock Text="{Binding ErrorCount}" Style="{StaticResource QlBsxDkOverviewValueStyle}" Foreground="#E57373" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- Actions -->
+                <StackPanel Orientation="Horizontal" Grid.Column="2" VerticalAlignment="Center">
+                    <Button Content="Làm mới" Command="{Binding RefreshCommand}" Style="{StaticResource toolbarRefreshButton}" Width="100" Height="30" Margin="0,0,10,0" />
+                    <Button Content="Cấu hình hệ thống" Command="{Binding OpenConfigCommand}" Style="{StaticResource toolbarRefreshButton}" Width="150" Height="30" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Body -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="5*" />
+                <ColumnDefinition Width="2" />
+                <ColumnDefinition Width="6*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Trái: Live View và sự kiện chụp mới -->
+            <Grid Grid.Column="0" Margin="5">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="3*" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="105" />
+                </Grid.RowDefinitions>
+                <Border Grid.Row="0" Background="#0D0F12" BorderBrush="#252830" BorderThickness="1" CornerRadius="5">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <StackPanel Margin="10,6" Orientation="Horizontal">
+                            <TextBlock Text="XEM TRỰC TIẾP " Foreground="WhiteSmoke" FontSize="12" FontWeight="SemiBold" />
+                            <TextBlock Text="•  Live" Foreground="LawnGreen" FontSize="12" FontWeight="SemiBold" />
+                          </StackPanel>
+                        <Frame x:Name="frameLiveStream" Grid.Row="1" NavigationUIVisibility="Hidden" />
+                    </Grid>
+                </Border>
+                <TextBlock Grid.Row="1" Text="SỰ KIỆN CHỤP ẢNH MỚI" Foreground="#A0AAB8" FontSize="13" FontWeight="SemiBold" Margin="4,8,0,5" />
+                <ListBox Grid.Row="2" ItemsSource="{Binding RecentCaptures}" Background="#0B0D12" BorderBrush="#252830" BorderThickness="1" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                         ItemContainerStyle="{StaticResource QlBsxDkListBoxItemStyle}">
+                    <ListBox.Resources>
+                        <Style TargetType="ScrollBar" BasedOn="{StaticResource QlBsxDkSlimScrollBarStyle}" />
+                    </ListBox.Resources>
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Border Width="128" Height="96" Margin="3" Background="#111318" BorderBrush="#303845" BorderThickness="1" CornerRadius="5">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" Margin="2" />
+                                    <Border Grid.Row="1" Background="#D9101520" Padding="5,3">
+                                        <Grid>
+                                            <TextBlock Text="{Binding FileName}" Foreground="#E0E5ED" FontSize="10" TextTrimming="CharacterEllipsis" Margin="0,0,38,0" />
+                                            <TextBlock Text="{Binding CaptureTime, StringFormat='{}{0:HH:mm:ss}'}" Foreground="#7C8595" FontSize="9" HorizontalAlignment="Right" />
+                                        </Grid>
+                                    </Border>
+                                    <Border Background="#2B5FBF" CornerRadius="3" Padding="4,2" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="5">
+                                        <TextBlock Text="MỚI" Foreground="White" FontSize="8" FontWeight="Bold" />
+                                    </Border>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
+
+            <GridSplitter Grid.Column="1" Width="2" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="#303540" />
+
+            <!-- Phải: Danh sách các xe vừa xử lý -->
+            <Grid Grid.Column="2" Margin="5">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="3*" MinWidth="280" />
+                    <ColumnDefinition Width="6" />
+                    <ColumnDefinition Width="2*" MinWidth="320" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="1*" />
+                    <RowDefinition Height="6" />
+                    <RowDefinition Height="1.2*" />
+                </Grid.RowDefinitions>
+
+                <!-- Row 0: THƯ MỤC LƯU KẾT QUẢ -->
+                <Border Grid.Row="0" Grid.ColumnSpan="3" Margin="0,0,0,6" Padding="12,10" Background="#161920" BorderBrush="#252830" BorderThickness="1" CornerRadius="8">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" Foreground="#4A9EFF" FontSize="13" Margin="0,0,6,0" />
+                            <TextBlock Text="THƯ MỤC LƯU KẾT QUẢ" Foreground="#8B95A5" FontSize="12" FontWeight="SemiBold" />
+                        </StackPanel>
+                        
+                        <Grid Grid.Row="1" Margin="0,12,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="100" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Đường dẫn lưu" Foreground="#6B7280" FontSize="12" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="{Binding OutputDirectory}" Foreground="#C0C8D4" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            
+                            <Button Grid.Column="2" Command="{Binding BrowseOutputDirectoryCommand}" Background="#181B24" BorderBrush="#303540" BorderThickness="1" Padding="12,4" Cursor="Hand">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="4">
+                                            <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                    </ControlTemplate>
+                                </Button.Template>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE838;" FontFamily="Segoe MDL2 Assets" Foreground="#C0C8D4" FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                    <TextBlock Text="Chọn thư mục" Foreground="#C0C8D4" FontSize="12" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                        
+                        <Grid Grid.Row="2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="100" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Dung lượng" Foreground="#6B7280" FontSize="12" VerticalAlignment="Center" />
+                            <ProgressBar Grid.Column="1" Value="{Binding StorageUsagePercent, Mode=OneWay}" Maximum="100" Height="4" Margin="0,0,15,0" Foreground="#4CAF50" Background="#1E2230" BorderThickness="0" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="2" Text="{Binding StorageUsageText}" Foreground="#6B7280" FontSize="11" VerticalAlignment="Center" />
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <!-- Row 1: DỮ LIỆU HÔM NAY -->
+                <Border Grid.Row="1" Grid.ColumnSpan="3" Margin="0,0,0,6" Background="#161920" BorderBrush="#252830" BorderThickness="1" CornerRadius="8" Padding="12,10">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="&#xE93E;" FontFamily="Segoe MDL2 Assets" Foreground="#4A9EFF" FontSize="13" Margin="0,0,6,0" />
+                            <TextBlock Text="DỮ LIỆU HÔM NAY" Foreground="#8B95A5" FontSize="12" FontWeight="SemiBold" />
+                        </StackPanel>
+
+                        <Grid Grid.Row="1" Margin="0,15,0,5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel>
+                                <TextBlock Text="Đã xử lý" Foreground="#6B7280" FontSize="12" Margin="0,0,0,5" />
+                                <TextBlock Text="{Binding TotalProcessed}" Foreground="#E8ECF1" FontSize="24" FontWeight="Bold" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="Thành công" Foreground="#6B7280" FontSize="12" Margin="0,0,0,5" />
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom">
+                                    <TextBlock Text="{Binding SuccessCount}" Foreground="#4CAF50" FontSize="20" FontWeight="Bold" />
+                                    <TextBlock Text="{Binding SuccessRate, StringFormat='({0:F1}%)'}" Foreground="#4CAF50" FontSize="12" Margin="6,0,0,3" VerticalAlignment="Bottom" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Lỗi" Foreground="#6B7280" FontSize="12" Margin="0,0,0,5" />
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom">
+                                    <TextBlock Text="{Binding ErrorCount}" Foreground="#E57373" FontSize="20" FontWeight="Bold" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                                <ucs:DonutChartControl Width="52" Height="52" Value="{Binding SuccessRate}" StrokeThickness="6" TrackColor="#1E2230" FillColor="#4CAF50" Margin="0,0,15,0" />
+                                <Button Background="#181B24" BorderBrush="#303540" BorderThickness="1" Padding="12,4" Cursor="Hand" VerticalAlignment="Center">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="4">
+                                                <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE9F9;" FontFamily="Segoe MDL2 Assets" Foreground="#C0C8D4" FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                        <TextBlock Text="Xuất báo cáo" Foreground="#C0C8D4" FontSize="12" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <!-- Nửa trái: trạng thái dữ liệu đầu vào -->
+                <Border Grid.Row="2" Grid.RowSpan="3" Grid.Column="0" Background="#161920"
+                        BorderBrush="#252830" BorderThickness="1" CornerRadius="6">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Border Padding="11,9" BorderBrush="#1E2230" BorderThickness="0,0,0,1">
+                            <Grid>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE9D9;" FontFamily="Segoe MDL2 Assets" Foreground="#5BA3F5"
+                                               FontSize="13" Margin="0,0,7,0" VerticalAlignment="Center" />
+                                    <TextBlock Text="DANH SÁCH XỬ LÝ ĐẦU VÀO" Foreground="#C0C8D4"
+                                               FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <TextBlock Text="{Binding ProcessingJobs.Count, StringFormat={}{0} mục}" Foreground="#4CAF50"
+                                           FontSize="10" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                        <Grid Grid.Row="1" Margin="9,7">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="150" />
+                            </Grid.ColumnDefinitions>
+                            <Border Background="#0B0D12" BorderBrush="#303540" BorderThickness="1" CornerRadius="4" Height="32" Padding="8,0">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="20" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" Foreground="#6B7280" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding InputSearchText, UpdateSourceTrigger=PropertyChanged}"
+                                             Background="Transparent" BorderThickness="0" Foreground="#E0E5ED" CaretBrush="#4A9EFF"
+                                             VerticalContentAlignment="Center" ToolTip="Tìm theo tên file hoặc thư mục" />
+                                </Grid>
+                            </Border>
+                            <ComboBox Grid.Column="2" ItemsSource="{Binding InputStatusOptions}" SelectedItem="{Binding SelectedInputStatus}"
+                                      Style="{StaticResource CustomComboBoxStyle}" ItemContainerStyle="{StaticResource CustomComboBoxItemStyle}"
+                                      Height="32" />
+                        </Grid>
+                        <DataGrid Grid.Row="2" ItemsSource="{Binding ProcessingJobs}"
+                                  AutoGenerateColumns="False" IsReadOnly="True"
+                                  SelectionMode="Single" SelectionUnit="FullRow"
+                                  CanUserAddRows="False" CanUserDeleteRows="False"
+                                  CanUserResizeRows="False" CanUserResizeColumns="False" CanUserReorderColumns="False"
+                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                  Style="{StaticResource QlBsxJobGridStyle}">
+                            <DataGrid.Resources>
+                                <Style TargetType="ScrollBar" BasedOn="{StaticResource QlBsxDkSlimScrollBarStyle}" />
+                            </DataGrid.Resources>
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="THỜI GIAN" Binding="{Binding UpdatedAt, StringFormat={}{0:dd/MM HH:mm}}" Width="105"
+                                                    HeaderStyle="{StaticResource JobHeaderCenterStyle}" ElementStyle="{StaticResource JobCellTextCenterStyle}" />
+                                <DataGridTemplateColumn Header="BIỂN SỐ" Width="Auto" MinWidth="82" MaxWidth="160"
+                                                        HeaderStyle="{StaticResource JobHeaderCenterStyle}">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding PlateDisplay}" ToolTip="{Binding PlateDisplay}"
+                                                       ToolTipService.ShowDuration="30000" TextTrimming="CharacterEllipsis"
+                                                       TextWrapping="NoWrap" HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center" TextAlignment="Center" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="FILE" Width="*" MinWidth="170" HeaderStyle="{StaticResource JobHeaderLeftStyle}">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Grid VerticalAlignment="Center" ToolTip="{Binding FileName}" ToolTipService.ShowDuration="30000">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="&#xE7C3;" FontFamily="Segoe MDL2 Assets"
+                                                           Foreground="#8095B0" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                                <TextBlock Grid.Column="1" Text="{Binding FileName}" Foreground="#DEE3ED"
+                                                           TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" VerticalAlignment="Center" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="TRẠNG THÁI" Width="92" HeaderStyle="{StaticResource JobHeaderCenterStyle}">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding StatusText}" FontSize="11" FontWeight="SemiBold"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="#8B95A5" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Status}" Value="Completed">
+                                                                <Setter Property="Foreground" Value="#4CAF50" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Status}" Value="Failed">
+                                                                <Setter Property="Foreground" Value="#A9445B" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Status}" Value="Rejected">
+                                                                <Setter Property="Foreground" Value="#A9445B" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="THAO TÁC" Width="112" HeaderStyle="{StaticResource JobHeaderCenterStyle}">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <Button Command="{Binding DataContext.ViewProcessingJobCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                        CommandParameter="{Binding}" Style="{StaticResource QlBsxJobActionButtonStyle}" ToolTip="Xem ảnh">
+                                                    <TextBlock Text="&#xE8A7;" FontFamily="Segoe MDL2 Assets" FontSize="12" />
+                                                </Button>
+                                                <Button Command="{Binding DataContext.OpenProcessingJobFolderCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                        CommandParameter="{Binding}" Style="{StaticResource QlBsxJobActionButtonStyle}" ToolTip="Mở thư mục đích nếu thành công, thư mục nguồn nếu thất bại">
+                                                    <TextBlock Text="&#xE838;" FontFamily="Segoe MDL2 Assets" FontSize="12" />
+                                                </Button>
+                                                <Button Command="{Binding DataContext.ManualProcessJobCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                        CommandParameter="{Binding}" Style="{StaticResource QlBsxJobActionButtonStyle}"
+                                                        Visibility="{Binding CanManualProcess, Converter={StaticResource BoolToVis}}" ToolTip="Xử lý thủ công">
+                                                    <TextBlock Text="&#xE70F;" FontFamily="Segoe MDL2 Assets" FontSize="12" />
+                                                </Button>
+                                                <Button Command="{Binding DataContext.ShowProcessingErrorCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                        CommandParameter="{Binding}" Style="{StaticResource QlBsxJobActionButtonStyle}"
+                                                        Visibility="{Binding IsError, Converter={StaticResource BoolToVis}}" ToolTip="Xem nguyên nhân lỗi">
+                                                    <TextBlock Text="!" FontSize="13" FontWeight="Bold" Foreground="#A9445B" />
+                                                </Button>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <Border Grid.Row="3" BorderBrush="#1E2230" BorderThickness="0,1,0,0" Padding="8,6">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Button Command="{Binding PreviousInputPageCommand}" Content="&#xE76B;" FontFamily="Segoe MDL2 Assets"
+                                        Style="{StaticResource QlBsxDkPaginationButtonStyle}" Margin="0,0,4,0"
+                                        ToolTip="Trang trước" />
+                                <ItemsControl ItemsSource="{Binding InputPageButtons}" VerticalAlignment="Center">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Content="{Binding Text}" Command="{Binding DataContext.GoToInputPageCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding PageNumber}" IsEnabled="{Binding CanNavigate}"
+                                                    Style="{StaticResource QlBsxDkPaginationNumberButtonStyle}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <Button Command="{Binding NextInputPageCommand}" Content="&#xE76C;" FontFamily="Segoe MDL2 Assets"
+                                        Style="{StaticResource QlBsxDkPaginationButtonStyle}" Margin="4,0,8,0"
+                                        ToolTip="Trang sau" />
+                                <ComboBox ItemsSource="{Binding InputPageSizeOptions}" SelectedItem="{Binding InputPageSize}"
+                                          Style="{StaticResource CustomComboBoxStyle}" ItemContainerStyle="{StaticResource CustomComboBoxItemStyle}"
+                                          Width="92" Height="28">
+                                    <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding StringFormat={}{0} / trang}" /></DataTemplate></ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <GridSplitter Grid.Row="2" Grid.RowSpan="3" Grid.Column="1" Width="2"
+                              HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                              ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
+                              ShowsPreview="True" Background="#222630" Opacity="0.5" Cursor="SizeWE" />
+
+                <!-- Cửa sổ Output tích hợp: thư mục ở trên, ảnh xe ở dưới -->
+                <Border Grid.Row="2" Grid.RowSpan="3" Grid.Column="2" Background="#161920" BorderBrush="#252830" BorderThickness="1" CornerRadius="6">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Grid Margin="10,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" Foreground="#5BA3F5" FontSize="13" Margin="0,0,7,0" />
+                                    <TextBlock Text="THƯ MỤC THEO BIỂN SỐ" Foreground="#C0C8D4" FontSize="12" FontWeight="SemiBold" />
+                                </StackPanel>
+                               
+                            </StackPanel>
+                            <Border Grid.Column="1" Background="{Binding SelectedFolder.PlateBackground}" CornerRadius="4"
+                                    Padding="8,3" Margin="8,0,3,0" VerticalAlignment="Center"
+                                    ToolTip="{Binding SelectedFolder.PlateColorName}">
+                                <TextBlock Text="{Binding SelectedFolder.DisplayPlateNumber}" Foreground="{Binding SelectedFolder.PlateForeground}"
+                                           FontSize="11" FontWeight="Bold" />
+                            </Border>
+                            <Button x:Name="EditSelectedPlateButton" Grid.Column="2" Content="&#xE70F;"
+                                    FontFamily="Segoe MDL2 Assets" Command="{Binding TogglePlateEditCommand}"
+                                    Width="28" Height="26" Background="Transparent" Foreground="#4A9EFF"
+                                    BorderThickness="0" FontSize="14" Cursor="Hand" ToolTip="Sửa biển số đang chọn" />
+                            <Button Grid.Column="3" Content="↻" Command="{Binding RefreshOutputFoldersCommand}" ToolTip="Làm mới" Width="28" Height="26" Background="Transparent" Foreground="#CCCCCC" BorderThickness="0" FontSize="18" />
+                            <Popup PlacementTarget="{Binding ElementName=EditSelectedPlateButton}" Placement="Bottom"
+                                   VerticalOffset="5" StaysOpen="False" AllowsTransparency="True"
+                                   DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}"
+                                   IsOpen="{Binding IsEditingPlate, Mode=TwoWay}">
+                                <Border Width="340" Padding="14" Background="#181C24" BorderBrush="#354050"
+                                        BorderThickness="1" CornerRadius="9">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="CẬP NHẬT BIỂN SỐ" Foreground="#DEE3ED" FontSize="13" FontWeight="SemiBold" />
+                                        <Grid Grid.Row="1" Margin="0,12,0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="28" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Text="BIỂN SỐ CŨ" Foreground="#6B7280" FontSize="9" Margin="2,0,0,4" />
+                                                <Border Height="34" Background="{Binding SelectedFolder.PlateBackground}" CornerRadius="6" Padding="8,0">
+                                                    <TextBlock Text="{Binding SelectedFolder.DisplayPlateNumber}" Foreground="{Binding SelectedFolder.PlateForeground}"
+                                                               FontWeight="Bold" VerticalAlignment="Center" />
+                                                </Border>
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="1" Text="&#x2192;" Foreground="#5580A8" FontSize="17"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,7" />
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="BIỂN SỐ MỚI" Foreground="#6B9FD0" FontSize="9" Margin="2,0,0,4" />
+                                                <Border Height="34" Background="#1A1D25" BorderBrush="#3A5580" BorderThickness="1" CornerRadius="6" Padding="8,0">
+                                                    <TextBox Text="{Binding EditedPlateNumber, UpdateSourceTrigger=PropertyChanged}" Background="Transparent"
+                                                             Foreground="#FFFFFF" BorderThickness="0" CaretBrush="#4A9EFF"
+                                                             VerticalContentAlignment="Center" FontSize="13" FontWeight="SemiBold" />
+                                                </Border>
+                                            </StackPanel>
+                                        </Grid>
+                                        <TextBlock Grid.Row="2" Text="{Binding EditStatusMessage}" Foreground="#4A9EFF"
+                                                   FontSize="10" TextWrapping="Wrap" Margin="2,0,2,8" />
+                                        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
+                                            <Button Content="Hủy" Command="{Binding CancelPlateEditCommand}" Style="{StaticResource QlBsxDkEditActionStyle}"
+                                                    Background="#181B24" BorderBrush="#354050" Foreground="#AAB4C0" />
+                                            <Button Content="Lưu thay đổi" Command="{Binding SavePlateCorrectionCommand}" Style="{StaticResource QlBsxDkEditActionStyle}"
+                                                    Background="#2B6EC0" BorderBrush="#5599DD" Foreground="White" Margin="7,0,0,0" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </Popup>
+                        </Grid>
+
+                        <Grid Grid.Row="1" Margin="10,0,10,9">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Border Height="34" Background="#181B24" BorderBrush="#354050" BorderThickness="1" CornerRadius="6" Padding="9,0">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="22" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" Foreground="#8095B0" FontSize="16" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                                    <Grid Grid.Column="1">
+                                        <TextBlock Text="Tìm theo thư mục hoặc biển số..." Foreground="#5A6370" VerticalAlignment="Center" IsHitTestVisible="False" Style="{StaticResource QlBsxDkTextBlock04Style}">
+                                            
+                                        </TextBlock>
+                                        <TextBox x:Name="FolderSearchBox" Text="{Binding FolderSearchText, UpdateSourceTrigger=PropertyChanged}" Background="Transparent" Foreground="#E8ECF1" BorderThickness="0" CaretBrush="#4A9EFF" Padding="2,6" VerticalContentAlignment="Center" />
+                                    </Grid>
+                                </Grid>
+                            </Border>
+                            <Grid Grid.Column="1" Margin="6,0,0,0">
+                                <ToggleButton x:Name="FolderSortButton" Width="30" Height="30"
+                                              Background="Transparent" Foreground="#AAB4C0"
+                                              BorderThickness="0"
+                                              Cursor="Hand" ToolTip="Lọc và sắp xếp thư mục"
+                                              Content="&#xE71C;" FontFamily="Segoe MDL2 Assets" FontSize="15" />
+                                <Popup x:Name="FolderSortPopup"
+                                       PlacementTarget="{Binding ElementName=FolderSortButton}"
+                                       Placement="Bottom" VerticalOffset="4"
+                                       StaysOpen="False" AllowsTransparency="True"
+                                       IsOpen="{Binding IsChecked, ElementName=FolderSortButton, Mode=TwoWay}">
+                                    <Border Background="#181B24" BorderBrush="#404858" BorderThickness="1"
+                                            CornerRadius="7" Padding="5" MinWidth="155">
+                                        <ListBox ItemsSource="{Binding OutputFolderSortOptions}"
+                                                 SelectedItem="{Binding SelectedOutputFolderSort}"
+                                                 ItemContainerStyle="{StaticResource QlBsxDkListBoxItemStyle}"
+                                                 Background="Transparent" BorderThickness="0"
+                                                 Foreground="#E8ECF1"
+                                                 SelectionChanged="FolderSortList_SelectionChanged" />
+                                    </Border>
+                                </Popup>
+                            </Grid>
+                            <Button Grid.Column="2" Content="&#xE838;" FontFamily="Segoe MDL2 Assets" Command="{Binding OpenSelectedFileCommand}" Padding="0" Width="30" Height="30" Background="Transparent" Foreground="#AAB4C0" BorderThickness="0" FontSize="15" Cursor="Hand" ToolTip="Mở thư mục đang chọn trong Explorer; nếu đang chọn file thì mở đúng vị trí file" />
+                        </Grid>
+
+                        <TreeView x:Name="OutputFileTree" Grid.Row="2" ItemsSource="{Binding OutputFolders}" Background="#0B0D12" Foreground="#E4E9F0" BorderBrush="#222630" BorderThickness="1" Padding="6" TextElement.Foreground="#E4E9F0" SelectedItemChanged="OutputFileTree_SelectedItemChanged" ItemContainerStyle="{StaticResource QlBsxDkTreeViewItem06Style}"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                  HorizontalContentAlignment="Stretch" ClipToBounds="True">
+                            
+                            <TreeView.Resources>
+                                <Style TargetType="ScrollBar" BasedOn="{StaticResource QlBsxDkSlimScrollBarStyle}" />
+                                <Style TargetType="TreeViewItem" BasedOn="{StaticResource QlBsxDkTreeViewItem06Style}" />
+                                <DataTemplate DataType="{x:Type models:PlateFolderItem}">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock FontSize="10" Margin="0,0,7,0" VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="&#x25B6;" />
+                                                    <Setter Property="Foreground" Value="#5BA3F5" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=TreeViewItem}}" Value="True">
+                                                            <Setter Property="Text" Value="&#x25BC;" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding FolderName}" FontWeight="SemiBold" FontSize="12" TextTrimming="CharacterEllipsis">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="#ECF0F5" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding PlateColorCode}" Value="V">
+                                                                <Setter Property="Foreground" Value="#F5C542" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0,0,0">
+                                            <TextBlock Text="{Binding LastUpdatedAt, StringFormat='{}{0:HH:mm:ss}'}" Foreground="#5A6370" FontSize="10" VerticalAlignment="Center" Margin="0,0,5,0" />
+                                            <TextBlock Text="{Binding FileCount, StringFormat='({0})'}" Foreground="#95A0B0" FontSize="11" VerticalAlignment="Center" />
+                                            <Border Background="#2456A8" BorderBrush="#5599DD" BorderThickness="1"
+                                                    CornerRadius="7" Padding="6,1" Margin="6,0,0,0" VerticalAlignment="Center">
+                                                <Border.Visibility>
+                                                    <MultiBinding Converter="{StaticResource NewFolderBadgeVisibility}">
+                                                        <Binding Path="FolderPath" />
+                                                        <Binding Path="DataContext.NewestOutputFolderPath" RelativeSource="{RelativeSource AncestorType=TreeView}" />
+                                                        <Binding Path="DataContext.NewFolderBadgeExpiresAt" RelativeSource="{RelativeSource AncestorType=TreeView}" />
+                                                    </MultiBinding>
+                                                </Border.Visibility>
+                                                <TextBlock Text="NEW" Foreground="White" FontSize="8" FontWeight="Bold" />
+                                            </Border>
+                                        </StackPanel>
+                                        <ucs:VehicleCaptureResultControl Grid.Row="1" Grid.ColumnSpan="3"
+                                                                         Height="125" Margin="0,6,0,2"
+                                                                         MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=TreeView}}"
+                                                                         HorizontalAlignment="Stretch" ClipToBounds="True"
+                                                                         DataContext="{Binding}">
+                                            <ucs:VehicleCaptureResultControl.Style>
+                                                <Style TargetType="ucs:VehicleCaptureResultControl">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=TreeViewItem}}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </ucs:VehicleCaptureResultControl.Style>
+                                        </ucs:VehicleCaptureResultControl>
+                                    </Grid>
+                                </DataTemplate>
+                                <DataTemplate DataType="{x:Type models:PlateImageItem}">
+                                    <Grid ToolTipService.InitialShowDelay="250">
+                                        <Grid.ToolTip>
+                                            <ToolTip Background="#0D0F12" BorderBrush="#354050" BorderThickness="1" Padding="4">
+                                                <StackPanel>
+                                                    <Image Source="{Binding Thumbnail}" Width="220" Height="130" Stretch="Uniform" />
+                                                    <TextBlock Text="{Binding FileName}" Foreground="#EEEEEE" Margin="2,4,2,0" />
+                                                </StackPanel>
+                                            </ToolTip>
+                                        </Grid.ToolTip>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Width="26" Height="20" Background="#1E2230" BorderBrush="#3A4555" BorderThickness="1" CornerRadius="3" Margin="0,0,6,0" VerticalAlignment="Center">
+                                            <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" Margin="1" />
+                                        </Border>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding FileName}" Foreground="#DEE3ED" FontSize="11" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="{Binding CaptureTime, StringFormat='{}{0:HH:mm:ss}'}" Foreground="#5A6370" FontSize="9" Margin="0,1,0,0" />
+                                        </StackPanel>
+                                    </Grid>
+                                 
+                                </DataTemplate>
+                            </TreeView.Resources>
+                        </TreeView>
+
+                        <Border Grid.Row="3" BorderBrush="#252830" BorderThickness="0,1,0,0" Padding="7,5" Background="#111318">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Button Command="{Binding PreviousOutputPageCommand}" Content="&#xE76B;" FontFamily="Segoe MDL2 Assets"
+                                        Style="{StaticResource QlBsxDkPaginationButtonStyle}" Margin="0,0,4,0"
+                                        ToolTip="Trang thư mục trước" />
+                                <ItemsControl ItemsSource="{Binding OutputPageButtons}" VerticalAlignment="Center">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Content="{Binding Text}" Command="{Binding DataContext.GoToOutputPageCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding PageNumber}" IsEnabled="{Binding CanNavigate}"
+                                                    Style="{StaticResource QlBsxDkPaginationNumberButtonStyle}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <Button Command="{Binding NextOutputPageCommand}" Content="&#xE76C;" FontFamily="Segoe MDL2 Assets"
+                                        Style="{StaticResource QlBsxDkPaginationButtonStyle}" Margin="4,0,8,0"
+                                        ToolTip="Trang thư mục sau" />
+                                <ComboBox ItemsSource="{Binding OutputPageSizeOptions}" SelectedItem="{Binding OutputPageSize}"
+                                          Style="{StaticResource CustomComboBoxStyle}" ItemContainerStyle="{StaticResource CustomComboBoxItemStyle}"
+                                          Width="86" Height="28">
+                                    <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding StringFormat={}{0} / trang}" /></DataTemplate></ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </StackPanel>
+                        </Border>
+
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+        
+        <!-- Status Bar -->
+        <Border Grid.Row="2" Background="#111318" BorderBrush="#252830" BorderThickness="0,1,0,0" Padding="15,6">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                
+                <!-- AI Engine Status -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,25,0">
+                    <Ellipse Width="8" Height="8" Margin="0,0,6,0">
+                        <Ellipse.Style>
+                            <Style TargetType="Ellipse">
+                                <Setter Property="Fill" Value="#E57373" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsServiceRunning}" Value="True">
+                                        <Setter Property="Fill" Value="#4CAF50" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Ellipse.Style>
+                    </Ellipse>
+                    <TextBlock Text="AI Engine: " Foreground="#6B7280" FontSize="11" />
+                    <TextBlock FontSize="11" FontWeight="SemiBold">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="#E57373" />
+                                <Setter Property="Text" Value="Dừng" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsServiceRunning}" Value="True">
+                                        <Setter Property="Foreground" Value="#4CAF50" />
+                                        <Setter Property="Text" Value="Hoạt động" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </StackPanel>
+
+                <!-- Model -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,25,0">
+                    <TextBlock Text="&#xE8B3;" FontFamily="Segoe MDL2 Assets" Foreground="#6B7280" FontSize="12" Margin="0,0,6,0" />
+                    <TextBlock Text="Model: " Foreground="#6B7280" FontSize="11" />
+                    <TextBlock Text="License Plate v2.1" Foreground="#C0C8D4" FontSize="11" />
+                </StackPanel>
+
+                <!-- OCR -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,25,0">
+                    <TextBlock Text="&#xE8D2;" FontFamily="Segoe MDL2 Assets" Foreground="#6B7280" FontSize="12" Margin="0,0,6,0" />
+                    <TextBlock Text="OCR: " Foreground="#6B7280" FontSize="11" />
+                    <TextBlock Text="v4.2" Foreground="#C0C8D4" FontSize="11" />
+                </StackPanel>
+
+                <!-- Inference -->
+                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE914;" FontFamily="Segoe MDL2 Assets" Foreground="#6B7280" FontSize="12" Margin="0,0,6,0" />
+                    <TextBlock Text="Inference: " Foreground="#6B7280" FontSize="11" />
+                    <TextBlock Text="28 ms" Foreground="#C0C8D4" FontSize="11" />
+                </StackPanel>
+
+            </Grid>
+        </Border>
+    </Grid>
+</Page>

@@ -1,0 +1,11 @@
+prefix=${pcfiledir}/../..
+includedir=${prefix}/include
+libdir=${prefix}/lib
+
+Name: avutil
+Description: Multimedia utilities
+Version: 58.2.100
+Libs: -L${libdir} -lavutil
+Libs.private: -lws2_32 -luser32 -lbcrypt
+Cflags: -I${includedir}
+

@@ -1,0 +1,13 @@
+prefix=${pcfiledir}/../..
+exec_prefix=${prefix}
+libdir=C:/projects/repos/cerbero.git/1.24/build/dist/msvc_x86_64/lib
+includedir=${prefix}/include
+
+Name: libmpg123
+Description: An optimised MPEG Audio decoder
+Requires: 
+Version: 1.26.3
+Libs: -L${libdir} -lmpg123 
+Libs.private: -lm -lshlwapi 
+Cflags: -I${includedir} 
+

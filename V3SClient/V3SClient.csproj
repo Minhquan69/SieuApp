@@ -1,0 +1,1366 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="..\packages\Microsoft.Toolkit.UI.XamlHost.6.1.2\build\Microsoft.Toolkit.UI.XamlHost.props" Condition="Exists('..\packages\Microsoft.Toolkit.UI.XamlHost.6.1.2\build\Microsoft.Toolkit.UI.XamlHost.props')" />
+  <Import Project="..\packages\Microsoft.Windows.SDK.Contracts.10.0.18362.2005\build\Microsoft.Windows.SDK.Contracts.props" Condition="Exists('..\packages\Microsoft.Windows.SDK.Contracts.10.0.18362.2005\build\Microsoft.Windows.SDK.Contracts.props')" />
+  <Import Project="..\packages\Microsoft.Toolkit.Win32.UI.XamlApplication.6.1.2\build\Microsoft.Toolkit.Win32.UI.XamlApplication.props" Condition="Exists('..\packages\Microsoft.Toolkit.Win32.UI.XamlApplication.6.1.2\build\Microsoft.Toolkit.Win32.UI.XamlApplication.props')" />
+  <Import Project="..\packages\Microsoft.Toolkit.Win32.UI.SDK.6.1.2\build\Microsoft.Toolkit.Win32.UI.SDK.props" Condition="Exists('..\packages\Microsoft.Toolkit.Win32.UI.SDK.6.1.2\build\Microsoft.Toolkit.Win32.UI.SDK.props')" />
+  <Import Project="..\packages\EntityFramework.6.4.4\build\EntityFramework.props" Condition="Exists('..\packages\EntityFramework.6.4.4\build\EntityFramework.props')" />
+  <Import Project="..\packages\SQLite.3.13.0\build\net45\SQLite.props" Condition="Exists('..\packages\SQLite.3.13.0\build\net45\SQLite.props')" />
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{3801FD7C-B029-46A0-A4CF-0CB0147DA3EE}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>V3SClient</RootNamespace>
+    <AssemblyName>V3SClient</AssemblyName>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <ProjectTypeGuids>{60dc8134-eba5-43b8-bcc9-bb4bc16c2548};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
+    <WarningLevel>4</WarningLevel>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <Deterministic>true</Deterministic>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <NuGetPackageImportStamp />
+    <TargetFrameworkProfile />
+    <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
+    <IsWebBootstrapper>false</IsWebBootstrapper>
+    <PublishUrl>publish\</PublishUrl>
+    <Install>true</Install>
+    <InstallFrom>Disk</InstallFrom>
+    <UpdateEnabled>false</UpdateEnabled>
+    <UpdateMode>Foreground</UpdateMode>
+    <UpdateInterval>7</UpdateInterval>
+    <UpdateIntervalUnits>Days</UpdateIntervalUnits>
+    <UpdatePeriodically>false</UpdatePeriodically>
+    <UpdateRequired>false</UpdateRequired>
+    <MapFileExtensions>true</MapFileExtensions>
+    <ApplicationRevision>0</ApplicationRevision>
+    <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
+    <UseApplicationTrust>false</UseApplicationTrust>
+    <BootstrapperEnabled>true</BootstrapperEnabled>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>x64</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>TRACE;DEBUG;CA,POC_,MAP_ONLINE,TLS,IPCAM_,LOAD_CONFIG_LOCAL_,RTSP_HARD_CODE,_VIEW_ONLY,BODYCAM_ONLY;LOG_DEBUG;LOG_INFO;LOG_WARN;LOG_ERROR;LOG_FATAL,DK_BSX_DOC</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>x64</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x64' ">
+    <PlatformTarget>x64</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>TRACE;DEBUG;CA,POC_,MAP_ONLINE,TLS,IPCAM_,LOAD_CONFIG_LOCAL_,RTSP_HARD_CODE,_VIEW_ONLY,BODYCAM_ONLY;LOG_DEBUG;LOG_INFO;LOG_WARN;LOG_ERROR;LOG_FATAL,DK_BSX_DOC</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
+    <PlatformTarget>x64</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup>
+    <AdditionalLibPaths>..\packages\Microsoft.Windows.SDK.Contracts.10.0.18362.2005\ref\netstandard2.0</AdditionalLibPaths>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="NLog.config">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="server_config.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <Content Include="x64\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Reference Include="gio-sharp, Version=3.0.0.0, Culture=neutral, PublicKeyToken=35e10195dab3c99f, processorArchitecture=MSIL">
+      <HintPath>..\packages\GstSharp.1.18.0\lib\net45\gio-sharp.dll</HintPath>
+    </Reference>
+    <Reference Include="glib-sharp, Version=3.0.0.0, Culture=neutral, PublicKeyToken=35e10195dab3c99f, processorArchitecture=MSIL">
+      <HintPath>..\packages\GstSharp.1.18.0\lib\net45\glib-sharp.dll</HintPath>
+    </Reference>
+    <Reference Include="GMap.NET.Core, Version=2.1.7.0, Culture=neutral, PublicKeyToken=b85b9027b614afef, processorArchitecture=MSIL">
+      <HintPath>..\packages\GMap.NET.Core.2.1.7\lib\net48\GMap.NET.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="GMap.NET.WindowsPresentation, Version=2.1.7.0, Culture=neutral, PublicKeyToken=b85b9027b614afef, processorArchitecture=MSIL">
+      <HintPath>..\packages\GMap.NET.WinPresentation.2.1.7\lib\net48\GMap.NET.WindowsPresentation.dll</HintPath>
+    </Reference>
+    <Reference Include="gstreamer-sharp, Version=0.0.0.0, Culture=neutral, PublicKeyToken=5cbf79803e97ff61, processorArchitecture=MSIL">
+      <HintPath>..\packages\GstSharp.1.18.0\lib\net45\gstreamer-sharp.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Toolkit.Win32.UI.XamlHost.Managed, Version=6.1.0.0, Culture=neutral, PublicKeyToken=4aff67a105548ee2, processorArchitecture=MSIL">
+      <HintPath>..\packages\Microsoft.Toolkit.UI.XamlHost.6.1.2\lib\net462\Microsoft.Toolkit.Win32.UI.XamlHost.Managed.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Toolkit.Wpf.UI.XamlHost, Version=6.1.0.0, Culture=neutral, PublicKeyToken=4aff67a105548ee2, processorArchitecture=MSIL">
+      <HintPath>..\packages\Microsoft.Toolkit.Wpf.UI.XamlHost.6.1.2\lib\net462\Microsoft.Toolkit.Wpf.UI.XamlHost.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.VisualBasic" />
+    <Reference Include="Newtonsoft.Json, Version=13.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
+      <HintPath>..\packages\Newtonsoft.Json.13.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="NvmlLib, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>3rdLibs\NvmlLib.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.ComponentModel.Composition" />
+    <Reference Include="System.ComponentModel.DataAnnotations" />
+    <Reference Include="System.Configuration" />
+    <Reference Include="System.Core.Runtime.Interop">
+      <HintPath>3rdLibs\System.Core.Runtime.Interop.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Data" />
+    <Reference Include="System.Data.SqlClient, Version=4.6.1.3, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Data.SqlClient.4.8.3\lib\net461\System.Data.SqlClient.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Design" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.IO, Version=4.1.1.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.IO.4.3.0\lib\net462\System.IO.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Management" />
+    <Reference Include="System.Net" />
+    <Reference Include="System.Net.Http, Version=4.1.1.3, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Net.Http.4.3.4\lib\net46\System.Net.Http.dll</HintPath>
+      <Private>True</Private>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Runtime, Version=4.1.1.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Runtime.4.3.0\lib\net462\System.Runtime.dll</HintPath>
+      <Private>True</Private>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Security.Cryptography.Algorithms, Version=4.2.1.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Security.Cryptography.Algorithms.4.3.0\lib\net463\System.Security.Cryptography.Algorithms.dll</HintPath>
+      <Private>True</Private>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Security.Cryptography.Encoding, Version=4.0.1.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Security.Cryptography.Encoding.4.3.0\lib\net46\System.Security.Cryptography.Encoding.dll</HintPath>
+      <Private>True</Private>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Security.Cryptography.Primitives, Version=4.0.1.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Security.Cryptography.Primitives.4.3.0\lib\net46\System.Security.Cryptography.Primitives.dll</HintPath>
+      <Private>True</Private>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Security.Cryptography.X509Certificates, Version=4.1.1.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Security.Cryptography.X509Certificates.4.3.0\lib\net461\System.Security.Cryptography.X509Certificates.dll</HintPath>
+      <Private>True</Private>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Security.Principal.Windows, Version=5.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Security.Principal.Windows.5.0.0\lib\net461\System.Security.Principal.Windows.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Speech" />
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="System.Xaml">
+      <RequiredTargetFramework>4.0</RequiredTargetFramework>
+    </Reference>
+    <Reference Include="WindowsBase" />
+    <Reference Include="Windows">
+      <HintPath>..\packages\Microsoft.Windows.SDK.Contracts.10.0.18362.2005\ref\netstandard2.0\Windows.WinMD</HintPath>
+      <IsWinMDFile>true</IsWinMDFile>
+      <Private>false</Private>
+      <Implementation>Windows.WinMD</Implementation>
+    </Reference>
+    <Reference Include="Windows.Foundation.UniversalApiContract">
+      <HintPath>..\packages\Microsoft.Windows.SDK.Contracts.10.0.18362.2005\ref\netstandard2.0\Windows.Foundation.UniversalApiContract.winmd</HintPath>
+      <IsWinMDFile>true</IsWinMDFile>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Windows.Foundation.FoundationContract">
+      <HintPath>..\packages\Microsoft.Windows.SDK.Contracts.10.0.18362.2005\ref\netstandard2.0\Windows.Foundation.FoundationContract.winmd</HintPath>
+      <IsWinMDFile>true</IsWinMDFile>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="WindowsFormsIntegration" />
+    <Reference Include="Xceed.Wpf.AvalonDock, Version=4.6.0.0, Culture=neutral, PublicKeyToken=3e4669d2f30244f4, processorArchitecture=MSIL">
+      <HintPath>..\packages\Extended.Wpf.Toolkit.4.6.1\lib\net40\Xceed.Wpf.AvalonDock.dll</HintPath>
+    </Reference>
+    <Reference Include="Xceed.Wpf.AvalonDock.Themes.Aero, Version=4.6.0.0, Culture=neutral, PublicKeyToken=3e4669d2f30244f4, processorArchitecture=MSIL">
+      <HintPath>..\packages\Extended.Wpf.Toolkit.4.6.1\lib\net40\Xceed.Wpf.AvalonDock.Themes.Aero.dll</HintPath>
+    </Reference>
+    <Reference Include="Xceed.Wpf.AvalonDock.Themes.Metro, Version=4.6.0.0, Culture=neutral, PublicKeyToken=3e4669d2f30244f4, processorArchitecture=MSIL">
+      <HintPath>..\packages\Extended.Wpf.Toolkit.4.6.1\lib\net40\Xceed.Wpf.AvalonDock.Themes.Metro.dll</HintPath>
+    </Reference>
+    <Reference Include="Xceed.Wpf.AvalonDock.Themes.VS2010, Version=4.6.0.0, Culture=neutral, PublicKeyToken=3e4669d2f30244f4, processorArchitecture=MSIL">
+      <HintPath>..\packages\Extended.Wpf.Toolkit.4.6.1\lib\net40\Xceed.Wpf.AvalonDock.Themes.VS2010.dll</HintPath>
+    </Reference>
+    <Reference Include="Xceed.Wpf.Toolkit, Version=4.6.0.0, Culture=neutral, PublicKeyToken=3e4669d2f30244f4, processorArchitecture=MSIL">
+      <HintPath>..\packages\Extended.Wpf.Toolkit.4.6.1\lib\net40\Xceed.Wpf.Toolkit.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <ApplicationDefinition Include="App.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </ApplicationDefinition>
+    <Compile Include="Attributes\DisplayInfoAttribute.cs" />
+    <Compile Include="libs\WebSocketManager.cs" />
+    <Compile Include="libs\WebViewEnvHelper.cs" />
+    <Compile Include="models\NamingSegment.cs" />
+    <Compile Include="models\CapturedSnapshot.cs" />
+    <Compile Include="models\PlateFolderItem.cs" />
+    <Compile Include="models\PlateImageItem.cs" />
+    <Compile Include="models\ProcessingJobStatusItem.cs" />
+    <Compile Include="models\PlaybackHLS.cs" />
+    <Compile Include="Services\DatabaseHelper.cs" />
+    <Compile Include="Services\DocumentProcessingManager.cs" />
+    <Compile Include="Services\FileNamingService.cs" />
+    <Compile Include="Services\FileWatcherService.cs" />
+    <Compile Include="Services\ImageSyncService.cs" />
+    <Compile Include="Services\LLMClient.cs" />
+    <Compile Include="Services\OutputFolderMonitorService.cs" />
+    <Compile Include="Services\InputCaptureMonitorService.cs" />
+    <Compile Include="Services\PdfPageImageExtractionService.cs" />
+    <Compile Include="Services\RtspStreamService.cs" />
+    <Compile Include="Services\ProcessingPipeline.cs" />
+    <Compile Include="Services\ProcessingModes.cs" />
+    <Compile Include="Services\ProcessingQueue.cs" />
+    <Compile Include="Services\AuthenticationService_v3.cs" />
+    <Compile Include="ucs\DonutChartControl.cs" />
+    <Compile Include="ucs\ucWebVehicleRegisterManagement.xaml.cs">
+      <DependentUpon>ucWebVehicleRegisterManagement.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Converters\BoolToVisibilityConverter.cs" />
+    <Compile Include="UI\Converters\ColorToBrushConverter.cs" />
+    <Compile Include="UI\Converters\CountToVisibilityConverter.cs" />
+    <Compile Include="UI\Converters\EmptyTextToVisibilityConverter.cs" />
+    <Compile Include="UI\Converters\IndexPlusOneConverter.cs" />
+    <Compile Include="UI\Converters\InverseBoolToVisibilityConverter.cs" />
+    <Compile Include="UI\Converters\NewFolderBadgeVisibilityConverter.cs" />
+    <Compile Include="UI\Converters\IsbacklistToImageConverter.cs" />
+    <Compile Include="UI\Converters\PassThroughArrayConverter.cs" />
+    <Compile Include="UI\Converters\PermissionVisibilityConverter.cs" />
+    <Compile Include="UI\Converters\ReflectionBindingConverter.cs" />
+    <Compile Include="UI\Converters\SegmentTypeToVisibilityConverter.cs" />
+    <Compile Include="UI\Converters\TrimConverter.cs" />
+    <Compile Include="UI\Converters\TypeToImageConverter.cs" />
+    <Compile Include="enums\EditControlType.cs" />
+    <Compile Include="enums\LocalType.cs" />
+    <Compile Include="enums\SearchType.cs" />
+    <Compile Include="enums\ServerType.cs" />
+    <Compile Include="libs\ActionButtonDefinition.cs" />
+    <Compile Include="libs\AIEvent.cs" />
+    <Compile Include="libs\ApiManager.cs" />
+    <Compile Include="libs\AsyncRelayCommand.cs" />
+    <Compile Include="UI\Converters\Base64ToBitmapConverter.cs" />
+    <Compile Include="libs\BaseColumnDefinition.cs" />
+    <Compile Include="libs\BaseItem.cs" />
+    <Compile Include="libs\ClientConfig.cs" />
+    <Compile Include="libs\CustomColumnDefinition.cs" />
+    <Compile Include="libs\interfaces\IDynamicGridViewModel.cs" />
+    <Compile Include="libs\MultiSelectFieldMapping.cs" />
+    <Compile Include="libs\NaturalStringComparer.cs" />
+    <Compile Include="UI\Pages\ViewVAISearch.xaml.cs">
+      <DependentUpon>ViewVAISearch.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\DownloadManagerWindow.xaml.cs">
+      <DependentUpon>DownloadManagerWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\FlexibleTimePicker.xaml.cs">
+      <DependentUpon>FlexibleTimePicker.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\Settings\models\CameraGroupModel.cs" />
+    <Compile Include="ucs\Settings\models\ClientInfoModel.cs" />
+    <Compile Include="libs\BlacklistObjectFaceInfo.cs" />
+    <Compile Include="libs\CamEventInfo.cs" />
+    <Compile Include="libs\CamInfo.cs" />
+    <Compile Include="ucs\Settings\models\CamInfoModel.cs" />
+    <Compile Include="libs\ComboBoxItemModel.cs" />
+    <Compile Include="libs\CommandStruct.cs" />
+    <Compile Include="libs\Counter.cs" />
+    <Compile Include="libs\CustomOpenStreetMapProvider.cs" />
+    <Compile Include="libs\FileHelper.cs" />
+    <Compile Include="libs\FileStorageInfo.cs" />
+    <Compile Include="libs\GlobalClass.cs" />
+    <Compile Include="libs\GlobalSystem.cs" />
+    <Compile Include="libs\GlobalUserInfo.cs" />
+    <Compile Include="libs\interfaces\IClosableView.cs" />
+    <Compile Include="libs\ItemEditField.cs" />
+    <Compile Include="libs\LocationData.cs" />
+    <Compile Include="libs\LoggerManager.cs" />
+    <Compile Include="libs\LoginResult.cs" />
+    <Compile Include="libs\MediaHelper.cs" />
+    <Compile Include="enums\MediaType.cs" />
+    <Compile Include="libs\MetaAIResultStorage.cs" />
+    <Compile Include="libs\NodeDefines.cs" />
+    <Compile Include="libs\NotificationType.cs" />
+    <Compile Include="libs\ObservableDictionary.cs" />
+    <Compile Include="libs\RedisPubSubManager.cs" />
+    <Compile Include="libs\RelayCommand.cs" />
+    <Compile Include="libs\ToastManager.cs" />
+    <Compile Include="libs\TTSManager.cs" />
+    <Compile Include="libs\UploadState.cs" />
+    <Compile Include="libs\Utils.cs" />
+    <Compile Include="libs\SmartDownloadManager.cs" />
+    <Compile Include="libs\VideoFileConvert.cs" />
+    <Compile Include="libs\VideoFiles.cs" />
+    <Compile Include="models\BoundingBox.cs" />
+    <Compile Include="models\Camera.cs" />
+    <Compile Include="models\FilesPlayer.cs" />
+    <Compile Include="models\FrameInfo.cs" />
+    <Compile Include="models\MetaAIResult.cs" />
+    <Compile Include="models\PlayerInfo.cs" />
+    <Compile Include="models\PlayerType.cs" />
+    <Compile Include="models\RtspPlayer.cs" />
+    <Compile Include="models\TalkGroup.cs" />
+    <Compile Include="models\VideoStorage.cs" />
+    <Compile Include="UI\Pages\PObjectDetail.xaml.cs">
+      <DependentUpon>PObjectDetail.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Pages\PSearchAndFilter.xaml.cs">
+      <DependentUpon>PSearchAndFilter.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Pages\RightMenu.xaml.cs">
+      <DependentUpon>RightMenu.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Pages\SystemAndMap.xaml.cs">
+      <DependentUpon>SystemAndMap.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Pages\RightPlayback.xaml.cs">
+      <DependentUpon>RightPlayback.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Pages\VAISearchPage.xaml.cs">
+      <DependentUpon>VAISearchPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Pages\ViewSearchCustom.xaml.cs">
+      <DependentUpon>ViewSearchCustom.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Pages\ViewSearch.xaml.cs">
+      <DependentUpon>ViewSearch.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Views\VVehicleRegisterManagement.xaml.cs">
+      <DependentUpon>VVehicleRegisterManagement.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Views\QL_BSX_DK.xaml.cs">
+      <DependentUpon>QL_BSX_DK.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Views\DOC_SCAN.xaml.cs">
+      <DependentUpon>DOC_SCAN.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Views\DocumentCameraCaptureWindow.xaml.cs">
+      <DependentUpon>DocumentCameraCaptureWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Selectors\EditFieldTemplateSelector.cs" />
+    <Compile Include="TLS\RtspClientTlsInteraction.cs" />
+    <Compile Include="ucs\CameraMarker.xaml.cs">
+      <DependentUpon>CameraMarker.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\VehicleCaptureSlotControl.xaml.cs">
+      <DependentUpon>VehicleCaptureSlotControl.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\VehicleCaptureResultControl.xaml.cs">
+      <DependentUpon>VehicleCaptureResultControl.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\ChangeNameWindow.xaml.cs">
+      <DependentUpon>ChangeNameWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\Gauge.xaml.cs">
+      <DependentUpon>Gauge.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\GaugeTitle.xaml.cs">
+      <DependentUpon>GaugeTitle.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\ImagePopup.xaml.cs">
+      <DependentUpon>ImagePopup.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\InputDialog.xaml.cs">
+      <DependentUpon>InputDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\LineChart.xaml.cs">
+      <DependentUpon>LineChart.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\LoginControl.xaml.cs">
+      <DependentUpon>LoginControl.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\SelectDeviceWindow.xaml.cs">
+      <DependentUpon>SelectDeviceWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\Settings\viewmodels\VMClientInfo.cs" />
+    <Compile Include="ucs\Settings\viewmodels\VMItemEditWindow.cs" />
+    <Compile Include="ucs\Settings\viewmodels\VMGroupTalkInfo.cs" />
+    <Compile Include="ucs\Settings\viewmodels\VMCameraGroup.cs" />
+    <Compile Include="ucs\Settings\viewmodels\VMCamInfo.cs" />
+    <Compile Include="ucs\Settings\viewmodels\VMPageableBase.cs" />
+    <Compile Include="ucs\Settings\viewmodels\VMPageableDynamicGridMain.cs" />
+    <Compile Include="ucs\Settings\viewmodels\VMPageableDynamicGridSub.cs" />
+    <Compile Include="ucs\Settings\viewmodels\VMSystemConfig.cs" />
+    <Compile Include="ucs\Settings\views\AIConfigView.xaml.cs">
+      <DependentUpon>AIConfigView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\Settings\views\CameraGroupView.xaml.cs">
+      <DependentUpon>CameraGroupView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\Settings\views\CamInfoView.xaml.cs">
+      <DependentUpon>CamInfoView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\Settings\views\ClientInfoView.xaml.cs">
+      <DependentUpon>ClientInfoView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\Settings\views\DynamicDataGridSubControl.xaml.cs">
+      <DependentUpon>DynamicDataGridSubControl.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\Settings\views\DynamicDataGridMainControl.xaml.cs">
+      <DependentUpon>DynamicDataGridMainControl.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\Settings\views\GroupTalkView.xaml.cs">
+      <DependentUpon>GroupTalkView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\Settings\views\ItemEditWindow.xaml.cs">
+      <DependentUpon>ItemEditWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\Settings\views\ROIManagementView.xaml.cs">
+      <DependentUpon>ROIManagementView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\Settings\views\SystemConfigView.xaml.cs">
+      <DependentUpon>SystemConfigView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\SystemMonitor.xaml.cs">
+      <DependentUpon>SystemMonitor.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\TimelineControl.xaml.cs">
+      <DependentUpon>TimelineControl.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\ToastMessageWindow.xaml.cs">
+      <DependentUpon>ToastMessageWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\VideoPlayerWindow.xaml.cs">
+      <DependentUpon>VideoPlayerWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\ViewCamera.xaml.cs">
+      <DependentUpon>ViewCamera.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\ViewCameraPlayback.xaml.cs">
+      <DependentUpon>ViewCameraPlayback.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\ucDocumentDashboard.xaml.cs">
+      <DependentUpon>ucDocumentDashboard.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\ucDocumentConfig.xaml.cs">
+      <DependentUpon>ucDocumentConfig.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\ucImageViewer.xaml.cs">
+      <DependentUpon>ucImageViewer.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\SmartDownloadWindow.xaml.cs">
+      <DependentUpon>SmartDownloadWindow.xaml</DependentUpon>
+    </Compile>
+    <!-- Duplicate removed -->
+    <Compile Include="ucs\ViewCamGroupList.xaml.cs">
+      <DependentUpon>ViewCamGroupList.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\ViewCamGroupWithOrganization.xaml.cs">
+      <DependentUpon>ViewCamGroupWithOrganization.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Views\VPlaybackHLS.xaml.cs">
+      <DependentUpon>VPlaybackHLS.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="viewModels\VMAIEvent.cs" />
+    <Compile Include="viewModels\VMBase.cs" />
+    <Compile Include="viewModels\VMDocumentDashboard.cs" />
+    <Compile Include="viewModels\VMDocumentConfig.cs" />
+    <Compile Include="viewModels\VMQLBSXDK.cs" />
+    <Compile Include="viewModels\VMMetaAIResult.cs" />
+    <Compile Include="viewModels\VMTalkGroup.cs" />
+    <Compile Include="viewModels\VMTalkGroups.cs" />
+    <Compile Include="UI\Pages\LeftMenu.xaml.cs">
+      <DependentUpon>LeftMenu.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="viewModels\VMVideoStorage.cs" />
+    <Compile Include="viewModels\VMViewSearchCustom.cs" />
+    <Compile Include="viewModels\LoginViewModel_v3.cs" />
+    <Compile Include="viewModels\ShellViewModel_v3.cs" />
+    <Compile Include="viewModels\LiveViewModel_v3.cs" />
+    <Compile Include="ucs\SidebarControl_v3.xaml.cs">
+      <DependentUpon>SidebarControl_v3.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\HeaderControl_v3.xaml.cs">
+      <DependentUpon>HeaderControl_v3.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Views\ShellPage_v3.xaml.cs">
+      <DependentUpon>ShellPage_v3.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Views\LivePage_v3.xaml.cs">
+      <DependentUpon>LivePage_v3.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Views\LiveTile_v3.xaml.cs">
+      <DependentUpon>LiveTile_v3.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Views\PlaybackPage_v3.xaml.cs">
+      <DependentUpon>PlaybackPage_v3.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Views\MapPage_v3.xaml.cs">
+      <DependentUpon>MapPage_v3.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="viewModels\PlaybackViewModel_v3.cs" />
+    <Compile Include="viewModels\MapViewModel_v3.cs" />
+    <Compile Include="UI\Views\WhepPlayer_v3.xaml.cs">
+      <DependentUpon>WhepPlayer_v3.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Views\GstRtspPlayer_v3.xaml.cs">
+      <DependentUpon>GstRtspPlayer_v3.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Services\LiveStreamService_v3.cs" />
+    <Compile Include="Services\MetadataSocketService_v3.cs" />
+    <Compile Include="UI\Views\AiMetadataOverlay_v3.cs" />
+    <Compile Include="window\ShellWindow_v3.xaml.cs">
+      <DependentUpon>ShellWindow_v3.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Views\LoginPage_v3.xaml.cs">
+      <DependentUpon>LoginPage_v3.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="window\LoginWindow_v3.xaml.cs">
+      <DependentUpon>LoginWindow_v3.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Views\CameraFloatingWindow.xaml.cs">
+      <DependentUpon>CameraFloatingWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Views\EMap.xaml.cs">
+      <DependentUpon>EMap.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Views\VConfig.xaml.cs">
+      <DependentUpon>VConfig.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Views\VWebConfigView.xaml.cs">
+      <DependentUpon>VWebConfigView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Views\VLivePosition.xaml.cs">
+      <DependentUpon>VLivePosition.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Views\VTrajectoryPosition.xaml.cs">
+      <DependentUpon>VTrajectoryPosition.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ucs\UCTrajectoryMap.xaml.cs">
+      <DependentUpon>UCTrajectoryMap.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Views\VLiveStream.xaml.cs">
+      <DependentUpon>VLiveStream.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Views\VMetaAIResult.xaml.cs">
+      <DependentUpon>VMetaAIResult.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Views\VPlayback.xaml.cs">
+      <DependentUpon>VPlayback.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="window\AIConfigWindow.xaml.cs">
+      <DependentUpon>AIConfigWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="window\CameraEditWindow.xaml.cs">
+      <DependentUpon>CameraEditWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="window\CameraGroupEditWindow.xaml.cs">
+      <DependentUpon>CameraGroupEditWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="window\ClientProfileEditWindow.xaml.cs">
+      <DependentUpon>ClientProfileEditWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="window\ImageViewerWindow.xaml.cs">
+      <DependentUpon>ImageViewerWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="window\ManualPlateProcessingWindow.xaml.cs">
+      <DependentUpon>ManualPlateProcessingWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="window\LoginWindow.xaml.cs">
+      <DependentUpon>LoginWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="window\ROIConfigWindow.xaml.cs">
+      <DependentUpon>ROIConfigWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="window\ROIManagementWindow.xaml.cs">
+      <DependentUpon>ROIManagementWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="window\ServerConfigWindow.xaml.cs">
+      <DependentUpon>ServerConfigWindow.xaml</DependentUpon>
+    </Compile>
+    <Page Include="MainWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Compile Include="App.xaml.cs">
+      <DependentUpon>App.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="MainWindow.xaml.cs">
+      <DependentUpon>MainWindow.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </Compile>
+    <Page Include="ucs\ucWebVehicleRegisterManagement.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Pages\PObjectDetail.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Pages\PSearchAndFilter.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Pages\RightMenu.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Pages\SystemAndMap.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="UI\Pages\RightPlayback.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Pages\VAISearchPage.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Pages\ViewSearchCustom.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Pages\ViewSearch.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Pages\ViewVAISearch.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="styles\border_reseted.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="styles\customize_button_v2.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="styles\customize_checkbox_v2.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="styles\customize_combobox_mini.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="styles\customize_datagrid_ivista.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="styles\customize_datagrid_v2.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="styles\customize_expander.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="styles\customize_listview.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="styles\customize_datagrid.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="styles\customize_groupbox.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="styles\customize_image.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="styles\customize_checkbox.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="styles\customize_combobox.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="styles\customize_datetimepicker.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="styles\customize_listbox.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="styles\customize_listview_ai_result.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="styles\customize_menu_flat.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="styles\customize_radio_button.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="styles\customize_scrollviewer.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="styles\customize_system_monitor.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="styles\customize_textblock.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="styles\customize_textbox.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="styles\customize_transparent_gray_button.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="styles\GradientBorder.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="styles\StyleCameraView.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="styles\customize_button.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="styles\TreeView.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="styles\windowformhost.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="styles\aiconfig_window_styles.xaml" />
+    <Page Include="styles\cam_info_view_styles.xaml" />
+    <Page Include="styles\camera_edit_window_scope01_styles.xaml" />
+    <Page Include="styles\client_profile_edit_window_scope01_styles.xaml" />
+    <Page Include="styles\client_profile_edit_window_styles.xaml" />
+    <Page Include="styles\download_manager_window_styles.xaml" />
+    <Page Include="styles\document_config_styles.xaml" />
+    <Page Include="styles\flexible_time_picker_styles.xaml" />
+    <Page Include="styles\form_base.xaml" />
+    <Page Include="styles\left_menu_styles.xaml" />
+    <Page Include="styles\line_chart_styles.xaml" />
+    <Page Include="styles\login_window_styles.xaml" />
+    <Page Include="styles\ql_bsx_dk_styles.xaml" />
+    <Page Include="styles\ql_bsx_job_grid_scope_styles.xaml" />
+    <Page Include="styles\roiconfig_window_styles.xaml" />
+    <Page Include="styles\search_base.xaml" />
+    <Page Include="styles\search_input_base.xaml" />
+    <Page Include="styles\settings_base.xaml" />
+    <Page Include="styles\smart_download_window_styles.xaml" />
+    <Page Include="styles\system_config_view_styles.xaml" />
+    <Page Include="styles\uc_document_dashboard_styles.xaml" />
+    <Page Include="styles\vaisearch_page_scope01_styles.xaml" />
+    <Page Include="styles\vaisearch_page_styles.xaml" />
+    <Page Include="styles\vconfig_styles.xaml" />
+    <Page Include="styles\vehicle_capture_result_control_styles.xaml" />
+    <Page Include="styles\vehicle_capture_slot_control_styles.xaml" />
+    <Page Include="styles\view_cam_group_list_scope01_styles.xaml" />
+    <Page Include="styles\view_cam_group_list_styles.xaml" />
+    <Page Include="styles\view_cam_group_with_organization_scope01_styles.xaml" />
+    <Page Include="styles\view_cam_group_with_organization_styles.xaml" />
+    <Page Include="styles\view_search_custom_scope01_styles.xaml" />
+    <Page Include="styles\view_search_custom_styles.xaml" />
+    <Page Include="styles\view_search_styles.xaml" />
+    <Page Include="styles\view_vaisearch_styles.xaml" />
+    <Page Include="styles\vmeta_airesult_scope01_styles.xaml" />
+    <Page Include="styles\V3Migration\VmsColors_v3.xaml" />
+    <Page Include="styles\V3Migration\VmsBrushes_v3.xaml" />
+    <Page Include="styles\V3Migration\Buttons_v3.xaml" />
+    <Page Include="styles\V3Migration\TextBoxes_v3.xaml" />
+    <Page Include="styles\V3Migration\ComboBoxes_v3.xaml" />
+    <Page Include="styles\V3Migration\DataGrids_v3.xaml" />
+    <Page Include="ucs\CameraMarker.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="ucs\VehicleCaptureResultControl.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="ucs\VehicleCaptureSlotControl.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="ucs\ChangeNameWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="ucs\DownloadManagerWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="ucs\FlexibleTimePicker.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="ucs\Gauge.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="ucs\GaugeTitle.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="ucs\ImagePopup.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="ucs\InputDialog.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="ucs\LineChart.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="ucs\LoginControl.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="ucs\SelectDeviceWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="ucs\Settings\views\AIConfigView.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="ucs\Settings\views\ROIManagementView.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="ucs\Settings\views\CameraGroupView.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="ucs\Settings\views\CamInfoView.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="ucs\Settings\views\ClientInfoView.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="ucs\Settings\views\DynamicDataGridSubControl.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="ucs\Settings\views\DynamicDataGridMainControl.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="ucs\Settings\views\GroupTalkView.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="ucs\Settings\views\ItemEditWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="ucs\Settings\views\SystemConfigView.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="ucs\SmartDownloadWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="ucs\SystemMonitor.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="ucs\TimelineControl.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="ucs\ToastMessageWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="ucs\VideoPlayerWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="ucs\ViewCamera.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="ucs\ViewCameraPlayback.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="ucs\ucDocumentDashboard.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="ucs\ucDocumentConfig.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="ucs\ucImageViewer.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="ucs\ViewCamGroupList.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Pages\LeftMenu.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="ucs\ViewCamGroupWithOrganization.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Views\VVehicleRegisterManagement.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Views\LoginPage_v3.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="UI\Views\ShellPage_v3.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="UI\Views\LivePage_v3.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="UI\Views\LiveTile_v3.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="UI\Views\PlaybackPage_v3.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="UI\Views\MapPage_v3.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="UI\Views\WhepPlayer_v3.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="UI\Views\GstRtspPlayer_v3.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="ucs\SidebarControl_v3.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="ucs\HeaderControl_v3.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="UI\Views\QL_BSX_DK.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Views\DOC_SCAN.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Views\DocumentCameraCaptureWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Views\CameraFloatingWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="UI\Views\EMap.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Views\VConfig.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Views\VPlaybackHLS.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="UI\Views\VWebConfigView.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Views\VLivePosition.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Views\VTrajectoryPosition.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="ucs\UCTrajectoryMap.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Views\VLiveStream.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Views\VMetaAIResult.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="UI\Views\VPlayback.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="window\AIConfigWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="window\CameraEditWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="window\CameraGroupEditWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="window\ClientProfileEditWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>XamlIntelliSenseFileGenerator</Generator>
+    </Page>
+    <Page Include="window\ImageViewerWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="window\ManualPlateProcessingWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="window\LoginWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="window\LoginWindow_v3.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="window\ShellWindow_v3.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="window\ROIConfigWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="window\ROIManagementWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="window\ServerConfigWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Properties\AssemblyInfo.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+    <Compile Include="Properties\Settings.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Settings.settings</DependentUpon>
+      <DesignTimeSharedInput>True</DesignTimeSharedInput>
+    </Compile>
+    <EmbeddedResource Include="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+    <None Include="packages.config" />
+    <None Include="Properties\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
+    </None>
+    <EmbeddedResource Include="TLS\ca.pem" />
+    <EmbeddedResource Include="TLS\client.key" />
+    <EmbeddedResource Include="TLS\client_cert.pem" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="App.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Dapper">
+      <Version>2.1.66</Version>
+    </PackageReference>
+    <PackageReference Include="GstSharp">
+      <Version>1.18.0</Version>
+    </PackageReference>
+    <PackageReference Include="LiveCharts.Wpf">
+      <Version>0.9.7</Version>
+    </PackageReference>
+    <PackageReference Include="MahApps.Metro.IconPacks">
+      <Version>5.1.0</Version>
+    </PackageReference>
+    <PackageReference Include="MediaToolkit">
+      <Version>1.1.0.1</Version>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Web.WebView2">
+      <Version>1.0.3856.49</Version>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Xaml.Behaviors.Wpf">
+      <Version>1.1.135</Version>
+    </PackageReference>
+    <PackageReference Include="NLog">
+      <Version>5.4.0</Version>
+    </PackageReference>
+    <PackageReference Include="OpenCvSharp4">
+      <Version>4.10.0.20241108</Version>
+    </PackageReference>
+    <PackageReference Include="OpenCvSharp4.runtime.win">
+      <Version>4.10.0.20241108</Version>
+    </PackageReference>
+    <PackageReference Include="SharpDX">
+      <Version>4.2.0</Version>
+    </PackageReference>
+    <PackageReference Include="SharpDX.Direct2D1">
+      <Version>4.2.0</Version>
+    </PackageReference>
+    <PackageReference Include="SharpDX.Direct3D11">
+      <Version>4.2.0</Version>
+    </PackageReference>
+    <PackageReference Include="SharpDX.Mathematics">
+      <Version>4.2.0</Version>
+    </PackageReference>
+    <PackageReference Include="SSH.NET">
+      <Version>2025.0.0</Version>
+    </PackageReference>
+    <PackageReference Include="StackExchange.Redis">
+      <Version>2.8.31</Version>
+    </PackageReference>
+    <PackageReference Include="System.Data.SQLite">
+      <Version>1.0.119</Version>
+    </PackageReference>
+    <PackageReference Include="System.Reactive">
+      <Version>6.0.1</Version>
+    </PackageReference>
+    <PackageReference Include="WpfAnimatedGif">
+      <Version>2.0.2</Version>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="images\ai.png" />
+    <Resource Include="images\location.png" />
+    <Resource Include="images\mic_off.png" />
+    <Resource Include="images\mic_on.png" />
+    <Resource Include="images\speaker_off.png" />
+    <Resource Include="images\speaker_on.png" />
+    <Resource Include="images\zoom_out.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="images\arrow_square_left.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="images\setting_room.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="images\cam.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="images\zip.png" />
+    <Resource Include="images\config\setting.png" />
+    <Resource Include="images\config.png" />
+    <Resource Include="images\layout\layout_1.PNG" />
+    <Resource Include="images\layout\layout_13_1big.PNG" />
+    <Resource Include="images\layout\layout_2x2.PNG" />
+    <Resource Include="images\layout\layout_3x3.PNG" />
+    <Resource Include="images\layout\layout_4x4.PNG" />
+    <Resource Include="images\layout\layout_6x6.PNG" />
+    <Resource Include="images\layout\layout_6_1big.PNG" />
+    <Resource Include="images\layout\layout_15_1big.PNG" />
+    <Resource Include="images\base_camera.png" />
+    <Resource Include="images\close.png" />
+    <Resource Include="images\logo\ivista_logo.png" />
+    <EmbeddedResource Include="audios\abnormal_warning.wav" />
+    <Resource Include="images\layout\layout_custom.png" />
+    <Resource Include="images\mouse_action.png" />
+    <Resource Include="images\vehicle_manager.png" />
+    <Resource Include="images\download.png" />
+    <Content Include="videos\background.mp4" />
+    <Resource Include="images\category.png" />
+    <Resource Include="images\close_app.png" />
+    <Resource Include="images\maximize-window.png" />
+    <Resource Include="images\minimize-window.png" />
+    <Resource Include="images\user.png" />
+    <Resource Include="images\Frame 30.png" />
+    <Resource Include="images\logo.png" />
+    <Resource Include="images\device.png" />
+    <Resource Include="images\Log.png" />
+    <Resource Include="images\playback.png" />
+    <Resource Include="images\right_bottom_live_page.png" />
+    <Resource Include="images\videocontrols\forward15.png" />
+    <Resource Include="images\videocontrols\forward.png" />
+    <Resource Include="images\videocontrols\pause.png" />
+    <Resource Include="images\videocontrols\play.png" />
+    <Resource Include="images\videocontrols\previous15.png" />
+    <Resource Include="images\videocontrols\previous.png" />
+    <Resource Include="images\videocontrols\refresh_play.png" />
+    <Resource Include="images\arrows\arrow-square-right.png" />
+    <Resource Include="images\arrows\arrow_square_left.png" />
+    <Resource Include="images\logo_3S_Client.png" />
+    <Resource Include="icons\icon.ico" />
+    <Resource Include="icon.ico" />
+    <Resource Include="images\map\map-marker.png" />
+    <Content Include="3rdLibs\NvmlLib.dll" />
+    <Resource Include="images\face.png" />
+    <Resource Include="images\licence_plate.png" />
+    <Resource Include="images\unknow.png" />
+    <Resource Include="images\backlist.png" />
+    <Resource Include="images\detail.png" />
+    <Resource Include="images\ok.png" />
+    <Resource Include="images\toast\toast_error.png" />
+    <Resource Include="images\toast\toast_info.png" />
+    <Resource Include="images\toast\toast_success.png" />
+    <Resource Include="images\toast\toast_warning.png" />
+    <Resource Include="images\media_show.png" />
+    <Resource Include="images\cam_offline.png" />
+    <Resource Include="images\cam_online.png" />
+    <Resource Include="images\cam_group.png" />
+    <Resource Include="images\track_oder.png" />
+    <Resource Include="images\reload.png" />
+    <Resource Include="images\save.png" />
+    <Resource Include="images\search.png" />
+    <Resource Include="images\filter.png" />
+    <Resource Include="images\rename.png" />
+    <Resource Include="images\uncheck_all.png" />
+    <Resource Include="images\sellect_all.png" />
+    <Resource Include="images\imageViewer\fit_to_page.png" />
+    <Resource Include="images\imageViewer\zoom_in.png" />
+    <Resource Include="images\imageViewer\zoom_out.png" />
+    <Resource Include="images\imageViewer.png" />
+    <Resource Include="images\imageViewer\pan.png" />
+    <Resource Include="images\map\marker_off.png" />
+    <Resource Include="images\login\login_password.png" />
+    <Resource Include="images\login\login_user.png" />
+    <Resource Include="images\login\logout.png" />
+    <Resource Include="images\change_50px.png" />
+    <Resource Include="images\province.png" />
+    <Resource Include="images\layer_1.png" />
+    <Resource Include="images\layer_3.png" />
+    <Resource Include="images\swap.png" />
+    <Resource Include="images\gif\smart_network.gif" />
+    <Content Include="wwwroot\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="tools\ffmpeg\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <WCFMetadata Include="Connected Services\" />
+  </ItemGroup>
+  <ItemGroup>
+    <BootstrapperPackage Include=".NETFramework,Version=v4.8.1">
+      <Visible>False</Visible>
+      <ProductName>Microsoft .NET Framework 4.8.1 %28x86 and x64%29</ProductName>
+      <Install>true</Install>
+    </BootstrapperPackage>
+    <BootstrapperPackage Include="Microsoft.Net.Framework.3.5.SP1">
+      <Visible>False</Visible>
+      <ProductName>.NET Framework 3.5 SP1</ProductName>
+      <Install>false</Install>
+    </BootstrapperPackage>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <Import Project="..\packages\GstSharp.1.18.0\build\GstSharp.targets" Condition="Exists('..\packages\GstSharp.1.18.0\build\GstSharp.targets')" />
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\packages\GstSharp.1.18.0\build\GstSharp.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\GstSharp.1.18.0\build\GstSharp.targets'))" />
+    <Error Condition="!Exists('..\packages\SQLite.3.13.0\build\net45\SQLite.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\SQLite.3.13.0\build\net45\SQLite.props'))" />
+    <Error Condition="!Exists('..\packages\EntityFramework.6.4.4\build\EntityFramework.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\EntityFramework.6.4.4\build\EntityFramework.props'))" />
+    <Error Condition="!Exists('..\packages\EntityFramework.6.4.4\build\EntityFramework.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\EntityFramework.6.4.4\build\EntityFramework.targets'))" />
+    <Error Condition="!Exists('..\packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets'))" />
+    <Error Condition="!Exists('..\packages\Microsoft.Toolkit.Win32.UI.SDK.6.1.2\build\Microsoft.Toolkit.Win32.UI.SDK.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.Toolkit.Win32.UI.SDK.6.1.2\build\Microsoft.Toolkit.Win32.UI.SDK.props'))" />
+    <Error Condition="!Exists('..\packages\Microsoft.Toolkit.Win32.UI.SDK.6.1.2\build\Microsoft.Toolkit.Win32.UI.SDK.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.Toolkit.Win32.UI.SDK.6.1.2\build\Microsoft.Toolkit.Win32.UI.SDK.targets'))" />
+    <Error Condition="!Exists('..\packages\Microsoft.Toolkit.Win32.UI.XamlApplication.6.1.2\build\Microsoft.Toolkit.Win32.UI.XamlApplication.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.Toolkit.Win32.UI.XamlApplication.6.1.2\build\Microsoft.Toolkit.Win32.UI.XamlApplication.props'))" />
+    <Error Condition="!Exists('..\packages\Microsoft.Toolkit.Win32.UI.XamlApplication.6.1.2\build\Microsoft.Toolkit.Win32.UI.XamlApplication.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.Toolkit.Win32.UI.XamlApplication.6.1.2\build\Microsoft.Toolkit.Win32.UI.XamlApplication.targets'))" />
+    <Error Condition="!Exists('..\packages\System.Runtime.WindowsRuntime.UI.Xaml.4.6.0\build\net461\System.Runtime.WindowsRuntime.UI.Xaml.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\System.Runtime.WindowsRuntime.UI.Xaml.4.6.0\build\net461\System.Runtime.WindowsRuntime.UI.Xaml.targets'))" />
+    <Error Condition="!Exists('..\packages\Microsoft.Windows.SDK.Contracts.10.0.18362.2005\build\Microsoft.Windows.SDK.Contracts.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.Windows.SDK.Contracts.10.0.18362.2005\build\Microsoft.Windows.SDK.Contracts.props'))" />
+    <Error Condition="!Exists('..\packages\Microsoft.Windows.SDK.Contracts.10.0.18362.2005\build\Microsoft.Windows.SDK.Contracts.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.Windows.SDK.Contracts.10.0.18362.2005\build\Microsoft.Windows.SDK.Contracts.targets'))" />
+    <Error Condition="!Exists('..\packages\Microsoft.Toolkit.UI.XamlHost.6.1.2\build\Microsoft.Toolkit.UI.XamlHost.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.Toolkit.UI.XamlHost.6.1.2\build\Microsoft.Toolkit.UI.XamlHost.props'))" />
+    <Error Condition="!Exists('..\packages\Microsoft.Toolkit.UI.XamlHost.6.1.2\build\Microsoft.Toolkit.UI.XamlHost.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.Toolkit.UI.XamlHost.6.1.2\build\Microsoft.Toolkit.UI.XamlHost.targets'))" />
+    <Error Condition="!Exists('..\packages\System.Runtime.WindowsRuntime.4.7.0\build\net461\System.Runtime.WindowsRuntime.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\System.Runtime.WindowsRuntime.4.7.0\build\net461\System.Runtime.WindowsRuntime.targets'))" />
+  </Target>
+  <Import Project="..\packages\EntityFramework.6.4.4\build\EntityFramework.targets" Condition="Exists('..\packages\EntityFramework.6.4.4\build\EntityFramework.targets')" />
+  <Import Project="..\packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets" Condition="Exists('..\packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.119.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets')" />
+  <Import Project="..\packages\Microsoft.Toolkit.Win32.UI.SDK.6.1.2\build\Microsoft.Toolkit.Win32.UI.SDK.targets" Condition="Exists('..\packages\Microsoft.Toolkit.Win32.UI.SDK.6.1.2\build\Microsoft.Toolkit.Win32.UI.SDK.targets')" />
+  <Import Project="..\packages\Microsoft.Toolkit.Win32.UI.XamlApplication.6.1.2\build\Microsoft.Toolkit.Win32.UI.XamlApplication.targets" Condition="Exists('..\packages\Microsoft.Toolkit.Win32.UI.XamlApplication.6.1.2\build\Microsoft.Toolkit.Win32.UI.XamlApplication.targets')" />
+  <Import Project="..\packages\System.Runtime.WindowsRuntime.UI.Xaml.4.6.0\build\net461\System.Runtime.WindowsRuntime.UI.Xaml.targets" Condition="Exists('..\packages\System.Runtime.WindowsRuntime.UI.Xaml.4.6.0\build\net461\System.Runtime.WindowsRuntime.UI.Xaml.targets')" />
+  <Import Project="..\packages\Microsoft.Windows.SDK.Contracts.10.0.18362.2005\build\Microsoft.Windows.SDK.Contracts.targets" Condition="Exists('..\packages\Microsoft.Windows.SDK.Contracts.10.0.18362.2005\build\Microsoft.Windows.SDK.Contracts.targets')" />
+  <Import Project="..\packages\Microsoft.Toolkit.UI.XamlHost.6.1.2\build\Microsoft.Toolkit.UI.XamlHost.targets" Condition="Exists('..\packages\Microsoft.Toolkit.UI.XamlHost.6.1.2\build\Microsoft.Toolkit.UI.XamlHost.targets')" />
+  <Import Project="..\packages\System.Runtime.WindowsRuntime.4.7.0\build\net461\System.Runtime.WindowsRuntime.targets" Condition="Exists('..\packages\System.Runtime.WindowsRuntime.4.7.0\build\net461\System.Runtime.WindowsRuntime.targets')" />
+  <Target Name="RemoveXceedSatelliteAssemblies" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="$([System.String]::Copy('%(Filename)').Contains('Xceed.')) AND $([System.String]::Copy('%(Filename)').Contains('resources'))" />
+    </ItemGroup>
+  </Target>
+  <ItemGroup>
+    <Content Remove="map_assets\**\*.*" />
+    <None Remove="map_assets\**\*.*" />
+    <EmbeddedResource Include="map_assets\**\*.*">
+      <LogicalName>map_assets.%(RecursiveDir)%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+</Project>

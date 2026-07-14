@@ -1,0 +1,96 @@
+<Window x:Class="V3SClient.window.ServerConfigWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:V3SClient.window"
+        mc:Ignorable="d"
+        Title="Cấu hình máy chủ" Height="400" Width="450" 
+        WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
+        Background="#0D0F12">
+    
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="../styles/customize_textbox.xaml" />
+                <ResourceDictionary Source="../styles/customize_button.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Border Background="#111318" Padding="25">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0" Text="Cấu hình kết nối" FontSize="20" FontWeight="Bold" Foreground="#E8ECF1" Margin="0,0,0,20"/>
+
+            <StackPanel Grid.Row="1">
+                <TextBlock Text="API Server Endpoint:" Margin="0,0,0,8" FontWeight="SemiBold" Foreground="#8B95A5"/>
+                <TextBox x:Name="ApiUrlBox" Height="35" Style="{StaticResource CustomTextBoxStyle}" Margin="0,0,0,15" Tag="http://localhost:8100"/>
+
+
+                <TextBlock Text="Chế độ mạng:" Margin="0,0,0,10" FontWeight="SemiBold" Foreground="#8B95A5"/>
+                <StackPanel Orientation="Horizontal" Margin="5,0,0,10">
+                    <RadioButton x:Name="PublicModeRadio" Content="Public (Internet)" Margin="0,0,25,0" IsChecked="True" Foreground="#E8ECF1"/>
+                    <RadioButton x:Name="InternalModeRadio" Content="Internal (Local)" Foreground="#E8ECF1"/>
+                </StackPanel>
+            </StackPanel>
+
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+                <Button Content="Kiểm tra version" Width="100" Height="35" Margin="0,0,12,0" Click="CheckUpdateButton_Click" 
+                        Background="#161920" Foreground="#E8ECF1" BorderBrush="#252830" BorderThickness="1" Cursor="Hand">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border CornerRadius="4" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+                <Button Content="Lưu" Width="90" Height="35" Margin="0,0,12,0" Click="SaveButton_Click" 
+                        Background="#4A9EFF" Foreground="#0D0F12" FontWeight="Bold" BorderThickness="0" Cursor="Hand">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border CornerRadius="4" Background="{TemplateBinding Background}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+                <Button Content="Hủy" Width="90" Height="35" Click="CancelButton_Click" Background="#252830" Foreground="#E8ECF1" BorderBrush="#252830" BorderThickness="1" Cursor="Hand">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border CornerRadius="4" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

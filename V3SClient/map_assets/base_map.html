@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>iVista Smart Web Map</title>
+    <!-- Thư viện MapLibre 3D Local -->
+    <link href="maplibre-gl.css" rel="stylesheet" />
+    <script src="maplibre-gl.js"></script>
+ 
+    <!-- Giao diện tùy chỉnh chung -->
+    <link href="css/base_style.css" rel="stylesheet" />
+</head>
+<body>
+    <!-- Container 100% tỷ lệ -->
+    <div id="map"></div>
+    <div id="appVersionBadge" aria-label="App version" title="Version">v1.0.3</div>
+    <div id="mapLibreAttribution" style="position:fixed;bottom:8px;right:10px;font-size:11px;line-height:1;color:black;pointer-events:none;"></div>
+
+    <!-- Lõi khởi tạo Map và liên lạc WebView2 -->
+    <script src="js/module_core.js"></script>
+
+    <!-- Trình quản lý Module động -->
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const mode = urlParams.get('mode');
+        if (mode) {
+            const el = document.createElement('script');
+            el.src = `js/module_${mode}.js`;
+            el.onerror = function () { console.error("Failed to load map module: " + mode); };
+            document.body.appendChild(el);
+            console.log("Dynamically loaded map module: " + mode);
+        }
+    </script>
+</body>
+</html>

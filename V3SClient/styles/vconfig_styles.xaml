@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:Icon="http://metro.mahapps.com/winfx/xaml/iconpacks" xmlns:converters="clr-namespace:V3SClient.UI.Converters" xmlns:local="clr-namespace:V3SClient.UI.Views">
+  <ResourceDictionary.MergedDictionaries>
+    <ResourceDictionary Source="/styles/customize_button_v2.xaml" />
+    <ResourceDictionary Source="/styles/customize_menu_flat.xaml" />
+  </ResourceDictionary.MergedDictionaries>
+  <Style TargetType="Expander" BasedOn="{StaticResource FlatMenuExpander}" x:Key="VconfigExpander01Style">
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding IsMenuCollapsed}" Value="True">
+        <Setter Property="Header" Value="" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+</ResourceDictionary>

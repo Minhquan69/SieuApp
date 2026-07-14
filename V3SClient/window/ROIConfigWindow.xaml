@@ -1,0 +1,218 @@
+<Window x:Class="V3SClient.window.ROIConfigWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:Icon="http://metro.mahapps.com/winfx/xaml/iconpacks" Title="Cấu hình ROI" Height="850" Width="1000" WindowStartupLocation="CenterScreen" ResizeMode="NoResize" WindowStyle="None" AllowsTransparency="True" Background="Transparent" FontFamily="Arial">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="../styles/customize_combobox.xaml" />
+                <ResourceDictionary Source="../styles/customize_textbox.xaml" />
+                <ResourceDictionary Source="../styles/customize_scrollviewer.xaml" />
+                <ResourceDictionary Source="../styles/customize_button.xaml" />
+            <ResourceDictionary Source="/styles/roiconfig_window_styles.xaml" /></ResourceDictionary.MergedDictionaries>
+
+            
+            
+            
+            
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Border Background="#111318" CornerRadius="8" BorderBrush="#252830" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="45" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <Border Grid.Row="0" Background="#161920" CornerRadius="8,8,0,0" MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                <Grid>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="15,0,0,0">
+                        <Icon:PackIconMaterial Kind="VectorSquare" Width="18" Height="18" Foreground="#4A9EFF" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBlock Text="Cấu hình vùng ROI cho Camera" FontSize="16" FontWeight="Bold" Foreground="#E8ECF1" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <Button Click="BtnCancel_Click" Background="Transparent" BorderThickness="0" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Width="30" Height="30" Cursor="Hand">
+                        <Icon:PackIconMaterial Kind="Close" Width="14" Height="14" Foreground="#8B95A5" />
+                    </Button>
+                </Grid>
+            </Border>
+
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="320" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Main Drawing Area -->
+                <Border Grid.Column="0" Margin="10" BorderBrush="#444" BorderThickness="1" Background="Black">
+                    <Grid x:Name="GridCanvas" ClipToBounds="True">
+                        <Image x:Name="ImgSnapshot" Stretch="Uniform" />
+                        <Canvas x:Name="RoiCanvas" Background="Transparent" MouseDown="RoiCanvas_MouseDown" MouseMove="RoiCanvas_MouseMove" />
+                    </Grid>
+                </Border>
+
+                <!-- Sidebar -->
+                <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" Style="{StaticResource CustomScrollViewerStyle}">
+                    <StackPanel Margin="15">
+                        <TextBlock Text="THIẾT LẬP ROI" Style="{StaticResource RoiConfigWindowHeaderStyle}" />
+                        
+                        <TextBlock Text="Tên vùng:" Style="{StaticResource RoiConfigWindowLabelStyle}" />
+                        <TextBox x:Name="TxtName" Style="{StaticResource RoiConfigWindowInputStyle}" Height="28" VerticalContentAlignment="Center" />
+
+                        <TextBlock x:Name="TxtResolutionInfo" Text="Độ phân giải: Đang tải..." Foreground="#888" FontSize="10" Margin="0,2,0,0" />
+
+                        <TextBlock Text="Loại ROI:" Style="{StaticResource RoiConfigWindowLabelStyle}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,2,0,5">
+                            <RadioButton x:Name="RbPolygon" Content="Đa giác" Foreground="White" IsChecked="True" Margin="0,0,15,0" Checked="RbType_Checked" />
+                            <RadioButton x:Name="RbLine" Content=" Đường kẻ" Foreground="White" Checked="RbType_Checked" />
+                        </StackPanel>
+
+                        <TextBlock Text="Trạng thái:" Style="{StaticResource RoiConfigWindowLabelStyle}" />
+                        <CheckBox x:Name="ChkActive" Content="Kích hoạt ROI" Foreground="White" IsChecked="True" />
+
+                        <Separator Margin="0,15" Background="#333" />
+                        <TextBlock Text="CẤU HÌNH QUY TẮC AI" Style="{StaticResource RoiConfigWindowHeaderStyle}" />
+
+                        <TextBlock Text="Mẫu cấu hình (Template):" Style="{StaticResource RoiConfigWindowLabelStyle}" />
+                        <ComboBox x:Name="CboTemplate" Style="{StaticResource RoiConfigWindowComboStyle}" SelectionChanged="CboTemplate_SelectionChanged">
+                            <ComboBoxItem Content="(Tùy chỉnh)" Tag="custom" />
+                            <ComboBoxItem Content="Face Detected" Tag="Face Detected" />
+                            <ComboBoxItem Content="Suspect Face Detected" Tag="Suspect Face Detected" />
+                            <ComboBoxItem Content="License Plate Detected" Tag="License Plate Detected" />
+                            <ComboBoxItem Content="ROI Overcrowding Detected" Tag="ROI Overcrowding Detected" />
+                            <ComboBoxItem Content="Restricted Zone Intrusion" Tag="Restricted Zone Intrusion" />
+                            <ComboBoxItem Content="Line Crossing Detected AB" Tag="Line Crossing Detected AB" />
+                            <ComboBoxItem Content="Line Crossing Detected Any" Tag="Line Crossing Detected Any" />
+                        </ComboBox>
+
+                        <TextBlock Text="Dịch vụ AI:" Style="{StaticResource RoiConfigWindowLabelStyle}" />
+                        <ComboBox x:Name="CboAiService" Style="{StaticResource RoiConfigWindowComboStyle}" DisplayMemberPath="Name" SelectedValuePath="Id" />
+
+                        <Separator Margin="0,15" Background="#333" />
+                        <TextBlock Text="CẤU HÌNH CHI TIẾT (TRIGGER)" Style="{StaticResource RoiConfigWindowHeaderStyle}" />
+                        
+                        <TextBlock Text="Loại sự kiện (Event Type):" Style="{StaticResource RoiConfigWindowLabelStyle}" />
+                        <ComboBox x:Name="CboEventType" Style="{StaticResource RoiConfigWindowComboStyle}">
+                            <ComboBoxItem Content="object_appear" Tag="object_appear" IsSelected="True" />
+                            <ComboBoxItem Content="object_update" Tag="object_update" />
+                            <ComboBoxItem Content="roi_overcrowd" Tag="roi_overcrowd" />
+                            <ComboBoxItem Content="line_cross" Tag="line_cross" />
+                        </ComboBox>
+
+                        <TextBlock Text="Loại đối tượng (Object Type):" Style="{StaticResource RoiConfigWindowLabelStyle}" />
+                        <ComboBox x:Name="CboObjectType" Style="{StaticResource RoiConfigWindowComboStyle}">
+                            <ComboBoxItem Content="face" Tag="face" IsSelected="True" />
+                            <ComboBoxItem Content="plate" Tag="plate" />
+                            <ComboBoxItem Content="person" Tag="person" />
+                            <ComboBoxItem Content="car" Tag="car" />
+                            <ComboBoxItem Content="bus" Tag="bus" />
+                            <ComboBoxItem Content="truck" Tag="truck" />
+                            <ComboBoxItem Content="motorcycle" Tag="motorcycle" />
+                        </ComboBox>
+
+                        <TextBlock Text="Hướng di chuyển (Direction):" Style="{StaticResource RoiConfigWindowLabelStyle}" />
+                        <ComboBox x:Name="CboDirection" Style="{StaticResource RoiConfigWindowComboStyle}">
+                            <ComboBoxItem Content="Bất kỳ (ANY)" Tag="ANY" IsSelected="True" />
+                            <ComboBoxItem Content="Hướng AB" Tag="AB" />
+                            <ComboBoxItem Content="Hướng BA" Tag="BA" />
+                            <ComboBoxItem Content="Hướng Bắc (NORTH)" Tag="NORTH" />
+                            <ComboBoxItem Content="Hướng Nam (SOUTH)" Tag="SOUTH" />
+                        </ComboBox>
+
+                        <TextBlock Text="Độ tin cậy tối thiểu (Confidence):" Style="{StaticResource RoiConfigWindowLabelStyle}" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Slider x:Name="SldConfidence" Minimum="0.1" Maximum="0.9" Value="0.5" TickFrequency="0.1" IsSnapToTickEnabled="True" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="{Binding Value, ElementName=SldConfidence, StringFormat=F1}" Foreground="White" Margin="10,0,0,0" VerticalAlignment="Center" Width="30" />
+                        </Grid>
+
+                        <CheckBox x:Name="ChkBlacklist" Content="Kiểm tra Danh sách đen (Blacklist)" Foreground="White" Margin="0,10,0,0" />
+
+                        <TextBlock Text="Hành động (Actions):" Style="{StaticResource RoiConfigWindowLabelStyle}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,5">
+                            <CheckBox x:Name="ChkCrop" Content="Cắt ảnh đối tượng" Foreground="White" IsChecked="True" Margin="0,0,10,0" />
+                            <CheckBox x:Name="ChkWarning" Content="Gửi cảnh báo" Foreground="White" />
+                        </StackPanel>
+
+                        <Separator Margin="0,15" Background="#333" />
+                        <TextBlock Text="LỊCH TRÌNH HOẠT ĐỘNG" Style="{StaticResource RoiConfigWindowHeaderStyle}" />
+                        
+                        <TextBlock Text="Các thứ trong tuần:" Style="{StaticResource RoiConfigWindowLabelStyle}" />
+                        <UniformGrid Columns="4">
+                            <CheckBox x:Name="ChkD2" Content="T2" Foreground="White" IsChecked="True" />
+                            <CheckBox x:Name="ChkD3" Content="T3" Foreground="White" IsChecked="True" />
+                            <CheckBox x:Name="ChkD4" Content="T4" Foreground="White" IsChecked="True" />
+                            <CheckBox x:Name="ChkD5" Content="T5" Foreground="White" IsChecked="True" />
+                            <CheckBox x:Name="ChkD6" Content="T6" Foreground="White" IsChecked="True" />
+                            <CheckBox x:Name="ChkD7" Content="T7" Foreground="White" IsChecked="True" />
+                            <CheckBox x:Name="ChkD8" Content="CN" Foreground="White" IsChecked="True" />
+                        </UniformGrid>
+
+                        <TextBlock Text="Khung giờ (HH:mm):" Style="{StaticResource RoiConfigWindowLabelStyle}" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="TxtTimeStart" Style="{StaticResource RoiConfigWindowInputStyle}" Text="00:00" HorizontalContentAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="đến" Margin="5,0" VerticalAlignment="Center" Foreground="#888" />
+                            <TextBox x:Name="TxtTimeEnd" Grid.Column="2" Style="{StaticResource RoiConfigWindowInputStyle}" Text="23:59" HorizontalContentAlignment="Center" />
+                        </Grid>
+
+                        <Separator Margin="0,15" Background="#333" />
+                        <TextBlock Text="CHI TIẾT RULE (JSON)" Style="{StaticResource RoiConfigWindowHeaderStyle}" />
+                        <TextBox x:Name="TxtRule" Height="100" Style="{StaticResource RoiConfigWindowInputStyle}" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" Text="{}{}" FontFamily="Consolas" FontSize="11" TextWrapping="Wrap" />
+
+                        <TextBlock Text="Danh sách điểm:" Style="{StaticResource RoiConfigWindowLabelStyle}" />
+                        <ListBox x:Name="LbPoints" Height="80" Background="#161920" Foreground="White" BorderBrush="#252830">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding DisplayText}" FontSize="11" />
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+
+                        <Button x:Name="BtnClear" Content="Xóa hết điểm" Height="30" Margin="0,10" Click="BtnClear_Click" Background="#C62828" Foreground="White" BorderThickness="0" Cursor="Hand">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border CornerRadius="4" Background="{TemplateBinding Background}">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                        
+                        <Grid Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Button Grid.Column="0" Content="LƯU ROI" Height="38" Margin="0,0,5,0" Background="#4A9EFF" Foreground="#0D0F12" FontWeight="Bold" BorderThickness="0" Click="BtnSave_Click" Cursor="Hand">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border CornerRadius="4" Background="{TemplateBinding Background}">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                            <Button Grid.Column="1" Content="HỦY" Height="38" Margin="5,0,0,0" Background="#252830" Foreground="#E8ECF1" BorderThickness="0" Click="BtnCancel_Click" Cursor="Hand">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border CornerRadius="4" Background="{TemplateBinding Background}">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                        </Grid>
+                        
+                        <Rectangle Height="40" Fill="Transparent" /> <!-- Space at bottom -->
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

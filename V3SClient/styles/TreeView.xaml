@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- Style cho ScrollBar -->
+  <Style x:Key="MyScrollBar" TargetType="ScrollBar">
+    <Setter Property="Width" Value="20" />
+    <Setter Property="Background" Value="#161920" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ScrollBar">
+          <Grid>
+            <Rectangle Fill="{TemplateBinding Background}" RadiusX="5" RadiusY="5" />
+            <Track Name="PART_Track" IsDirectionReversed="true">
+              <Track.DecreaseRepeatButton>
+                <RepeatButton Command="ScrollBar.LineUpCommand" Width="{TemplateBinding Width}" />
+              </Track.DecreaseRepeatButton>
+              <Track.Thumb>
+                <Thumb Style="{Binding CustomThumbStyle}" />
+                <!-- Màu n?n và chi?u cao c?a Thumb -->
+              </Track.Thumb>
+              <Track.IncreaseRepeatButton>
+                <RepeatButton Command="ScrollBar.LineDownCommand" Width="{TemplateBinding Width}" />
+              </Track.IncreaseRepeatButton>
+            </Track>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <Style x:Key="CustomThumbStyle" TargetType="Thumb">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Thumb">
+          <Grid>
+            <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" Opacity="{TemplateBinding Opacity}" BorderThickness="1" CornerRadius="2" Width="{TemplateBinding Width}" />
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+    <Setter Property="Background" Value="#252830" />
+    <Setter Property="BorderBrush" Value="#222222" />
+    <Setter Property="SnapsToDevicePixels" Value="True" />
+    <Setter Property="Opacity" Value="0.9" />
+  </Style>
+</ResourceDictionary>

@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- Toggle Button Template (arrow down) -->
+  <ControlTemplate x:Key="ComboBoxToggleButton" TargetType="ToggleButton">
+    <Grid>
+      <Path x:Name="Arrow" HorizontalAlignment="Center" VerticalAlignment="Center" Data="M 0 0 L 4 4 L 8 0 Z" Fill="White" Margin="0,0,4,0" />
+    </Grid>
+  </ControlTemplate>
+  <Style x:Key="CustomComboBoxStyle" TargetType="ComboBox">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ComboBox">
+          <Grid>
+            <Border x:Name="Border" CornerRadius="5" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+              <Grid>
+                <!-- Hi?n th? n?i dung du?c ch?n -->
+                <ContentPresenter x:Name="ContentSite" Margin="10,0,30,0" VerticalAlignment="Center" HorizontalAlignment="Left" Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" RecognizesAccessKey="True" />
+                <!-- Nút m? dropdown -->
+                <ToggleButton x:Name="ToggleButton" Style="{x:Null}" Template="{StaticResource ComboBoxToggleButton}" Background="Transparent" BorderThickness="0" Focusable="False" IsChecked="{Binding Path=IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}}" ClickMode="Press" HorizontalAlignment="Right" Width="20" Margin="0" />
+              </Grid>
+            </Border>
+            <!-- Danh sách dropdown -->
+            <Popup x:Name="Popup" Placement="Bottom" IsOpen="{TemplateBinding IsDropDownOpen}" AllowsTransparency="True" Focusable="False" PopupAnimation="Slide">
+              <Grid x:Name="DropDown" SnapsToDevicePixels="True" MinWidth="{TemplateBinding ActualWidth}" MaxHeight="200">
+                <Border x:Name="DropDownBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" />
+                <ScrollViewer Margin="4,6,4,6" SnapsToDevicePixels="True">
+                  <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Contained" />
+                </ScrollViewer>
+              </Grid>
+            </Popup>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+    <Setter Property="Background" Value="#111318" />
+    <Setter Property="Foreground" Value="#E8ECF1" />
+    <Setter Property="BorderBrush" Value="#252830" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontFamily" Value="Kanit" />
+    <Setter Property="FontWeight" Value="Medium" />
+  </Style>
+  <Style x:Key="CustomComboBoxItemStyle" TargetType="ComboBoxItem">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ComboBoxItem">
+          <Border Name="Border" BorderThickness="1" Padding="5,0,0,0" CornerRadius="2" Background="{TemplateBinding Background}">
+            <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Border" Property="Background" Value="#252830" />
+              <Setter Property="Foreground" Value="White" />
+            </Trigger>
+            <Trigger Property="IsSelected" Value="True">
+              <Setter TargetName="Border" Property="Background" Value="#1A2C3E" />
+              <Setter Property="Foreground" Value="#4A9EFF" />
+            </Trigger>
+            <Trigger Property="Selector.IsSelectionActive" Value="False">
+              <Setter TargetName="Border" Property="Background" Value="#161920" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+    <Setter Property="Background" Value="#111318" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="Foreground" Value="#8B95A5" />
+    <Setter Property="FontFamily" Value="kanit" />
+    <Setter Property="FontSize" Value="11" />
+  </Style>
+</ResourceDictionary>

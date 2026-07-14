@@ -1,0 +1,33 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Style x:Key="PrimaryButtonStyle_v3" TargetType="{x:Type Button}">
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="Padding" Value="14,6" />
+        <Setter Property="Background" Value="{StaticResource VmsPrimaryBrush_v3}" />
+        <Setter Property="BorderBrush" Value="{StaticResource VmsPrimaryBrush_v3}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Foreground" Value="{StaticResource VmsTextInverseBrush_v3}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Button}">
+                    <Border x:Name="Root" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="4" SnapsToDevicePixels="True">
+                        <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Root" Property="Background" Value="{StaticResource VmsPrimaryHoverBrush_v3}" /><Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource VmsPrimaryHoverBrush_v3}" /></Trigger>
+                        <Trigger Property="IsPressed" Value="True"><Setter TargetName="Root" Property="Background" Value="{StaticResource VmsPrimaryPressedBrush_v3}" /><Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource VmsPrimaryPressedBrush_v3}" /></Trigger>
+                        <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Root" Property="Opacity" Value="0.45" /></Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="SecondaryButtonStyle_v3" TargetType="{x:Type Button}" BasedOn="{StaticResource PrimaryButtonStyle_v3}">
+        <Setter Property="Background" Value="{StaticResource VmsSurface2Brush_v3}" />
+        <Setter Property="BorderBrush" Value="{StaticResource VmsBorderBrush_v3}" />
+        <Setter Property="Foreground" Value="{StaticResource VmsTextPrimaryBrush_v3}" />
+    </Style>
+</ResourceDictionary>

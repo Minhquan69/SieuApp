@@ -1,0 +1,12 @@
+prefix=${pcfiledir}/../../..
+includedir=${prefix}/include
+libdir=${prefix}/lib
+
+Name: gstwinks
+Description: gst-plugins-bad: gstwinks
+Version: 1.24.10
+Requires.private: gstreamer-base-1.0 >=  1.24.0
+Libs: -L${prefix}/lib/gstreamer-1.0 -lgstwinks
+Libs.private: -lksuser -luuid -lstrmiids -ldxguid -lsetupapi -lole32
+Cflags: -I${includedir}
+

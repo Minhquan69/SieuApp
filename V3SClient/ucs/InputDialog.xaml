@@ -1,0 +1,28 @@
+<Window x:Class="V3SClient.ucs.InputDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:V3SClient.ucs"
+        mc:Ignorable="d"
+         Title="Nhập dữ liệu" SizeToContent="WidthAndHeight" WindowStartupLocation="CenterOwner">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock x:Name="TitleText" FontSize="14" FontWeight="Bold" Margin="5"/>
+        <TextBox x:Name="InputBox" Grid.Row="1" Margin="5"/>
+
+        <!-- Thêm TextBlock hiển thị lỗi -->
+        <TextBlock x:Name="ErrorText" Foreground="Red" Grid.Row="2" Margin="5" Visibility="Collapsed"/>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Đồng ý" Width="75" Margin="5" Click="OkButton_Click"/>
+            <Button Content="Hủy" Width="75" Margin="5" Click="CancelButton_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

@@ -1,0 +1,102 @@
+<Page x:Class="V3SClient.UI.Views.VConfig" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:Icon="http://metro.mahapps.com/winfx/xaml/iconpacks" xmlns:converters="clr-namespace:V3SClient.UI.Converters" xmlns:local="clr-namespace:V3SClient.UI.Views" mc:Ignorable="d" d:DesignHeight="450" d:DesignWidth="800" Title="VConfig">
+    <Page.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/styles/customize_button_v2.xaml" />
+                <ResourceDictionary Source="/styles/customize_menu_flat.xaml" />
+            <ResourceDictionary Source="/styles/vconfig_styles.xaml" /></ResourceDictionary.MergedDictionaries>
+            <converters:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibilityConverter" />
+            <converters:PermissionVisibilityConverter x:Key="PermissionVisConverter" />
+        </ResourceDictionary>
+
+
+    </Page.Resources>
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition x:Name="MenuColumn" Width="0" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <!-- Toggle Button -->
+        <Button Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,1,10,0" Click="ToggleMenu_Click" Grid.Column="0">
+            <Icon:PackIconMaterial x:Name="ArrowIcon" Kind="ChevronLeft" Width="16" Height="16" Foreground="White" />
+        </Button>
+        <!--Left Menu-->
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <Button Style="{StaticResource topButton}" HorizontalAlignment="Left" Margin="20 28 0 35">
+                <Icon:PackIconMaterial Kind="Menu" Width="15" Height="15" />
+            </Button>
+        </Grid>
+        <Border x:Name="NativeMenuBorder" Grid.RowSpan="2" Background="#111318" CornerRadius="0 10 0 1" Visibility="Collapsed">
+            <DockPanel>
+                <!--Menu Titles-->
+                <TextBlock Text="Cài đặt" Foreground="#95FFFFFF" FontSize="16" FontWeight="Bold" DockPanel.Dock="Top" Margin="20 25 0 10" Visibility="{Binding IsMenuCollapsed, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
+                
+                <!--Menu Seprator-->
+                <Separator Margin="20,10,20,10" Background="#252830" DockPanel.Dock="Top" Height="1" Visibility="{Binding IsMenuCollapsed, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
+                
+                <!--Menu Buttons-->
+                <StackPanel DockPanel.Dock="Top" Margin="5,0,5,0">
+                    <!-- Nhóm: Camera Settings -->
+                    <Expander Header="Thông tin cấu hình" IsExpanded="True" Style="{StaticResource VconfigExpander01Style}">
+                        
+                        <StackPanel Margin="0,5,0,0">
+                            <Button Style="{StaticResource FlatMenuButton}" Tag="CamInfo" Click="MenuButton_Click" Visibility="{Binding Converter={StaticResource PermissionVisConverter}, ConverterParameter='camera:view'}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Icon:PackIconMaterial Kind="Camera" Width="18" Height="18" Margin="0,0,15,0" />
+                                    <TextBlock Text="Danh sách Camera" VerticalAlignment="Center" Visibility="{Binding IsMenuCollapsed, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
+                                </StackPanel>
+                            </Button>
+
+                            <Button Style="{StaticResource FlatMenuButton}" Tag="RoiConfig" Click="MenuButton_Click" Visibility="{Binding Converter={StaticResource PermissionVisConverter}, ConverterParameter='roi:view'}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Icon:PackIconMaterial Kind="VectorPolygon" Width="18" Height="18" Margin="0,0,15,0" />
+                                    <TextBlock Text="Quản lý vùng ROI" VerticalAlignment="Center" Visibility="{Binding IsMenuCollapsed, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
+                                </StackPanel>
+                            </Button>
+
+                            <Button Style="{StaticResource FlatMenuButton}" Tag="GroupArea" Click="MenuButton_Click" Visibility="{Binding Converter={StaticResource PermissionVisConverter}, ConverterParameter='camera_group:view'}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Icon:PackIconMaterial Kind="OfficeBuilding" Width="18" Height="18" Margin="0,0,15,0" />
+                                    <TextBlock Text="Nhóm và khu vực" VerticalAlignment="Center" Visibility="{Binding IsMenuCollapsed, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
+                                </StackPanel>
+                            </Button>
+
+                            <Button Style="{StaticResource FlatMenuButton}" Tag="AiConfig" Click="MenuButton_Click" Visibility="{Binding Converter={StaticResource PermissionVisConverter}, ConverterParameter='ai_assignment:view'}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Icon:PackIconMaterial Kind="Brain" Width="18" Height="18" Margin="0,0,15,0" />
+                                    <TextBlock Text="Cấu hình AI node" VerticalAlignment="Center" Visibility="{Binding IsMenuCollapsed, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
+                                </StackPanel>
+                            </Button>
+                            
+                            <Button Style="{StaticResource FlatMenuButton}" Tag="ClientInfo" Click="MenuButton_Click" Visibility="{Binding Converter={StaticResource PermissionVisConverter}, ConverterParameter='client_profile:view'}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Icon:PackIconMaterial Kind="RemoteDesktop" Width="18" Height="18" Margin="0,0,15,0" />
+                                    <TextBlock Text="Client Profile" VerticalAlignment="Center" Visibility="{Binding IsMenuCollapsed, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
+                                </StackPanel>
+                            </Button>
+
+
+                            <Button Style="{StaticResource FlatMenuButton}" Tag="SystemConfig" Click="MenuButton_Click" Visibility="{Binding Converter={StaticResource PermissionVisConverter}, ConverterParameter='config:view'}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Icon:PackIconMaterial Kind="Cog" Width="18" Height="18" Margin="0,0,15,0" />
+                                    <TextBlock Text="Cấu hình System" VerticalAlignment="Center" Visibility="{Binding IsMenuCollapsed, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Expander>
+                </StackPanel>
+                <Button Style="{StaticResource FlatLogoutButton}" VerticalAlignment="Bottom" DockPanel.Dock="Bottom" Margin="5 0 5 20">
+                    <StackPanel Orientation="Horizontal">
+                        <Icon:PackIconMaterial Kind="Logout" Width="18" Height="18" Margin="0,0,15,0" />
+                        <TextBlock Text="Đăng xuất" VerticalAlignment="Center" Visibility="{Binding IsMenuCollapsed, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
+                    </StackPanel>
+                </Button>
+            </DockPanel>
+        </Border>
+        <ContentControl x:Name="MainContentArea" Grid.Column="0" Grid.ColumnSpan="2" />
+    </Grid>
+</Page>

@@ -1,0 +1,13 @@
+prefix=${pcfiledir}/../..
+exec_prefix=${prefix}
+libdir=${exec_prefix}/C:/projects/repos/cerbero.git/1.24/build/dist/msvc_x86_64/lib
+includedir=${prefix}/include
+
+Name: srt
+Description: SRT library set
+Version: 1.5.3
+Libs: -L${libdir} -lsrt   
+Libs.private:  -lwsock32 -lws2_32 -lstdc++ -lmingw32 -lgcc_s -lgcc -lmoldname -lmingwex -lpthread -ladvapi32 -lshell32 -luser32 -lkernel32 -lmingw32 -lgcc_s -lgcc -lmoldname -lmingwex
+Cflags: -I${includedir} -I${includedir}/srt
+Requires.private: openssl libcrypto
+

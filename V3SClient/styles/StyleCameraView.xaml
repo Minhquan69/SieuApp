@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- Ð?nh nghia m?t Style cho TextBlock -->
+  <Style x:Key="UCamera_Text_Block" TargetType="TextBlock">
+    <Setter Property="FontFamily" Value="Kanit" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="Normal" />
+    <Setter Property="Foreground" Value="#FFFFFF" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style x:Key="ImageFull" TargetType="Image">
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="Panel.UseLayoutRounding" Value="True" />
+    <Setter Property="Stretch" Value="Fill" />
+  </Style>
+  <Style x:Key="UCamera_Button" TargetType="Button">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="BorderBrush" Value="#463626" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+</ResourceDictionary>

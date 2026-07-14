@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Style x:Key="CustomListViewItemStyle" TargetType="ListViewItem">
+    <!-- Thi?t l?p màu m?c d?nh -->
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Margin" Value="1" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Stretch" />
+    <Setter Property="Height" Value="50" />
+    <Style.Triggers>
+      <!--Màu khi hover (di chu?t qua)-->
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="Background" Value="#2B2621" />
+        <Setter Property="Foreground" Value="Black" />
+        <Setter Property="BorderBrush" Value="#64B5F6" />
+        <Setter Property="BorderThickness" Value="1" />
+      </Trigger>
+      <!--Màu khi focus-->
+      <Trigger Property="IsFocused" Value="True">
+        <Setter Property="Background" Value="#2B2621" />
+        <Setter Property="Foreground" Value="Black" />
+        <Setter Property="BorderBrush" Value="#64B5F6" />
+        <Setter Property="BorderThickness" Value="1" />
+      </Trigger>
+      <!--Màu khi du?c ch?n (selected)-->
+      <Trigger Property="IsSelected" Value="True">
+        <Setter Property="Background" Value="#2B2621" />
+        <Setter Property="Foreground" Value="Black" />
+        <Setter Property="BorderBrush" Value="#64B5F6" />
+        <Setter Property="BorderThickness" Value="1" />
+      </Trigger>
+      <!--Màu khi v?a du?c ch?n v?a focus-->
+      <MultiTrigger>
+        <MultiTrigger.Conditions>
+          <Condition Property="IsSelected" Value="True" />
+          <Condition Property="IsFocused" Value="True" />
+        </MultiTrigger.Conditions>
+        <Setter Property="Background" Value="#2B2621" />
+        <Setter Property="Foreground" Value="Black" />
+        <Setter Property="BorderBrush" Value="#64B5F6" />
+        <Setter Property="BorderThickness" Value="1" />
+      </MultiTrigger>
+      <!--Màu khi du?c ch?n nhung ListView m?t focus-->
+      <MultiTrigger>
+        <MultiTrigger.Conditions>
+          <Condition Property="IsSelected" Value="True" />
+          <Condition Property="Selector.IsSelectionActive" Value="False" />
+        </MultiTrigger.Conditions>
+        <Setter Property="Background" Value="#2B2621" />
+        <Setter Property="Foreground" Value="Black" />
+        <Setter Property="BorderBrush" Value="#64B5F6" />
+        <Setter Property="BorderThickness" Value="1" />
+      </MultiTrigger>
+    </Style.Triggers>
+  </Style>
+  <Style TargetType="TextBlock" x:Key="customizeTextBlock">
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="TextAlignment" Value="Center" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="WhiteSmoke" />
+    <Setter Property="FontFamily" Value="Kanit" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Opacity" Value="0.6" />
+  </Style>
+  <!-- Style cho header -->
+  <Style TargetType="GridViewColumnHeader">
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Height" Value="30" />
+    <Setter Property="Foreground" Value="WhiteSmoke" />
+    <Setter Property="Opacity" Value="0.8" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="GridViewColumnHeader">
+          <Border Background="{TemplateBinding Background}" BorderThickness="0" Padding="{TemplateBinding Padding}">
+            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center" />
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <Style TargetType="CheckBox" x:Key="customizeCheckbox">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="CheckBox">
+          <Border Background="Transparent" BorderThickness="0" Padding="3">
+            <Grid>
+              <Rectangle Name="CheckMark" Width="16" Height="16" Fill="LightGray" Stroke="Gray" StrokeThickness="1" />
+              <Path Name="CheckPath" Width="16" Height="16" Stretch="Uniform" Fill="White" Data="M 0 0 L 0 7 L 3 10 L 8 5 L 8 0 L 3 5 Z" Visibility="Collapsed" />
+            </Grid>
+          </Border>
+          <ControlTemplate.Triggers>
+            <!-- Trigger cho khi IsChecked = True (màu d?) -->
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="CheckMark" Property="Fill" Value="Red" />
+              <Setter TargetName="CheckMark" Property="Stroke" Value="DarkRed" />
+              <Setter TargetName="CheckPath" Property="Visibility" Value="Visible" />
+            </Trigger>
+            <!-- Trigger cho khi IsChecked = False (màu xanh) -->
+            <Trigger Property="IsChecked" Value="False">
+              <Setter TargetName="CheckMark" Property="Fill" Value="Blue" />
+              <Setter TargetName="CheckMark" Property="Stroke" Value="DarkBlue" />
+              <Setter TargetName="CheckPath" Property="Visibility" Value="Collapsed" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+</ResourceDictionary>

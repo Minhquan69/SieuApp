@@ -1,0 +1,84 @@
+<UserControl x:Class="V3SClient.ucs.TimelineControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             mc:Ignorable="d" 
+             d:DesignHeight="200" d:DesignWidth="800"
+             Background="#1E1E1E" MinHeight="100">
+    <UserControl.Resources>
+        <!-- ScrollViewer styles can be added here if needed to make scrollbars dark too -->
+    </UserControl.Resources>
+    
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="80" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="30" />
+            <RowDefinition Height="60" />
+        </Grid.RowDefinitions>
+
+        <!-- Top Left Corner -->
+        <Border BorderBrush="#333" BorderThickness="0,0,1,1" Background="#1A1A1A">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <ToggleButton x:Name="btnExpand" Content="+" Width="18" Height="18" Margin="5,0,5,0" 
+                               Background="#333" Foreground="White" BorderThickness="0" Cursor="Hand"
+                               Checked="BtnExpand_Changed" Unchecked="BtnExpand_Changed"/>
+                <TextBlock Text="CAMERA" Foreground="#888" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="10"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Time Ruler -->
+        <ScrollViewer Grid.Column="1" x:Name="scrollRuler" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled">
+            <Canvas x:Name="canvasTimeLabels" Height="30" Background="#1A1A1A" />
+        </ScrollViewer>
+
+        <!-- Camera Headers -->
+        <ScrollViewer Grid.Row="1" x:Name="scrollHeaders" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden">
+            <StackPanel x:Name="pnlCameraHeaders" Background="#1E1E1E" />
+        </ScrollViewer>
+
+        <!-- Timeline Area -->
+        <ScrollViewer Grid.Row="1" Grid.Column="1" x:Name="scrollTimeline" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" ScrollChanged="ScrollTimeline_ScrollChanged">
+            <Grid x:Name="gridTimelineContainer" Background="#151515">
+                <Canvas x:Name="canvasGridLines" IsHitTestVisible="False" />
+                <Canvas x:Name="canvasTimeline" Background="Transparent" 
+                        MouseDown="CanvasTimeline_MouseDown" MouseMove="CanvasTimeline_MouseMove" MouseUp="CanvasTimeline_MouseUp" MouseLeave="CanvasTimeline_MouseLeave">
+                    <Canvas.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Chọn điểm bắt đầu" Click="MenuSetStart_Click"/>
+                            <MenuItem Header="Chọn điểm kết thúc" Click="MenuSetEnd_Click"/>
+                            <Separator/>
+                            <MenuItem Header="Tải vùng video đã chọn" Click="MenuDownload_Click"/>
+                        </ContextMenu>
+                    </Canvas.ContextMenu>
+                </Canvas>
+                
+                <!-- Selection Overlay Canvas -->
+                <Canvas IsHitTestVisible="False">
+                    <Rectangle x:Name="rectSelection" Fill="#4400D2FF" Visibility="Collapsed" VerticalAlignment="Stretch" Height="{Binding ActualHeight, ElementName=gridTimelineContainer}" />
+                    
+                    <!-- Manual Selection Markers -->
+                    <TextBlock x:Name="txtStartMarker" Text="[" Foreground="#FF4CAF50" FontSize="24" FontWeight="Bold" Visibility="Collapsed" Panel.ZIndex="110"/>
+                    <TextBlock x:Name="txtEndMarker" Text="]" Foreground="#FFF44336" FontSize="24" FontWeight="Bold" Visibility="Collapsed" Panel.ZIndex="110"/>
+
+                    <!-- Selection Time Labels -->
+                    <Border x:Name="borderStart" Background="#FF4CAF50" CornerRadius="4" Padding="4,2" Visibility="Collapsed" MinWidth="50" Panel.ZIndex="100">
+                        <TextBlock x:Name="txtSelectionStart" Foreground="White" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center"/>
+                    </Border>
+                    <Border x:Name="borderEnd" Background="#FFF44336" CornerRadius="4" Padding="4,2" Visibility="Collapsed" MinWidth="50" Panel.ZIndex="100">
+                        <TextBlock x:Name="txtSelectionEnd" Foreground="White" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center"/>
+                    </Border>
+                </Canvas>
+
+                <Rectangle x:Name="rectPlayhead" Width="2" Fill="#00D2FF" HorizontalAlignment="Left" VerticalAlignment="Stretch" IsHitTestVisible="False">
+                    <Rectangle.Effect>
+                        <DropShadowEffect Color="#00D2FF" BlurRadius="6" ShadowDepth="0" />
+                    </Rectangle.Effect>
+                </Rectangle>
+            </Grid>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

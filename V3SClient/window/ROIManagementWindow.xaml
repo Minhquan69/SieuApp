@@ -1,0 +1,103 @@
+<Window x:Class="V3SClient.window.ROIManagementWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:Icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
+        Title="Quản lý vùng ROI" Height="450" Width="650"
+        WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        FontFamily="Arial">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="../styles/customize_datagrid.xaml" />
+                <ResourceDictionary Source="../styles/customize_scrollviewer.xaml" />
+                <ResourceDictionary Source="../styles/customize_textblock.xaml" />
+                <ResourceDictionary Source="../styles/customize_button.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Border Background="#111318" CornerRadius="8" BorderBrush="#252830" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="45"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="55"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <Border Grid.Row="0" Background="#161920" CornerRadius="8,8,0,0" MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                <Grid>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="15,0,0,0">
+                        <Icon:PackIconMaterial Kind="Layers" Width="18" Height="18" Foreground="#4A9EFF" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Text="Danh sách vùng ROI của Camera" FontSize="16" FontWeight="Bold" Foreground="#E8ECF1" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <Button Click="BtnClose_Click" Background="Transparent" BorderThickness="0" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Width="30" Height="30" Cursor="Hand">
+                        <Icon:PackIconMaterial Kind="Close" Width="14" Height="14" Foreground="#8B95A5"/>
+                    </Button>
+                </Grid>
+            </Border>
+            
+            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="20,15,20,10">
+                <Button Content="Thêm mới" Width="100" Height="32" Click="BtnAdd_Click" 
+                        Background="#4A9EFF" Foreground="#0D0F12" FontWeight="Bold" Cursor="Hand">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border CornerRadius="3" Background="{TemplateBinding Background}" Padding="8,4">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+                <Button Content="Tải lại" Width="100" Height="32" Margin="10,0,0,0" Click="BtnRefresh_Click"
+                        Background="#252830" Foreground="#E8ECF1" Cursor="Hand">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border CornerRadius="3" Background="{TemplateBinding Background}" Padding="8,4">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+            </StackPanel>
+
+            <DataGrid Grid.Row="2" x:Name="dgRois" AutoGenerateColumns="False" CanUserAddRows="False" 
+                      IsReadOnly="True" Background="Transparent" BorderThickness="0" Margin="20,0,20,0" ItemsSource="{Binding}">
+                <DataGrid.Resources>
+                    <ResourceDictionary Source="/styles/settings_base.xaml" />
+                </DataGrid.Resources>
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Tên vùng" Binding="{Binding Name}" Width="*"/>
+                    <DataGridTextColumn Header="Loại" Binding="{Binding RoiType}" Width="100"/>
+                    <DataGridCheckBoxColumn Header="Trạng thái" Binding="{Binding IsActive}" Width="80"/>
+                    <DataGridTemplateColumn Header="Thao tác" Width="120">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                    <Button Content="Sửa" Width="50" Height="26" Margin="0,0,5,0" Click="BtnEdit_Click" Style="{StaticResource gridEditButton}"/>
+                                    <Button Content="Xóa" Width="50" Height="26" Click="BtnDelete_Click" Style="{StaticResource gridRemoveButton}"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <!-- Footer -->
+            <Border Grid.Row="3" Background="#161920" CornerRadius="0,0,8,8">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,15,0" VerticalAlignment="Center">
+                    <Button Content="Đóng" Click="BtnClose_Click" Width="90" Height="32" Cursor="Hand">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border CornerRadius="4" Background="#252830" Padding="8,4">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Border>
+</Window>

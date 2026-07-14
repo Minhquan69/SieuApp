@@ -1,0 +1,11 @@
+prefix=${pcfiledir}/../../..
+includedir=${prefix}/include
+libdir=${prefix}/lib
+
+Name: gstwin32ipc
+Description: gst-plugins-bad: gstwin32ipc
+Version: 1.24.10
+Requires.private: gstreamer-base-1.0 >=  1.24.0, gstreamer-video-1.0 >=  1.24.0
+Libs: -L${prefix}/lib/gstreamer-1.0 -lgstwin32ipc
+Cflags: -I${includedir}
+

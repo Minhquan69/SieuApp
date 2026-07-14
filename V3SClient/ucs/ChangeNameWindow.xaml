@@ -1,0 +1,33 @@
+<Window x:Class="V3SClient.ucs.ChangeNameWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:V3SClient.ucs"
+        xmlns:cnv="clr-namespace:V3SClient.UI.Converters"
+        mc:Ignorable="d" WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+         Title="Thay đổi tên" Height="140" Width="300">
+    <Window.Resources>
+        <cnv:EmptyTextToVisibilityConverter x:Key="EmptyTextToVisibilityConverter"/>
+    </Window.Resources>
+    
+    <StackPanel Margin="10">
+        <CheckBox x:Name="chkUseOriginal" Content="Sử dụng tên mặc định"
+                  Checked="chkUseOriginal_Checked" Unchecked="chkUseOriginal_Unchecked"/>
+
+        <Grid Margin="0,10,0,0">
+            <TextBox x:Name="txtNewName" />
+            <TextBlock Text="Nhập tên mới..."
+                       Foreground="Gray"
+                       Margin="5,2,0,0"
+                       IsHitTestVisible="False"
+                       VerticalAlignment="Top"
+                       Visibility="{Binding Text, ElementName=txtNewName, Converter={StaticResource EmptyTextToVisibilityConverter}}"/>
+        </Grid>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button Content="Xác nhận" Width="70" Margin="5" Click="Ok_Click"/>
+            <Button Content="Hủy bỏ" Width="70" Margin="5" Click="Cancel_Click"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

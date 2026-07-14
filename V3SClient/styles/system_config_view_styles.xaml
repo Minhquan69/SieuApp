@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:Icon="http://metro.mahapps.com/winfx/xaml/iconpacks" xmlns:System="clr-namespace:System;assembly=mscorlib" xmlns:converters="clr-namespace:V3SClient.UI.Converters" xmlns:ucs="clr-namespace:V3SClient.ucs">
+  <ResourceDictionary.MergedDictionaries>
+    <ResourceDictionary Source="/styles/customize_button_v2.xaml" />
+    <ResourceDictionary Source="/styles/customize_textbox.xaml" />
+    <ResourceDictionary Source="/styles/customize_textblock.xaml" />
+    <ResourceDictionary Source="/styles/customize_combobox.xaml" />
+    <ResourceDictionary Source="/styles/customize_scrollviewer.xaml" />
+    <ResourceDictionary Source="/styles/customize_datagrid_ivista.xaml" />
+  </ResourceDictionary.MergedDictionaries>
+  <Style TargetType="Ellipse" x:Key="SystemConfigViewEllipse01Style">
+    <Setter Property="Fill" Value="#666" />
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding Status}" Value="Active">
+        <Setter Property="Fill" Value="#4ade80" />
+      </DataTrigger>
+      <DataTrigger Binding="{Binding Status}" Value="Online">
+        <Setter Property="Fill" Value="#4ade80" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+</ResourceDictionary>

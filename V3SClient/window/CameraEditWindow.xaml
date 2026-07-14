@@ -1,0 +1,211 @@
+<Window x:Class="V3SClient.window.CameraEditWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:Icon="http://metro.mahapps.com/winfx/xaml/iconpacks" Title="Đăng ký / Chỉnh sửa Camera" Height="650" Width="550" WindowStartupLocation="CenterScreen" ResizeMode="NoResize" WindowStyle="None" AllowsTransparency="True" Background="Transparent" FontFamily="Arial">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="../styles/customize_combobox.xaml" />
+                <ResourceDictionary Source="../styles/customize_textbox.xaml" />
+                <ResourceDictionary Source="../styles/customize_scrollviewer.xaml" />
+                <ResourceDictionary Source="../styles/customize_button.xaml" />
+                <ResourceDictionary Source="/styles/form_base.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Border Background="#111318" CornerRadius="8" BorderBrush="#252830" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="45" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="55" />
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <Border Grid.Row="0" Background="#161920" CornerRadius="8,8,0,0" MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                <Grid>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="15,0,0,0">
+                        <Icon:PackIconMaterial Kind="Camera" Width="18" Height="18" Foreground="#4A9EFF" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBlock x:Name="txtTitle" Text="Đăng ký Camera mới" FontSize="16" FontWeight="Bold" Foreground="#E8ECF1" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <Button Click="BtnCancel_Click" Background="Transparent" BorderThickness="0" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" Width="30" Height="30" Cursor="Hand">
+                        <Icon:PackIconMaterial Kind="Close" Width="14" Height="14" Foreground="#8B95A5" />
+                    </Button>
+                </Grid>
+            </Border>
+
+            <!-- Form Fields -->
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0">
+                <StackPanel Margin="20,10,20,10">
+                    
+                    <TextBlock Text="Loại camera *" Style="{StaticResource FieldLabelBase}" />
+                    <ComboBox x:Name="cboCameraType" Style="{StaticResource FieldComboBase}" SelectionChanged="cboCameraType_SelectionChanged" SelectedIndex="0">
+                        <ComboBoxItem Content="IP Camera" Tag="ip_cam" />
+                        <ComboBoxItem Content="Body Camera" Tag="body_cam" />
+                    </ComboBox>
+
+                    <!-- Basic Info Section (Always Visible) -->
+                    <StackPanel x:Name="basicInfoSection">
+                        <TextBlock Text="Mã định danh camera *" Style="{StaticResource FieldLabelBase}" />
+                        <TextBox x:Name="txtCameraCode" Style="{StaticResource FieldInputBase}" Tag="Nhập mã camera" />
+
+                        <TextBlock Text="Tên camera (chính) *" Style="{StaticResource FieldLabelBase}" />
+                        <TextBox x:Name="txtDisplayName1" Style="{StaticResource FieldInputBase}" Tag="Nhập tên camera" />
+
+                        <TextBlock Text="Tên camera (phụ)" Style="{StaticResource FieldLabelBase}" />
+                        <TextBox x:Name="txtDisplayName2" Style="{StaticResource FieldInputBase}" Tag="Nhập tên phụ (tùy chọn)" />
+
+                        <TextBlock Text="Vị trí đặt camera" Style="{StaticResource FieldLabelBase}" />
+                        <TextBox x:Name="txtLocationName" Style="{StaticResource FieldInputBase}" Tag="Nhập vị trí" />
+
+                        <TextBlock Text="Nhóm Camera (Chọn nhiều)" Style="{StaticResource FieldLabelBase}" />
+                        <Border BorderBrush="#252830" BorderThickness="1" Background="#161920" CornerRadius="3" Height="80">
+                            <ListBox x:Name="lbGroups" Background="Transparent" BorderThickness="0" Foreground="White">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <CheckBox Content="{Binding Name}" IsChecked="{Binding IsSelected}" Foreground="#E8ECF1" Margin="2" />
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- RTSP URL Section (Visible for IP Camera) -->
+                    <StackPanel x:Name="streamUrlSection">
+                        <TextBlock Text="Địa chỉ Stream (RTSP URL) *" Style="{StaticResource FieldLabelBase}" />
+                        <TextBox x:Name="txtStreamUrl" Style="{StaticResource FieldInputBase}" Tag="rtsp://..." />
+                    </StackPanel>
+
+                    <!-- Technical Info Section (Visible for Body Camera / Advanced) -->
+                    <StackPanel x:Name="technicalFieldsSection">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="10" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Codec *" Style="{StaticResource FieldLabelBase}" />
+                                <ComboBox x:Name="cboCodec" Style="{StaticResource FieldComboBase}" SelectedIndex="0">
+                                    <ComboBoxItem Content="H264" Tag="h264" />
+                                    <ComboBoxItem Content="H265" Tag="h265" />
+                                </ComboBox>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Chế độ hoạt động" Style="{StaticResource FieldLabelBase}" />
+                                <ComboBox x:Name="cboOperationMode" Style="{StaticResource FieldComboBase}" SelectedIndex="1">
+                                    <ComboBoxItem Content="Raw Data" Tag="raw_data" />
+                                    <ComboBoxItem Content="AI Processed" Tag="ai_processed" />
+                                </ComboBox>
+                            </StackPanel>
+                        </Grid>
+
+                        <StackPanel x:Name="ipPortSection">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="2*" />
+                                    <ColumnDefinition Width="10" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="IP Address / Domain" Style="{StaticResource FieldLabelBase}" />
+                                    <TextBox x:Name="txtSourceIp" Style="{StaticResource FieldInputBase}" Tag="192.168.1.x" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="Port" Style="{StaticResource FieldLabelBase}" />
+                                    <TextBox x:Name="txtSourcePort" Style="{StaticResource FieldInputBase}" Tag="554" />
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+
+                        <StackPanel x:Name="authSection">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="10" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="RTSP Username" Style="{StaticResource FieldLabelBase}" />
+                                    <TextBox x:Name="txtRtspUser" Style="{StaticResource FieldInputBase}" Tag="admin" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="RTSP Password" Style="{StaticResource FieldLabelBase}" />
+                                    <PasswordBox x:Name="txtRtspPass" Background="#161920" Foreground="#E8ECF1" BorderBrush="#252830" BorderThickness="1" Padding="6,4" FontSize="13" VerticalContentAlignment="Center" Height="30">
+                                        <PasswordBox.Resources><ResourceDictionary Source="/styles/camera_edit_window_scope01_styles.xaml" /></PasswordBox.Resources>
+                                    </PasswordBox>
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="10" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Latitude" Style="{StaticResource FieldLabelBase}" />
+                                <TextBox x:Name="txtLatitude" Style="{StaticResource FieldInputBase}" Tag="0.0" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Longitude" Style="{StaticResource FieldLabelBase}" />
+                                <TextBox x:Name="txtLongitude" Style="{StaticResource FieldInputBase}" Tag="0.0" />
+                            </StackPanel>
+                        </Grid>
+
+                        <TextBlock Text="Media Server (Relay)" Style="{StaticResource FieldLabelBase}" />
+                        <ComboBox x:Name="cboMediaServer" Style="{StaticResource FieldComboBase}" DisplayMemberPath="Name" SelectedValuePath="Id" SelectedIndex="0" />
+                    </StackPanel>
+
+                    <!-- Common Optional Fields -->
+                    <TextBlock Text="Mô tả" Style="{StaticResource FieldLabelBase}" />
+                    <TextBox x:Name="txtDescription" Style="{StaticResource FieldInputBase}" TextWrapping="Wrap" AcceptsReturn="True" Height="50" Tag="Nhập mô tả" />
+
+                    <CheckBox x:Name="chkActive" Content="Hoạt động" Foreground="#E8ECF1" FontSize="13" Margin="0,10,0,0" IsChecked="True" />
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Footer -->
+            <Border Grid.Row="2" Background="#161920" CornerRadius="0,0,8,8">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,15,0" VerticalAlignment="Center">
+                    <Button Content="Hủy" Click="BtnCancel_Click" Width="80" Height="32" Margin="0,0,10,0" Cursor="Hand">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border CornerRadius="4" Background="#252830" Padding="8,4">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    <Button x:Name="btnSave" Content="Lưu" Click="BtnSave_Click" Width="100" Height="32" Background="#4A9EFF" Foreground="#0D0F12" FontWeight="Bold" Cursor="Hand">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border CornerRadius="4" Background="{TemplateBinding Background}">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Border>
+</Window>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

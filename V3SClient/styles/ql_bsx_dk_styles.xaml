@@ -1,0 +1,498 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:local="clr-namespace:V3SClient.UI.Views" xmlns:ucs="clr-namespace:V3SClient.ucs" xmlns:models="clr-namespace:V3SClient.models">
+  <ResourceDictionary.MergedDictionaries>
+    <ResourceDictionary Source="/styles/border_reseted.xaml" />
+    <ResourceDictionary Source="/styles/customize_button_v2.xaml" />
+    <ResourceDictionary Source="/styles/customize_scrollviewer.xaml" />
+    <ResourceDictionary Source="/styles/customize_listbox.xaml" />
+    <ResourceDictionary Source="/styles/customize_combobox.xaml" />
+  </ResourceDictionary.MergedDictionaries>
+  <Style x:Key="QlBsxDkSlimScrollBarStyle" TargetType="ScrollBar">
+    <Setter Property="Width" Value="4" />
+    <Setter Property="Height" Value="4" />
+    <Setter Property="Opacity" Value="0.55" />
+    <Setter Property="Background" Value="#0F1117" />
+    <Setter Property="Foreground" Value="#404858" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ScrollBar">
+          <Grid Background="{TemplateBinding Background}">
+            <Track x:Name="PART_Track"
+                   Orientation="{TemplateBinding Orientation}"
+                   IsDirectionReversed="False">
+              <Track.DecreaseRepeatButton>
+                <RepeatButton Command="ScrollBar.PageUpCommand" Background="Transparent" BorderThickness="0" />
+              </Track.DecreaseRepeatButton>
+              <Track.Thumb>
+                <Thumb x:Name="ScrollThumb" Background="{TemplateBinding Foreground}">
+                  <Thumb.Template>
+                    <ControlTemplate TargetType="Thumb">
+                      <Border x:Name="ThumbBorder" Background="{TemplateBinding Background}" CornerRadius="3" Margin="1" />
+                      <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                          <Setter TargetName="ThumbBorder" Property="Background" Value="#5A6578" />
+                        </Trigger>
+                        <Trigger Property="IsDragging" Value="True">
+                          <Setter TargetName="ThumbBorder" Property="Background" Value="#7080A0" />
+                        </Trigger>
+                      </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                  </Thumb.Template>
+                </Thumb>
+              </Track.Thumb>
+              <Track.IncreaseRepeatButton>
+                <RepeatButton Command="ScrollBar.PageDownCommand" Background="Transparent" BorderThickness="0" />
+              </Track.IncreaseRepeatButton>
+            </Track>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="Orientation" Value="Vertical">
+              <Setter TargetName="PART_Track" Property="IsDirectionReversed" Value="True" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+    <Style.Triggers>
+      <Trigger Property="Orientation" Value="Vertical">
+        <Setter Property="Width" Value="4" />
+        <Setter Property="Height" Value="Auto" />
+      </Trigger>
+      <Trigger Property="Orientation" Value="Horizontal">
+        <Setter Property="Width" Value="Auto" />
+        <Setter Property="Height" Value="4" />
+      </Trigger>
+      <MultiTrigger>
+        <MultiTrigger.Conditions>
+          <Condition Property="Orientation" Value="Vertical" />
+          <Condition Property="IsMouseOver" Value="True" />
+        </MultiTrigger.Conditions>
+        <MultiTrigger.EnterActions>
+          <BeginStoryboard>
+            <Storyboard>
+              <DoubleAnimation Storyboard.TargetProperty="Width" To="10" Duration="0:0:0.15" />
+              <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.12" />
+            </Storyboard>
+          </BeginStoryboard>
+        </MultiTrigger.EnterActions>
+        <MultiTrigger.ExitActions>
+          <BeginStoryboard>
+            <Storyboard>
+              <DoubleAnimation Storyboard.TargetProperty="Width" To="4" Duration="0:0:0.22" />
+              <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0.55" Duration="0:0:0.22" />
+            </Storyboard>
+          </BeginStoryboard>
+        </MultiTrigger.ExitActions>
+      </MultiTrigger>
+      <MultiTrigger>
+        <MultiTrigger.Conditions>
+          <Condition Property="Orientation" Value="Horizontal" />
+          <Condition Property="IsMouseOver" Value="True" />
+        </MultiTrigger.Conditions>
+        <MultiTrigger.EnterActions>
+          <BeginStoryboard>
+            <Storyboard>
+              <DoubleAnimation Storyboard.TargetProperty="Height" To="10" Duration="0:0:0.15" />
+              <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.12" />
+            </Storyboard>
+          </BeginStoryboard>
+        </MultiTrigger.EnterActions>
+        <MultiTrigger.ExitActions>
+          <BeginStoryboard>
+            <Storyboard>
+              <DoubleAnimation Storyboard.TargetProperty="Height" To="4" Duration="0:0:0.22" />
+              <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0.55" Duration="0:0:0.22" />
+            </Storyboard>
+          </BeginStoryboard>
+        </MultiTrigger.ExitActions>
+      </MultiTrigger>
+    </Style.Triggers>
+  </Style>
+  <Style x:Key="QlBsxDkOverviewCardStyle" TargetType="Border">
+    <Setter Property="Background" Value="#1A1D25" />
+    <Setter Property="BorderBrush" Value="#252830" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Margin" Value="3,2" />
+    <Setter Property="Padding" Value="10,8" />
+    <Setter Property="Effect">
+      <Setter.Value>
+        <DropShadowEffect Color="#050608" BlurRadius="10" Direction="270" ShadowDepth="3" Opacity="0.28" />
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <Style x:Key="QlBsxDkOverviewTitleStyle" TargetType="TextBlock">
+    <Setter Property="Foreground" Value="#8B95A5" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style x:Key="QlBsxDkOverviewValueStyle" TargetType="TextBlock">
+    <Setter Property="Foreground" Value="#FFFFFF" />
+    <Setter Property="FontSize" Value="32" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+  <Style x:Key="QlBsxDkServiceActionStyle" TargetType="Button">
+    <Setter Property="Height" Value="34" />
+    <Setter Property="MinWidth" Value="76" />
+    <Setter Property="Margin" Value="4,0" />
+    <Setter Property="Padding" Value="12,0" />
+    <Setter Property="Foreground" Value="#E8ECF1" />
+    <Setter Property="Background" Value="#1E2230" />
+    <Setter Property="BorderBrush" Value="#354050" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="ActionBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8">
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="ActionBorder" Property="Background" Value="#2A3040" />
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+              <Setter TargetName="ActionBorder" Property="Opacity" Value="0.72" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter TargetName="ActionBorder" Property="Opacity" Value="0.38" />
+              <Setter Property="Cursor" Value="Arrow" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <Style x:Key="QlBsxDkEditActionStyle" TargetType="Button">
+    <Setter Property="Height" Value="32" />
+    <Setter Property="MinWidth" Value="64" />
+    <Setter Property="Padding" Value="14,0" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="ActionBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="7">
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="ActionBorder" Property="Opacity" Value="0.86" />
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+              <Setter TargetName="ActionBorder" Property="Opacity" Value="0.7" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <Style TargetType="Border" BasedOn="{StaticResource QlBsxDkOverviewCardStyle}" x:Key="QlBsxDkBorder01Style">
+    <Setter Property="BorderBrush" Value="#252830" />
+    <Setter Property="Background" Value="#1A1D25" />
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding IsServiceRunning}" Value="True">
+        <Setter Property="BorderBrush" Value="#283038" />
+        <Setter Property="Background" Value="#1C2028" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+  <Style TargetType="TextBlock" x:Key="QlBsxDkTextBlock02Style">
+    <Setter Property="Foreground" Value="#7C8595" />
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding IsServiceRunning}" Value="True">
+        <Setter Property="Foreground" Value="#4CAF50" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+  <Style TargetType="TextBlock" x:Key="QlBsxDkTextBlock03Style">
+    <Setter Property="Text" Value="&#xE768;" />
+    <Setter Property="Foreground" Value="#4CAF50" />
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding IsServiceRunning}" Value="True">
+        <Setter Property="Text" Value="&#xE71A;" />
+        <Setter Property="Foreground" Value="#E57373" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+  <Style TargetType="TextBlock" x:Key="QlBsxDkTextBlock04Style">
+    <Setter Property="Visibility" Value="Collapsed" />
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding Text, ElementName=FolderSearchBox}" Value="">
+        <Setter Property="Visibility" Value="Visible" />
+      </DataTrigger>
+      <DataTrigger Binding="{Binding Text, ElementName=FolderSearchBox}" Value="{x:Null}">
+        <Setter Property="Visibility" Value="Visible" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+  <Style TargetType="Button" x:Key="QlBsxDkButton05Style">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="SearchButtonBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6">
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="SearchButtonBorder" Property="Background" Value="#3B85E0" />
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+              <Setter TargetName="SearchButtonBorder" Property="Background" Value="#1F5AA0" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding SelectedOutputFile}" Value="{x:Null}">
+        <Setter Property="IsEnabled" Value="False" />
+        <Setter Property="Opacity" Value="0.45" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+  <Style TargetType="TreeViewItem" x:Key="QlBsxDkTreeViewItem06Style">
+    <Setter Property="Foreground" Value="#E4E9F0" />
+    <Setter Property="Background" Value="#0F1117" />
+    <Setter Property="BorderBrush" Value="#1E2230" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Padding" Value="9,7" />
+    <Setter Property="Margin" Value="0,1" />
+    <Setter Property="MinHeight" Value="34" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="TreeViewItem">
+          <Border x:Name="ItemCard"
+                  Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="3"
+                  Padding="{TemplateBinding Padding}"
+                  SnapsToDevicePixels="True">
+            <ContentPresenter ContentSource="Header"
+                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="ItemCard" Property="Background" Value="#1A1E28" />
+              <Setter TargetName="ItemCard" Property="BorderBrush" Value="#303845" />
+            </Trigger>
+            <Trigger Property="IsSelected" Value="True">
+              <Setter TargetName="ItemCard" Property="Background" Value="#1C2030" />
+              <Setter TargetName="ItemCard" Property="BorderBrush" Value="#404858" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter TargetName="ItemCard" Property="Opacity" Value="0.5" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+    <Style.Triggers>
+      <Trigger Property="IsSelected" Value="True">
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+  <Style TargetType="ListBoxItem">
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style TargetType="ComboBoxItem">
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style TargetType="ListBoxItem" x:Key="QlBsxDkListBoxItemStyle" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="#E8ECF1" />
+    <Setter Property="Padding" Value="3" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Style.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="Background" Value="#252A38" />
+      </Trigger>
+      <Trigger Property="IsSelected" Value="True">
+        <Setter Property="Background" Value="#2A3545" />
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+  <Style x:Key="QlBsxDkPaginationButtonStyle" TargetType="Button">
+    <Setter Property="Width" Value="28" />
+    <Setter Property="Height" Value="26" />
+    <Setter Property="Margin" Value="2,0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Background" Value="#0F1117" />
+    <Setter Property="BorderBrush" Value="#252830" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="#95A0B0" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="PageBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3">
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="PageBorder" Property="Background" Value="#1E2230" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <Style x:Key="QlBsxDkPaginationNumberButtonStyle" TargetType="Button" BasedOn="{StaticResource QlBsxDkPaginationButtonStyle}">
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+        <Setter Property="Background" Value="#1A2540" />
+        <Setter Property="BorderBrush" Value="#3B6FA8" />
+        <Setter Property="Foreground" Value="#78B7F2" />
+      </DataTrigger>
+      <DataTrigger Binding="{Binding PageNumber}" Value="-1">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Cursor" Value="Arrow" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+  <Style x:Key="QlBsxJobColumnHeaderStyle" TargetType="DataGridColumnHeader">
+    <Setter Property="Background" Value="#161920" />
+    <Setter Property="Foreground" Value="#8B95A5" />
+    <Setter Property="BorderBrush" Value="#252830" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="FontSize" Value="10" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Padding" Value="8,5" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Style.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="Background" Value="#1E2230" />
+        <Setter Property="Foreground" Value="#AAB4C0" />
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+  <Style x:Key="QlBsxJobCellStyle" TargetType="DataGridCell">
+    <Setter Property="Foreground" Value="#C0C8D4" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="8,4" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Style.Triggers>
+      <Trigger Property="IsSelected" Value="True">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="#C0C8D4" />
+      </Trigger>
+      <MultiTrigger>
+        <MultiTrigger.Conditions>
+          <Condition Property="IsSelected" Value="True" />
+          <Condition Property="Selector.IsSelectionActive" Value="False" />
+        </MultiTrigger.Conditions>
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="#C0C8D4" />
+      </MultiTrigger>
+    </Style.Triggers>
+  </Style>
+  <Style x:Key="QlBsxJobRowStyle" TargetType="DataGridRow">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="MinHeight" Value="32" />
+    <Style.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="Background" Value="#1E2230" />
+        <Setter Property="Foreground" Value="#C0C8D4" />
+      </Trigger>
+      <Trigger Property="IsSelected" Value="True">
+        <Setter Property="Background" Value="#1B2533" />
+        <Setter Property="Foreground" Value="#C0C8D4" />
+      </Trigger>
+      <MultiTrigger>
+        <MultiTrigger.Conditions>
+          <Condition Property="IsSelected" Value="True" />
+          <Condition Property="Selector.IsSelectionActive" Value="False" />
+        </MultiTrigger.Conditions>
+        <Setter Property="Background" Value="#1B2533" />
+        <Setter Property="Foreground" Value="#C0C8D4" />
+      </MultiTrigger>
+      <DataTrigger Binding="{Binding IsError}" Value="True">
+        <Setter Property="Background" Value="#201518" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+  <Style x:Key="QlBsxJobGridStyle" TargetType="DataGrid">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="#C0C8D4" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="GridLinesVisibility" Value="Horizontal" />
+    <Setter Property="HorizontalGridLinesBrush" Value="#1E2230" />
+    <Setter Property="HeadersVisibility" Value="Column" />
+    <Setter Property="ColumnHeaderStyle" Value="{StaticResource QlBsxJobColumnHeaderStyle}" />
+    <Setter Property="CellStyle" Value="{StaticResource QlBsxJobCellStyle}" />
+    <Setter Property="RowStyle" Value="{StaticResource QlBsxJobRowStyle}" />
+    <Setter Property="RowHeaderWidth" Value="0" />
+  </Style>
+  <Style x:Key="QlBsxJobStatusBadgeStyle" TargetType="Border">
+    <Setter Property="Background" Value="#1A1D25" />
+    <Setter Property="BorderBrush" Value="#404858" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="7,2" />
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding Status}" Value="Processing">
+        <Setter Property="Background" Value="#192635" />
+        <Setter Property="BorderBrush" Value="#456D92" />
+      </DataTrigger>
+      <DataTrigger Binding="{Binding Status}" Value="Queued">
+        <Setter Property="Background" Value="#192635" />
+        <Setter Property="BorderBrush" Value="#456D92" />
+      </DataTrigger>
+      <DataTrigger Binding="{Binding Status}" Value="Failed">
+        <Setter Property="Background" Value="#251518" />
+        <Setter Property="BorderBrush" Value="#9A493F" />
+      </DataTrigger>
+      <DataTrigger Binding="{Binding Status}" Value="Rejected">
+        <Setter Property="Background" Value="#1E2230" />
+        <Setter Property="BorderBrush" Value="#5A6578" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+  <Style x:Key="QlBsxJobActionButtonStyle" TargetType="Button">
+    <Setter Property="Width" Value="26" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Margin" Value="2,0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="#A0AAB8" />
+    <Setter Property="BorderBrush" Value="#354050" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="ActionBorder" Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="5">
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="ActionBorder" Property="Background" Value="#252A38" />
+              <Setter Property="Foreground" Value="#7EB8FF" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter Property="Opacity" Value="0.35" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+</ResourceDictionary>

@@ -1,0 +1,13 @@
+prefix=${pcfiledir}/../..
+exec_prefix=${prefix}
+libdir=C:/projects/repos/cerbero.git/1.24/build/dist/msvc_x86_64/lib
+includedir=${prefix}/include
+
+Name: spandsp
+Description: A DSP library for telephony.
+Requires:
+Version: 0.0.6
+Libs: -L${libdir} -lspandsp
+Libs.private: -ltiff -lm
+Cflags: -I${includedir}
+

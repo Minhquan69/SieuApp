@@ -1,0 +1,12 @@
+prefix=${pcfiledir}/../../..
+includedir=${prefix}/include
+libdir=${prefix}/lib
+
+Name: gstnvcodec
+Description: gst-plugins-bad: gstnvcodec
+Version: 1.24.10
+Requires.private: gstreamer-codecparsers-1.0, gstreamer-video-1.0 >=  1.24.0, gstreamer-base-1.0 >=  1.24.0, gstreamer-d3d11-1.0, gstreamer-cuda-1.0, gstreamer-pbutils-1.0 >=  1.24.0, gstreamer-gl-1.0 >=  1.24.0, gstreamer-gl-prototypes-1.0 >=  1.24.0, gmodule-no-export-2.0
+Libs: -L${prefix}/lib/gstreamer-1.0 -lgstnvcodec
+Libs.private: -ld3d11 -ldxgi -ladvapi32 -L${libdir} -lgstcodecs-1.0
+Cflags: -I${includedir}
+

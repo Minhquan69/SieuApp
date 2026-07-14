@@ -1,0 +1,55 @@
+﻿<UserControl x:Class="V3SClient.ucs.Gauge"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:lvc="clr-namespace:LiveCharts.Wpf;assembly=LiveCharts.Wpf"
+             xmlns:local="clr-namespace:V3SClient.ucs"
+             xmlns:cnv="clr-namespace:V3SClient.UI.Converters"
+             mc:Ignorable="d" 
+             Name="gauge">
+    <UserControl.Resources>
+        <cnv:ColorToBrushConverter x:Key="ColorToBrushConverter"/>
+        <LinearGradientBrush x:Key="GaugeBrush">
+            <GradientStop Color="{Binding Path=Foreground1.Color, ElementName=gauge}" Offset="0"/>
+            <GradientStop Color="{Binding Path=Foreground2.Color, ElementName=gauge}" Offset="1"/>
+        </LinearGradientBrush>
+    </UserControl.Resources>
+
+    
+
+    <Grid>
+        <lvc:Gauge Margin="5" Uses360Mode="True" From="0" To="100" Value="{Binding Path=GaugeValue, ElementName=gauge}"
+           Foreground="Transparent" InnerRadius="{Binding Path=Radius, ElementName=gauge}" >
+            <lvc:Gauge.GaugeActiveFill>
+                <StaticResource ResourceKey="GaugeBrush"/>
+            </lvc:Gauge.GaugeActiveFill>
+            <lvc:Gauge.GaugeRenderTransform>
+                <TransformGroup>
+                    <RotateTransform Angle="270"></RotateTransform>
+                    <ScaleTransform ScaleX="1"></ScaleTransform>
+                </TransformGroup>
+            </lvc:Gauge.GaugeRenderTransform>
+        </lvc:Gauge>
+
+    </Grid>
+</UserControl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

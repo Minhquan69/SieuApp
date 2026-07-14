@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:d="http://schemas.microsoft.com/expression/blend/2008">
+  <Style x:Key="FlexibleTimePickerSidebarButtonStyle" TargetType="Button">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="#AAA" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="15,8" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border Background="{TemplateBinding Background}" CornerRadius="4">
+            <ContentPresenter VerticalAlignment="Center" />
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+    <Style.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="Background" Value="#2A2A2A" />
+        <Setter Property="Foreground" Value="White" />
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+  <Style x:Key="FlexibleTimePickerDayButtonStyle" TargetType="Button">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="Silver" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Width" Value="32" />
+    <Setter Property="Height" Value="32" />
+    <Setter Property="Margin" Value="1" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="16">
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+    <Style.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="Background" Value="#333" />
+      </Trigger>
+      <DataTrigger Binding="{Binding IsSelected}" Value="True">
+        <Setter Property="Background" Value="#3D85C6" />
+        <Setter Property="Foreground" Value="White" />
+      </DataTrigger>
+      <DataTrigger Binding="{Binding IsInRange}" Value="True">
+        <Setter Property="Background" Value="#1A3D5E" />
+      </DataTrigger>
+      <DataTrigger Binding="{Binding IsOuterMonth}" Value="True">
+        <Setter Property="Foreground" Value="#444" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+</ResourceDictionary>

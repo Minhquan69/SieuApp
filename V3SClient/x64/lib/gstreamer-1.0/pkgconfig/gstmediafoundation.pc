@@ -1,0 +1,12 @@
+prefix=${pcfiledir}/../../..
+includedir=${prefix}/include
+libdir=${prefix}/lib
+
+Name: gstmediafoundation
+Description: gst-plugins-bad: gstmediafoundation
+Version: 1.24.10
+Requires.private: gstreamer-d3d11-1.0, gstreamer-base-1.0 >=  1.24.0, gstreamer-video-1.0 >=  1.24.0, gstreamer-audio-1.0 >=  1.24.0, gstreamer-pbutils-1.0 >=  1.24.0, gmodule-no-export-2.0
+Libs: -L${prefix}/lib/gstreamer-1.0 -lgstmediafoundation
+Libs.private: -lmf -lmfplat -lmfreadwrite -lmfuuid -lstrmiids -lole32 -ld3d11 -ldxgi
+Cflags: -I${includedir}
+

@@ -1,0 +1,12 @@
+prefix=${pcfiledir}/../../..
+includedir=${prefix}/include
+libdir=${prefix}/lib
+
+Name: gstwasapi
+Description: gst-plugins-bad: gstwasapi
+Version: 1.24.10
+Requires.private: gstreamer-audio-1.0 >=  1.24.0
+Libs: -L${prefix}/lib/gstreamer-1.0 -lgstwasapi
+Libs.private: -lole32 -lksuser
+Cflags: -I${includedir}
+

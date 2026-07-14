@@ -1,0 +1,105 @@
+<UserControl x:Class="V3SClient.ucs.ucDocumentDashboard" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:local="clr-namespace:V3SClient.ucs" xmlns:viewModels="clr-namespace:V3SClient.viewModels" mc:Ignorable="d" d:DesignHeight="800" d:DesignWidth="600" Background="#0D0F12">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/styles/customize_datagrid.xaml" />
+                <ResourceDictionary Source="/styles/customize_button_v2.xaml" />
+                <ResourceDictionary Source="/styles/customize_textblock.xaml" />
+            <ResourceDictionary Source="/styles/uc_document_dashboard_styles.xaml" /></ResourceDictionary.MergedDictionaries>
+
+            <!-- Style DatePicker đồng bộ dark theme -->
+            
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Thống kê (Dashboard) -->
+        <Border Grid.Row="0" Margin="10" Padding="15" Background="#161920" CornerRadius="8" BorderBrush="#252830" BorderThickness="1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Vertical" HorizontalAlignment="Center">
+                    <TextBlock Text="Đã xử lý" Foreground="#A0A0A0" FontSize="14" />
+                    <TextBlock Text="{Binding TotalProcessed}" Foreground="#4A9EFF" FontSize="28" FontWeight="Bold" Margin="0,5,0,0" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Vertical" HorizontalAlignment="Center">
+                    <TextBlock Text="Lỗi" Foreground="#A0A0A0" FontSize="14" />
+                    <TextBlock Text="{Binding TotalErrors}" Foreground="#FF6B6B" FontSize="28" FontWeight="Bold" Margin="0,5,0,0" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <!-- Trạng thái Running -->
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,15,0" Style="{StaticResource UcDocumentDashboardStackPanel01Style}">
+                        
+                        <Ellipse Width="10" Height="10" Fill="#00FF00" Margin="0,0,6,0" Style="{StaticResource UcDocumentDashboardEllipse02Style}">
+                            
+                        </Ellipse>
+                        <TextBlock Text="Đang chạy" Foreground="#00FF00" FontSize="14" FontWeight="SemiBold" />
+                    </StackPanel>
+
+                    <Grid>
+                        <ToggleButton x:Name="btnMore" Content="⋮" FontSize="24" FontWeight="Bold" Foreground="#4A9EFF" Background="Transparent" BorderThickness="0" Width="40" Height="40" Cursor="Hand" />
+                        <Popup IsOpen="{Binding IsChecked, ElementName=btnMore}" StaysOpen="False" PlacementTarget="{Binding ElementName=btnMore}" Placement="Bottom">
+                            <Border Background="#181C24" BorderBrush="#252830" BorderThickness="1" CornerRadius="4" Padding="5">
+                                <StackPanel Width="120">
+                                    <Button Command="{Binding ToggleRunningCommand}" Margin="0" Cursor="Hand" Style="{StaticResource UcDocumentDashboardButton03Style}">
+                                        
+                                    </Button>
+                                    
+                                    <Button Content="  Làm mới" Command="{Binding RefreshCommand}" Style="{StaticResource menuButton}" Margin="0" Cursor="Hand" />
+                                </StackPanel>
+                            </Border>
+                        </Popup>
+                    </Grid>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Bộ lọc thời gian -->
+        <Border Grid.Row="1" Margin="10,0,10,10" Padding="10" Background="#161920" CornerRadius="8" BorderBrush="#252830" BorderThickness="1">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="Từ ngày:" Foreground="#E8ECF1" VerticalAlignment="Center" Margin="0,0,10,0" />
+                <DatePicker SelectedDate="{Binding FilterStartDate}" Width="130" Margin="0,0,20,0" Style="{StaticResource UcDocumentDashboardDarkDatePickerStyle}" />
+                
+                <TextBlock Text="Đến ngày:" Foreground="#E8ECF1" VerticalAlignment="Center" Margin="0,0,10,0" />
+                <DatePicker SelectedDate="{Binding FilterEndDate}" Width="130" Margin="0,0,20,0" Style="{StaticResource UcDocumentDashboardDarkDatePickerStyle}" />
+                
+                <Button Content="Lọc" Command="{Binding RefreshCommand}" Style="{StaticResource toolbarAddButton}" Width="80" Height="30" />
+            </StackPanel>
+        </Border>
+
+        <!-- Danh sách file (DataGrid) -->
+        <Border Grid.Row="2" Margin="10,0,10,10" Background="#161920" CornerRadius="8" BorderBrush="#252830" BorderThickness="1">
+            <DataGrid ItemsSource="{Binding Records}" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" RowHeight="40" Margin="5">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Thời gian" Binding="{Binding CreatedAt, StringFormat=\{0:dd/MM/yyyy HH:mm:ss\}}" Width="150" />
+                    <DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="*" />
+                    <DataGridTextColumn Header="Loại giấy tờ" Binding="{Binding DocumentType}" Width="150" />
+                    <DataGridTextColumn Header="Biển số" Binding="{Binding LicensePlate}" Width="150" />
+                    <DataGridTextColumn Header="Trạng thái" Binding="{Binding DisplayStatus}" Width="150" />
+                    <DataGridTemplateColumn Header="" Width="60">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Button ToolTip="Xem ảnh" Command="{Binding DataContext.OpenImageCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}" CommandParameter="{Binding FilePath}" Style="{StaticResource menuButton}" Height="30" Width="40" Foreground="#4A9EFF" BorderThickness="0" Cursor="Hand">
+                                    <TextBlock Text="👁" FontSize="14" />
+                                </Button>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+    </Grid>
+</UserControl>

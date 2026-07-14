@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Style x:Key="ViewCameraOverlay" TargetType="WindowsFormsHost">
+    <Setter Property="Background">
+      <Setter.Value>
+        <LinearGradientBrush EndPoint="1,0.5" StartPoint="0,0.5">
+          <GradientStop Color="#151a1e" />
+          <GradientStop Color="#454545" Offset=".5" />
+        </LinearGradientBrush>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <Style x:Key="ViewCameraOverlay_Transparent" TargetType="WindowsFormsHost">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style x:Key="LiveButton" TargetType="Border">
+    <Setter Property="Background">
+      <Setter.Value>
+        <LinearGradientBrush StartPoint="0.5,0.0" EndPoint="0.5,1.0">
+          <GradientStop Color="#e59866" Offset="0.5" />
+          <GradientStop Color="#a04000" Offset="1.0" />
+        </LinearGradientBrush>
+      </Setter.Value>
+    </Setter>
+    <Style.Triggers>
+      <!-- Khi IsMouseOver = True (chu?t n?m trên Border) -->
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="Background" Value="#e59866" />
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+  <Style x:Key="PlayerSlider" TargetType="Slider">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Slider">
+          <Grid>
+            <!-- Track -->
+            <Track x:Name="PART_Track" VerticalAlignment="Center">
+              <Track.Thumb>
+                <Thumb Width="30" Height="8" VerticalAlignment="Center" Background="Blue" />
+              </Track.Thumb>
+            </Track>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <Style x:Key="BorderSlider" TargetType="Border">
+    <Setter Property="Background">
+      <Setter.Value>
+        <LinearGradientBrush EndPoint="1,0.5" StartPoint="0,0.5">
+          <GradientStop Color="#151a1e" />
+          <GradientStop Color="#454545" Offset=".5" />
+        </LinearGradientBrush>
+      </Setter.Value>
+    </Setter>
+  </Style>
+</ResourceDictionary>

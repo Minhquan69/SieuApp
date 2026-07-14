@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:local="clr-namespace:V3SClient.UI.Pages" xmlns:ucs="clr-namespace:V3SClient.ucs" xmlns:converters="clr-namespace:V3SClient.UI.Converters">
+  <ResourceDictionary.MergedDictionaries>
+    <ResourceDictionary Source="/styles/border_reseted.xaml" />
+    <ResourceDictionary Source="/styles/TreeView.xaml" />
+    <ResourceDictionary Source="/styles/customize_combobox_mini.xaml" />
+    <ResourceDictionary Source="/styles/customize_textblock.xaml" />
+  </ResourceDictionary.MergedDictionaries>
+  <Style TargetType="ToggleButton" x:Key="LeftMenuToggleButton01Style">
+    <Setter Property="Background" Value="#1E2230" />
+    <Setter Property="Foreground" Value="#8B95A5" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="6,2" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ToggleButton">
+          <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}" BorderThickness="1" BorderBrush="#303540">
+            <TextBlock Text="AI" FontSize="10" FontWeight="Bold" Foreground="{TemplateBinding Foreground}" VerticalAlignment="Center" HorizontalAlignment="Center" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="border" Property="Background" Value="#4A9EFF" />
+              <Setter TargetName="border" Property="BorderBrush" Value="#4A9EFF" />
+              <Setter Property="Foreground" Value="White" />
+            </Trigger>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="border" Property="BorderBrush" Value="#4A9EFF" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+</ResourceDictionary>

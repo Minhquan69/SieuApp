@@ -1,0 +1,38 @@
+﻿<Application x:Class="V3SClient.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:V3SClient"
+             ShutdownMode="OnExplicitShutdown">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/styles/customize_button_v2.xaml" />
+                <!-- Isolated migration resources: every key is suffixed _v3. -->
+                <ResourceDictionary Source="/styles/V3Migration/VmsColors_v3.xaml" />
+                <ResourceDictionary Source="/styles/V3Migration/VmsBrushes_v3.xaml" />
+                <ResourceDictionary Source="/styles/V3Migration/Buttons_v3.xaml" />
+                <ResourceDictionary Source="/styles/V3Migration/TextBoxes_v3.xaml" />
+                <ResourceDictionary Source="/styles/V3Migration/ComboBoxes_v3.xaml" />
+                <ResourceDictionary Source="/styles/V3Migration/DataGrids_v3.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

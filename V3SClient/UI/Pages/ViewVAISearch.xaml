@@ -1,0 +1,89 @@
+<Page x:Class="V3SClient.UI.Pages.ViewVAISearch" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:local="clr-namespace:V3SClient.UI.Pages" xmlns:xctk="http://schemas.xceed.com/wpf/xaml/toolkit" mc:Ignorable="d" d:DesignHeight="600" d:DesignWidth="230" Title="ViewVAISearch">
+
+    <Page.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="../../styles/customize_textblock.xaml" />
+                <ResourceDictionary Source="../../styles/customize_combobox.xaml" />
+                <ResourceDictionary Source="../../styles/customize_button.xaml" />
+                <ResourceDictionary Source="../../styles/customize_image.xaml" />
+                <ResourceDictionary Source="../../styles/GradientBorder.xaml" />
+            <ResourceDictionary Source="/styles/view_vaisearch_styles.xaml" /></ResourceDictionary.MergedDictionaries>
+            
+            
+            
+        </ResourceDictionary>
+    </Page.Resources>
+
+    <Grid Margin="10,5,10,5">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" /> <!-- Mode Toggle (Row 0) -->
+            <RowDefinition Height="Auto" /> <!-- Search Box (Row 1) -->
+            <RowDefinition Height="Auto" /> <!-- Start Time (Row 2) -->
+            <RowDefinition Height="Auto" /> <!-- End Time (Row 3) -->
+            <RowDefinition Height="Auto" /> <!-- Limit (Row 4) -->
+            <RowDefinition Height="Auto" /> <!-- Camera Status (Row 5) -->
+            <RowDefinition Height="Auto" /> <!-- Search Button (Row 6) -->
+            <RowDefinition Height="*" />    <!-- Status/Result info (Row 7) -->
+        </Grid.RowDefinitions>
+
+        <!-- Search Mode Choice -->
+        <StackPanel Grid.Row="0" Margin="0,5,0,10">
+            <TextBlock Text="Loại tìm kiếm" Style="{StaticResource label_TextBlock}" Margin="0,0,0,3" />
+            <ComboBox x:Name="cmbSearchType" Style="{StaticResource CustomComboBoxStyle}" Height="28" SelectionChanged="cmbSearchType_SelectionChanged">
+                <ComboBoxItem Content="Khuôn mặt" Tag="Face" IsSelected="True" />
+                <ComboBoxItem Content="Biển số" Tag="Plate" />
+                <ComboBoxItem Content="Simulator" Tag="Simulator" />
+            </ComboBox>
+        </StackPanel>
+
+        <!-- Search Box -->
+        <StackPanel Grid.Row="1" Margin="0,0,0,10">
+            <TextBlock x:Name="lblQuery" Text="Nhập ID / tên" Style="{StaticResource label_TextBlock}" Margin="0,0,0,3" />
+            <TextBox x:Name="txtSearchQuery" Height="28" Background="#161920" Foreground="#E8ECF1" BorderBrush="#252830" Padding="5,2" VerticalContentAlignment="Center" CaretBrush="White" />
+        </StackPanel>
+
+        <!-- Start Time -->
+        <StackPanel Grid.Row="2" Margin="0,0,0,10">
+            <TextBlock Text="Từ ngày" Style="{StaticResource label_TextBlock}" Margin="0,0,0,3" />
+            <xctk:DateTimePicker x:Name="dtpStart" Style="{StaticResource CustomizeDateTimePicker}" Format="Custom" FormatString="HH:mm:ss dd/MM/yyyy" Height="28" />
+        </StackPanel>
+
+        <!-- End Time -->
+        <StackPanel Grid.Row="3" Margin="0,0,0,10">
+            <TextBlock Text="Đến ngày" Style="{StaticResource label_TextBlock}" Margin="0,0,0,3" />
+            <xctk:DateTimePicker x:Name="dtpEnd" Style="{StaticResource CustomizeDateTimePicker}" Format="Custom" FormatString="HH:mm:ss dd/MM/yyyy" Height="28" />
+        </StackPanel>
+
+        <!-- Limit -->
+        <StackPanel Grid.Row="4" Margin="0,0,0,15">
+            <TextBlock Text="Số lượng kết quả" Style="{StaticResource label_TextBlock}" Margin="0,0,0,3" />
+            <ComboBox x:Name="cmbLimit" Style="{StaticResource CustomComboBoxStyle}" Height="28">
+                <ComboBoxItem Content="50" IsSelected="True" />
+                <ComboBoxItem Content="100" />
+                <ComboBoxItem Content="200" />
+                <ComboBoxItem Content="500" />
+            </ComboBox>
+        </StackPanel>
+
+        <!-- Camera Selection Status -->
+        <StackPanel Grid.Row="5" Margin="0,0,0,10">
+            <TextBlock x:Name="txtCameraInfo" Text="Chưa chọn camera" Style="{StaticResource label_TextBlock}" FontSize="11" Foreground="OrangeRed" HorizontalAlignment="Center" />
+        </StackPanel>
+
+        <!-- Search Button -->
+        <Button Grid.Row="6" x:Name="btnSearch" Click="btnSearch_Click" Margin="0,5,0,0" Style="{StaticResource Transparent_Button}" ToolTip="Bắt đầu tìm kiếm đối tượng">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <Image Source="/images/search.png" Width="20" Height="20" Style="{StaticResource Transparent_Image}" />
+                <TextBlock Text="TÌM KIẾM" Style="{StaticResource label_TextBlock}" FontWeight="Bold" VerticalAlignment="Center" Margin="5,0,0,0" />
+            </StackPanel>
+        </Button>
+
+        <!-- Status -->
+        <Border Grid.Row="7" Margin="0,15,0,0" BorderBrush="#252830" BorderThickness="0,1,0,0" Padding="0,10,0,0">
+             <ScrollViewer VerticalScrollBarVisibility="Auto">
+                 <TextBlock x:Name="txtStatus" Style="{StaticResource label_TextBlock}" FontSize="11" TextWrapping="Wrap" Opacity="0.7" />
+             </ScrollViewer>
+        </Border>
+    </Grid>
+</Page>

@@ -1,0 +1,5 @@
+{
+  "ApiUrl": "https://portal.ivistatech.vn",
+  "StreamApiUrl": "http://localhost:3000/streams",
+  "NetworkMode": "Public"
+}

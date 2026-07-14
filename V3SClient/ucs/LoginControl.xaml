@@ -1,0 +1,77 @@
+<UserControl x:Class="V3SClient.ucs.LoginControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:V3SClient.ucs"
+             mc:Ignorable="d" 
+             Height="250" Width="360">
+    <Grid Margin="20,20,0,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Username -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0 10">
+            <Image Source="/images/login/login_user.png" Width="24" Height="24" Margin="0,0,10,0"/>
+            <Grid>
+                <!-- TextBox -->
+                <TextBox x:Name="UsernameBox" Width="250" Height="30"
+             TextChanged="UsernameBox_TextChanged"
+             VerticalContentAlignment="Center" />
+
+                <!-- Placeholder -->
+                <TextBlock x:Name="UsernamePlaceholder" Text="Tên đăng nhập"
+               Foreground="Gray" Margin="5,0,0,0"
+               IsHitTestVisible="False" VerticalAlignment="Center"
+               Visibility="Visible"/>
+            </Grid>
+        </StackPanel>
+
+        <!-- Password -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0 10">
+            <Image Source="/images/login/login_password.png" Width="24" Height="24" Margin="0,0,10,0"/>
+            <Grid>
+                <PasswordBox x:Name="PasswordBox" Width="250" Height="30"
+                 PasswordChanged="PasswordBox_PasswordChanged"
+                 VerticalContentAlignment="Center"/>
+
+                <TextBlock x:Name="PasswordPlaceholder" Text="Mật khẩu"
+               Foreground="Gray" Margin="5,0,0,0"
+               IsHitTestVisible="False" VerticalAlignment="Center"
+               Visibility="Visible"/>
+            </Grid>
+        </StackPanel>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="1">
+            <Button x:Name="LoginButton" Content="Đăng nhập" Width="64" Margin="0,0,10,0" Click="LoginButton_Click"/>
+            <Button x:Name="CancelButton" Content="Hủy" Width="64" Margin="0,0,60,0" Click="CancelButton_Click"/>
+        </StackPanel>
+
+        <!-- UserS-->
+            <!--<ComboBox x:Name="UserSettingsComboBox" Grid.Row="3" Visibility="Collapsed" Width="250" Height="30" Margin="0 20"/>-->
+    </Grid>
+</UserControl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

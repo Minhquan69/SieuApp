@@ -1,0 +1,12 @@
+prefix=${pcfiledir}/../../..
+includedir=${prefix}/include
+libdir=${prefix}/lib
+
+Name: gstrtmp
+Description: gst-plugins-bad: gstrtmp
+Version: 1.24.10
+Requires.private: gstreamer-base-1.0 >=  1.24.0, librtmp
+Libs: -L${prefix}/lib/gstreamer-1.0 -lgstrtmp
+Libs.private: -lws2_32
+Cflags: -I${includedir}
+

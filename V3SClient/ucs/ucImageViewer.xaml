@@ -1,0 +1,46 @@
+<UserControl x:Class="V3SClient.ucs.ucImageViewer"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             mc:Ignorable="d" 
+             d:DesignHeight="450" d:DesignWidth="800"
+             Background="#0D0F12">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Border x:Name="PreviewViewport" Grid.Row="0" Margin="10" Background="#161920" BorderBrush="#252830" BorderThickness="1" CornerRadius="4" ClipToBounds="True">
+            <Image x:Name="imgPreview" Stretch="None" Margin="5" RenderTransformOrigin="0.5,0.5"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   MouseWheel="imgPreview_MouseWheel"
+                   MouseLeftButtonDown="imgPreview_MouseLeftButtonDown"
+                   MouseLeftButtonUp="imgPreview_MouseLeftButtonUp"
+                   MouseMove="imgPreview_MouseMove">
+                <Image.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform x:Name="st" />
+                        <RotateTransform x:Name="rt" />
+                        <TranslateTransform x:Name="tt" />
+                    </TransformGroup>
+                </Image.RenderTransform>
+                <Image.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem x:Name="menuHand" Header="Kích hoạt kéo thả (Hand)" Click="menuHand_Click" IsCheckable="True" />
+                        <Separator />
+                        <MenuItem Header="Phóng to" Click="btnZoomIn_Click" />
+                        <MenuItem Header="Thu nhỏ" Click="btnZoomOut_Click" />
+                        <MenuItem Header="Kích thước gốc (100%)" Click="btnActualSize_Click" />
+                        <MenuItem Header="Vừa màn hình" Click="btnFit_Click" />
+                        <Separator />
+                        <MenuItem Header="Xoay trái (90°)" Click="btnRotateLeft_Click" />
+                        <MenuItem Header="Xoay phải (90°)" Click="btnRotateRight_Click" />
+                    </ContextMenu>
+                </Image.ContextMenu>
+            </Image>
+        </Border>
+    </Grid>
+</UserControl>

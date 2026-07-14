@@ -1,0 +1,11 @@
+prefix=${pcfiledir}/../../..
+includedir=${prefix}/include
+libdir=${prefix}/lib
+
+Name: gstdvbsubenc
+Description: gst-plugins-bad: gstdvbsubenc
+Version: 1.24.10
+Requires.private: gstreamer-base-1.0 >=  1.24.0, gstreamer-video-1.0 >=  1.24.0
+Libs: -L${prefix}/lib/gstreamer-1.0 -lgstdvbsubenc
+Cflags: -I${includedir}
+

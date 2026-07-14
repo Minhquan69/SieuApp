@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Style TargetType="DataGrid">
+    <Setter Property="Background" Value="#111318" />
+    <Setter Property="BorderThickness" Value="0.05" />
+    <Setter Property="BorderBrush" Value="#252830" />
+    <Setter Property="GridLinesVisibility" Value="None" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="RowBackground" Value="#111318" />
+    <Setter Property="AlternatingRowBackground" Value="#161920" />
+    <Setter Property="HeadersVisibility" Value="Column" />
+  </Style>
+  <Style TargetType="DataGridColumnHeader">
+    <Setter Property="Background" Value="#161920" />
+    <Setter Property="Foreground" Value="#8B95A5" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="Padding" Value="10" />
+    <Setter Property="BorderBrush" Value="#252830" />
+    <Setter Property="BorderThickness" Value="0 0 0.5 0.5" />
+  </Style>
+  <Style x:Key="smallHeaderStyle" TargetType="DataGridColumnHeader">
+    <Setter Property="Background" Value="#161920" />
+    <Setter Property="Foreground" Value="#8B95A5" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="Padding" Value="1,3,1,3" />
+    <!-- ch?nh l?i padding -->
+    <Setter Property="BorderBrush" Value="#252830" />
+    <Setter Property="BorderThickness" Value="0 0 0.5 0.5" />
+  </Style>
+  <Style TargetType="DataGridCell">
+    <!--<Setter Property="Foreground" Value="#E2E8EE"/>-->
+    <Setter Property="Foreground" Value="#E8ECF1" />
+    <!--<Setter Property="Background" Value="#E0E0E0"/>-->
+    <Setter Property="Padding" Value="8" />
+    <!--<Setter Property="TextBlock.TextAlignment" Value="Center"/>
+        <Setter Property="TextBlock.HorizontalAlignment" Value="Center"/>-->
+    <!-- Can gi?a n?i dung -->
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <!-- Ð?t border m? nét d?t -->
+    <Setter Property="BorderBrush">
+      <Setter.Value>
+        <SolidColorBrush Color="#252830" Opacity="0.4" />
+      </Setter.Value>
+    </Setter>
+    <Setter Property="BorderThickness" Value="0.5" />
+    <!-- Template d? v? nét d?t -->
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="DataGridCell">
+          <Border BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" SnapsToDevicePixels="True" Background="{TemplateBinding Background}">
+            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" SnapsToDevicePixels="True" />
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+    <Style.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="Background" Value="#252830" />
+      </Trigger>
+      <Trigger Property="IsSelected" Value="True">
+        <Setter Property="Background" Value="#1A2C3E" />
+        <Setter Property="Foreground" Value="#4A9EFF" />
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+  <Style TargetType="DataGridRow">
+    <!--<Setter Property="Background" Value="Transparent"/>-->
+    <Setter Property="Height" Value="40" />
+    <Style.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="Background" Value="#252830" />
+        <!--<Setter Property="Opacity" Value="0.1"/>-->
+        <Setter Property="Foreground" Value="#E8ECF1" />
+      </Trigger>
+      <Trigger Property="IsSelected" Value="True">
+        <Setter Property="Background" Value="#1A2C3E" />
+        <Setter Property="Foreground" Value="#E8ECF1" />
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+  <Style x:Key="VerticalScrollBarStyle" TargetType="ScrollBar">
+    <Setter Property="Orientation" Value="Vertical" />
+    <Setter Property="Width" Value="4" />
+    <Setter Property="Background" Value="#111318" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ScrollBar">
+          <Grid Background="#111318">
+            <Track Name="PART_Track" IsDirectionReversed="true">
+              <Track.DecreaseRepeatButton>
+                <RepeatButton Height="0" IsEnabled="False" Template="{DynamicResource ScrollBarRepeatButtonTemplate}" />
+              </Track.DecreaseRepeatButton>
+              <Track.Thumb>
+                <Thumb>
+                  <Thumb.Template>
+                    <ControlTemplate TargetType="Thumb">
+                      <Border Background="#AAAAAA" CornerRadius="2" Width="3" Margin="0" HorizontalAlignment="Center" />
+                    </ControlTemplate>
+                  </Thumb.Template>
+                </Thumb>
+              </Track.Thumb>
+              <Track.IncreaseRepeatButton>
+                <RepeatButton Height="0" IsEnabled="False" Template="{DynamicResource ScrollBarRepeatButtonTemplate}" />
+              </Track.IncreaseRepeatButton>
+            </Track>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <Style x:Key="HorizontalScrollBarStyle" TargetType="ScrollBar">
+    <Setter Property="Orientation" Value="Horizontal" />
+    <Setter Property="Height" Value="10" />
+    <Setter Property="Background" Value="#111318" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ScrollBar">
+          <Grid Background="#111318">
+            <Track Name="PART_Track">
+              <Track.DecreaseRepeatButton>
+                <RepeatButton Style="{x:Null}" Background="#111318" />
+              </Track.DecreaseRepeatButton>
+              <Track.Thumb>
+                <Thumb>
+                  <Thumb.Template>
+                    <ControlTemplate TargetType="Thumb">
+                      <Border Background="#AAAAAA" CornerRadius="4" Margin="2" />
+                    </ControlTemplate>
+                  </Thumb.Template>
+                </Thumb>
+              </Track.Thumb>
+              <Track.IncreaseRepeatButton>
+                <RepeatButton Style="{x:Null}" Background="#111318" />
+              </Track.IncreaseRepeatButton>
+            </Track>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+</ResourceDictionary>

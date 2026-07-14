@@ -1,0 +1,36 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Dark VMS theme is the operational default; values come from vms-color-source-of-truth.md. -->
+    <Color x:Key="VmsBackgroundColor_v3">#FF06111F</Color>
+    <Color x:Key="VmsSidebarColor_v3">#FF071624</Color>
+    <Color x:Key="VmsHeaderColor_v3">#FF071421</Color>
+    <Color x:Key="VmsSurfaceColor_v3">#FF0B1B2B</Color>
+    <Color x:Key="VmsSurface2Color_v3">#FF102437</Color>
+    <Color x:Key="VmsSurface3Color_v3">#FF132C43</Color>
+    <Color x:Key="VmsElevatedColor_v3">#FF152F48</Color>
+    <Color x:Key="VmsBorderSubtleColor_v3">#FF14283B</Color>
+    <Color x:Key="VmsBorderColor_v3">#FF1E3A56</Color>
+    <Color x:Key="VmsBorderStrongColor_v3">#FF2A4D70</Color>
+    <Color x:Key="VmsTextPrimaryColor_v3">#FFEAF2FF</Color>
+    <Color x:Key="VmsTextSecondaryColor_v3">#FFA9BCD0</Color>
+    <Color x:Key="VmsTextTertiaryColor_v3">#FF738AA3</Color>
+    <Color x:Key="VmsTextDisabledColor_v3">#FF52677D</Color>
+    <Color x:Key="VmsTextInverseColor_v3">#FFFFFFFF</Color>
+    <Color x:Key="VmsPrimaryColor_v3">#FF2563EB</Color>
+    <Color x:Key="VmsPrimaryHoverColor_v3">#FF1D4ED8</Color>
+    <Color x:Key="VmsPrimaryPressedColor_v3">#FF1E40AF</Color>
+    <Color x:Key="VmsFocusColor_v3">#FF3B82F6</Color>
+    <Color x:Key="VmsSuccessColor_v3">#FF22C55E</Color>
+    <Color x:Key="VmsWarningColor_v3">#FFF59E0B</Color>
+    <Color x:Key="VmsErrorColor_v3">#FFEF4444</Color>
+    <Color x:Key="VmsInfoColor_v3">#FF38BDF8</Color>
+    <Color x:Key="VmsOfflineColor_v3">#FF64748B</Color>
+
+    <!-- Light semantic values are reserved for a future explicit light `_v3` theme. -->
+    <Color x:Key="VmsLightBackgroundColor_v3">#FFF5F7FB</Color>
+    <Color x:Key="VmsLightSurfaceColor_v3">#FFFFFFFF</Color>
+    <Color x:Key="VmsLightBorderColor_v3">#FFE5E7EB</Color>
+    <Color x:Key="VmsLightTextPrimaryColor_v3">#FF111827</Color>
+    <Color x:Key="VmsLightTextSecondaryColor_v3">#FF6B7280</Color>
+    <Color x:Key="VmsLightPrimaryColor_v3">#FFFF7A1A</Color>
+</ResourceDictionary>

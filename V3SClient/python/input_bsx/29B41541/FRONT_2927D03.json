@@ -1,0 +1,74 @@
+{
+  "api_crop_elapsed_ms": 25.458936113864183,
+  "bbox": {
+    "height": 401.812530517578,
+    "left": 289.875,
+    "top": 182.4375,
+    "width": 397.125
+  },
+  "capture_cam_id": "2927D-03",
+  "capture_role": "front",
+  "confidence": 0.999755859375,
+  "crop_bbox": {
+    "height": 602.7187957763671,
+    "left": 190.59375,
+    "top": 81.9843673706055,
+    "width": 595.6875
+  },
+  "crop_bbox_norm": {
+    "crop_height_norm": "0.55807296",
+    "crop_left_norm": "0.09926758",
+    "crop_top_norm": "0.07591145",
+    "crop_width_norm": "0.31025391"
+  },
+  "event_type": "object_update",
+  "file": "/data/vehicle_captures/2026-07-02/29B41541/FRONT_2927D03.jpg",
+  "frame_num": 1141829,
+  "group_id": "vehicle_lane_01",
+  "image_height": 1080,
+  "image_path": "./server_assets/V3SStorage/images/2026/07/02/2927D-03/2927D-03_2026_07_02_10_09_05_499342.jpg",
+  "image_width": 1920,
+  "message_id": "019f20cd-2e5b-7f77-9af7-9fbfb892b4ca",
+  "ntp_timestamp": 1782961745478394000,
+  "placeholder": {
+    "plate_bbox": {
+      "height": 32.0,
+      "left": 389.0,
+      "top": 549.0,
+      "width": 54.0
+    }
+  },
+  "plate": "29B41541",
+  "plate_bbox": {
+    "height": 32.0,
+    "left": 389.0,
+    "top": 549.0,
+    "width": 54.0
+  },
+  "plate_bbox_norm": {
+    "crop_height_norm": "0.02962963",
+    "crop_left_norm": "0.20260417",
+    "crop_top_norm": "0.50833333",
+    "crop_width_norm": "0.02812500"
+  },
+  "plate_image_file": "/data/vehicle_captures/2026-07-02/29B41541/FRONT_2927D03_plate.jpg",
+  "produced_at": "2026-07-02T03:09:05.506214Z",
+  "request_elapsed_ms": 634.6818148158491,
+  "saved_at": "2026-07-02T03:09:06.147372Z",
+  "snapshot_at": "2026-07-02T03:09:05.506214Z",
+  "source_file_name": "./server_assets/V3SStorage/images/2026/07/02/2927D-03/2927D-03_2026_07_02_10_09_05_499342.jpg",
+  "source_method": "storage_file_name",
+  "status": 200,
+  "storage_asset": {
+    "device_id": "2927D-03",
+    "file_path": "snapshot/2927D-03/2026/07/02/2927D-03_2026_07_02_10_09_05_499342.jpg",
+    "filename": "2927D-03_2026_07_02_10_09_05_499342.jpg",
+    "id": "96828b8a-75a6-4cf1-98c8-71b29d5a4749",
+    "timestamp": "2026-07-02T03:09:05.506564"
+  },
+  "storage_date": "2026-07-02",
+  "storage_preview_url": "http://storage.api:8001/api/storage/proxy/96828b8a-75a6-4cf1-98c8-71b29d5a4749?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5NjgyOGI4YS03NWE2LTRjZjEtOThjOC03MWIyOWQ1YTQ3NDkiLCJleHAiOjE3ODI5NjUzNDYsInR5cGUiOiJmaWxlX2FjY2VzcyJ9.t6IKdNWtbL-T7U0mEfFCXRRkQomHMX2P91yOhiQF9A4&disposition=inline",
+  "total_latency_ms": 635.4576977901161,
+  "tracking_object_id": 6884,
+  "trigger_cam_id": "2927D-03"
+}

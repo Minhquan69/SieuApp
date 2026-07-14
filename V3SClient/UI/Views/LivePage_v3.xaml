@@ -1,0 +1,141 @@
+<UserControl x:Class="V3SClient.UI.Views.LivePage_v3"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="{StaticResource VmsBackgroundBrush_v3}">
+    <Grid>
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+
+        <Border Background="{StaticResource VmsHeaderBrush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="0,0,0,1" Padding="10,6">
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Live View _v3" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontWeight="SemiBold" FontSize="16"/>
+                    <Border Background="{StaticResource VmsSurface2Brush_v3}" CornerRadius="10" Padding="8,3" Margin="10,0,0,0">
+                        <TextBlock x:Name="CameraStatus" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" FontSize="11"/>
+                    </Border>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center">
+                    <Button Content="Connect all" Click="ConnectAll_Click" Style="{StaticResource PrimaryButtonStyle_v3}" Padding="9,4" Margin="2"/>
+                    <Button Content="Disconnect all" Click="DisconnectAll_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="9,4" Margin="2"/>
+                    <Button Content="Remove errors" Click="RemoveErrors_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="9,4" Margin="2" Foreground="{StaticResource VmsWarningBrush_v3}"/>
+                    <Button Content="Remove all" Click="RemoveAll_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="9,4" Margin="2" Foreground="{StaticResource VmsErrorBrush_v3}"/>
+                </StackPanel>
+                <Button Grid.Column="2" Content="Fullscreen" Click="FullscreenButton_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="9,4" Margin="8,0,0,0"/>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition x:Name="SidebarColumn" Width="280"/></Grid.ColumnDefinitions>
+            <Grid Grid.Column="0">
+                <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8" Padding="4" Panel.ZIndex="20" Background="{StaticResource VmsElevatedBrush_v3}" BorderBrush="{StaticResource VmsBorderStrongBrush_v3}" BorderThickness="1" CornerRadius="4">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Layout" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" VerticalAlignment="Center" Margin="2,0,5,0" FontSize="11"/>
+                        <Button Content="1x1" Tag="Layout1x1" Click="LayoutButton_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="6,3" Margin="1"/>
+                        <Button Content="2x2" Tag="Layout2x2" Click="LayoutButton_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="6,3" Margin="1"/>
+                        <Button Content="3x3" Tag="Layout3x3" Click="LayoutButton_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="6,3" Margin="1"/>
+                        <Button Content="5+1" Tag="Layout5Plus1" Click="LayoutButton_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="6,3" Margin="1"/>
+                        <Button Content="16+1" Tag="Layout16Plus1" Click="LayoutButton_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="6,3" Margin="1"/>
+                        <TextBox x:Name="InlineCustomSlotText" Text="10" Width="38" Height="24" Style="{StaticResource VmsTextBoxStyle_v3}" Margin="3,0,1,0" ToolTip="Number of custom tiles"/>
+                        <Button Content="Apply" Click="InlineCustomLayout_Click" Style="{StaticResource PrimaryButtonStyle_v3}" Padding="6,3" Margin="1"/>
+                    </StackPanel>
+                </Border>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Background="{StaticResource VmsBackgroundBrush_v3}">
+                    <Grid x:Name="CameraGrid" AllowDrop="True"/>
+                </ScrollViewer>
+                <Border x:Name="EmptyState" Background="{StaticResource VmsBackgroundBrush_v3}" Visibility="Collapsed">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="Live View" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontSize="24" HorizontalAlignment="Center"/>
+                        <TextBlock Text="{Binding StatusMessage}" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" Margin="0,10,0,0" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+                <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8" Background="{StaticResource VmsElevatedBrush_v3}" BorderBrush="{StaticResource VmsBorderStrongBrush_v3}" BorderThickness="1" CornerRadius="4" Padding="3" MouseEnter="LayoutMenu_MouseEnter">
+                    <Button x:Name="LayoutMenuButton" Content="▦ 2x2" Click="LayoutMenuButton_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="8,4"/>
+                </Border>
+                <Popup x:Name="LayoutPopup" Placement="Bottom" PlacementTarget="{Binding ElementName=LayoutMenuButton}" StaysOpen="True" AllowsTransparency="True">
+                    <Border Background="{StaticResource VmsSidebarBrush_v3}" BorderBrush="{StaticResource VmsFocusBrush_v3}" BorderThickness="1" CornerRadius="6" Padding="5" Width="150">
+                        <StackPanel>
+                            <Button Content="□  1x1" Tag="Layout1x1" Click="LayoutButton_Click" Style="{StaticResource SecondaryButtonStyle_v3}" HorizontalContentAlignment="Left" Padding="8,5"/>
+                            <Button Content="▦  2x2" Tag="Layout2x2" Click="LayoutButton_Click" Style="{StaticResource SecondaryButtonStyle_v3}" HorizontalContentAlignment="Left" Padding="8,5"/>
+                            <Button Content="▦  3x3" Tag="Layout3x3" Click="LayoutButton_Click" Style="{StaticResource SecondaryButtonStyle_v3}" HorizontalContentAlignment="Left" Padding="8,5"/>
+                            <Button Content="＋  5+1" Tag="Layout5Plus1" Click="LayoutButton_Click" Style="{StaticResource SecondaryButtonStyle_v3}" HorizontalContentAlignment="Left" Padding="8,5"/>
+                            <Button Content="▦  16+1" Tag="Layout16Plus1" Click="LayoutButton_Click" Style="{StaticResource SecondaryButtonStyle_v3}" HorizontalContentAlignment="Left" Padding="8,5"/>
+                            <Button Content="▦  6x6" Tag="Layout6x6" Click="LayoutButton_Click" Style="{StaticResource SecondaryButtonStyle_v3}" HorizontalContentAlignment="Left" Padding="8,5"/>
+                            <StackPanel Orientation="Horizontal" Margin="2,4,2,0">
+                                <TextBox x:Name="CustomSlotText" Text="10" Width="45" Height="25" Style="{StaticResource VmsTextBoxStyle_v3}"/>
+                                <Button Content="Custom" Click="CustomLayout_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="7,3" Margin="3,0,0,0"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="2,4,2,0">
+                                <Button Content="4x4" Tag="16" Click="CustomPreset_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="7,3" Margin="0,0,3,0"/>
+                                <Button Content="5x5" Tag="25" Click="CustomPreset_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="7,3" Margin="0,0,3,0"/>
+                                <Button Content="6x6" Tag="36" Click="CustomPreset_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="7,3"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </Popup>
+            </Grid>
+
+            <Border x:Name="CameraSidebar" Grid.Column="1" Background="{StaticResource VmsSidebarBrush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1,0,0,0">
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    <Grid Margin="12,10,12,7">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock Text="Camera list" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center"/>
+                        <Button Grid.Column="1" Content="Hide" Click="ToggleSidebar_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="7,2"/>
+                    </Grid>
+                    <TextBox Grid.Row="1" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Margin="10,0,10,8" Height="30" Style="{StaticResource VmsTextBoxStyle_v3}" ToolTip="Search camera or group"/>
+                    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding CameraGroups}" Margin="6,0,6,8">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Expander Header="{Binding Name}" IsExpanded="{Binding IsExpanded}" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" Margin="0,2">
+                                        <ItemsControl ItemsSource="{Binding CameraItems}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Tag="{Binding Camera}" MouseLeftButtonUp="Camera_MouseUp" Padding="8,4" Margin="0,1" Background="Transparent">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Background" Value="Transparent"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                        <Setter Property="Background" Value="{StaticResource VmsPrimarySoftBrush_v3}"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                            <TextBlock Text="✓" Foreground="{StaticResource VmsSuccessBrush_v3}" FontWeight="Bold" Width="14" Visibility="Collapsed" Margin="0,0,0,0">
+                                                                <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsSelected}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+                                                            </TextBlock>
+                                                            <TextBlock Grid.Column="1" Text="{Binding DisplayName}" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" TextTrimming="CharacterEllipsis" FontSize="12"/>
+                                                            <TextBlock Grid.Column="2" Text="{Binding StateText}" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="10" Margin="6,0,0,0"/>
+                                                            <StackPanel Grid.Column="3" Orientation="Horizontal" Visibility="Collapsed">
+                                                                <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=Border}, Path=IsMouseOver}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+                                                                <Button Content="＋" Tag="{Binding Camera}" Click="InlineFill_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="4,0" Margin="2,0,0,0" ToolTip="Add to layout"/>
+                                                                <Button Content="▶" Tag="{Binding Camera}" Click="InlineConnect_Click" Style="{StaticResource PrimaryButtonStyle_v3}" Padding="4,0" Margin="2,0,0,0" ToolTip="Connect"/>
+                                                            </StackPanel>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </Expander>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
+        <Border x:Name="FullscreenToolbar" Grid.Row="1" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,14" Padding="6" Background="{StaticResource VmsElevatedBrush_v3}" BorderBrush="{StaticResource VmsBorderStrongBrush_v3}" BorderThickness="1" CornerRadius="6" Visibility="Collapsed">
+            <StackPanel Orientation="Horizontal">
+                <Button Content="Connect all" Click="ConnectAll_Click" Style="{StaticResource PrimaryButtonStyle_v3}" Padding="9,4" Margin="2"/>
+                <Button Content="Disconnect all" Click="DisconnectAll_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="9,4" Margin="2"/>
+                <Button Content="Remove errors" Click="RemoveErrors_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="9,4" Margin="2"/>
+                <Button Content="Remove all" Click="RemoveAll_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="9,4" Margin="2"/>
+                <Button Content="Camera list" Click="ToggleSidebar_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="9,4" Margin="2"/>
+                <Button Content="Exit fullscreen" Click="FullscreenButton_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="9,4" Margin="8,2,2,2"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

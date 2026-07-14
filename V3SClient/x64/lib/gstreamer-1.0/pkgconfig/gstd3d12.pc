@@ -1,0 +1,12 @@
+prefix=${pcfiledir}/../../..
+includedir=${prefix}/include
+libdir=${prefix}/lib
+
+Name: gstd3d12
+Description: gst-plugins-bad: gstd3d12
+Version: 1.24.10
+Requires.private: gstreamer-codecparsers-1.0, gstreamer-video-1.0 >=  1.24.0, gstreamer-base-1.0 >=  1.24.0, DirectX-Headers >=  1.611
+Libs: -L${prefix}/lib/gstreamer-1.0 -lgstd3d12
+Libs.private: -ld3d12 -ld3d11 -ld2d1 -ldxgi -L${libdir} -lgstdxva-1.0 -lgstcodecs-1.0
+Cflags: -I${includedir}
+

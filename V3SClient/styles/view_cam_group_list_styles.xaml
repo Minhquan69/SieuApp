@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:local="clr-namespace:V3SClient.ucs" xmlns:libs="clr-namespace:V3SClient.libs" xmlns:models="clr-namespace:V3SClient.models" xmlns:viewModels="clr-namespace:V3SClient.viewModels" xmlns:cv="clr-namespace:V3SClient.UI.Converters">
+  <ResourceDictionary.MergedDictionaries>
+    <ResourceDictionary Source="/styles/border_reseted.xaml" />
+    <ResourceDictionary Source="/styles/TreeView.xaml" />
+    <ResourceDictionary Source="/styles/customize_radio_button.xaml" />
+    <ResourceDictionary Source="/styles/customize_checkbox.xaml" />
+  </ResourceDictionary.MergedDictionaries>
+  <Style TargetType="Image" x:Key="ViewCamGroupListImage01Style">
+    <Setter Property="Source" Value="/images/cam.png" />
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding Status}" Value="online">
+        <Setter Property="Source" Value="/images/cam_online.png" />
+      </DataTrigger>
+      <DataTrigger Binding="{Binding Status}" Value="offline">
+        <Setter Property="Source" Value="/images/cam_offline.png" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+  <Style TargetType="TextBlock" BasedOn="{StaticResource General_TextBlock}" x:Key="ViewCamGroupListTextBlock02Style">
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding IsPlaying}" Value="True">
+        <Setter Property="Foreground" Value="#F39C12" />
+        <Setter Property="FontWeight" Value="Bold" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+  <Style TargetType="TextBlock" BasedOn="{StaticResource General_TextBlock}" x:Key="ViewCamGroupListTextBlock03Style">
+    <Setter Property="Foreground" Value="#AAAAAA" />
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding IsPlaying}" Value="True">
+        <Setter Property="Foreground" Value="#D68910" />
+        <Setter Property="FontWeight" Value="Bold" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+  <Style TargetType="Border" x:Key="ViewCamGroupListBorder04Style">
+    <Setter Property="Background" Value="#2980B9" />
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding ActiveStreamMode}" Value="M">
+        <Setter Property="Background" Value="#E74C3C" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+</ResourceDictionary>

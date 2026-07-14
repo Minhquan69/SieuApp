@@ -1,0 +1,25 @@
+<Window x:Class="V3SClient.ucs.SelectDeviceWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:V3SClient.ucs"
+        mc:Ignorable="d"
+         Title="Chọn Thiết Bị" Height="260" Width="300">
+    <StackPanel Margin="10">
+        <TextBlock Text="Chọn thiết bị cần thêm:" FontWeight="Bold"/>
+
+        <ListBox x:Name="DeviceListBox" 
+                 ItemsSource="{Binding AvailableDevices}" 
+                 DisplayMemberPath="CamInfo_Name" 
+                 SelectionMode="Multiple"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 Height="150"/>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="10">
+            <Button Content="Đồng ý" Width="80" Margin="2" Click="OkButton_Click"/>
+            <Button Content="Hủy" Width="80" Margin="2" Click="CancelButton_Click"/>
+        </StackPanel>
+    </StackPanel>
+</Window>
