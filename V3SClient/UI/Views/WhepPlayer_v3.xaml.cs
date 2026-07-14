@@ -77,6 +77,11 @@ namespace V3SClient.UI.Views
             RaiseState(WhepPlaybackState_v3.Stopped);
         }
 
+        public void RequestDisconnect()
+        {
+            _cancellation?.Cancel();
+        }
+
         private async System.Threading.Tasks.Task ConnectAsync()
         {
             DisposePipeline();

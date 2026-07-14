@@ -355,6 +355,8 @@ namespace V3SClient.UI.Views
             var ids = _viewModel.Slots.Where(slot => slot.Camera != null).Select(slot => GetStreamId(slot)).ToArray();
             CameraGrid.Visibility = Visibility.Collapsed;
             try { await _streamService.DisconnectAsync(ids, _lifetime.Token); } catch (Exception ex) { LoggerManager.LogException(ex, "Live View _v3 bulk disconnect failed"); }
+            foreach (var tile in _tiles.Values) tile.RequestDisconnect();
+            await Task.Yield();
             await Task.WhenAll(_tiles.Values.Select(tile => tile.DisconnectAsync()));
             CameraGrid.Visibility = Visibility.Visible;
         }
@@ -364,6 +366,8 @@ namespace V3SClient.UI.Views
             var ids = _viewModel.Slots.Where(slot => slot.Camera != null).Select(slot => GetStreamId(slot)).ToArray();
             CameraGrid.Visibility = Visibility.Collapsed;
             try { await _streamService.RemoveAsync(ids, _lifetime.Token); } catch (Exception ex) { LoggerManager.LogException(ex, "Live View _v3 bulk remove failed"); }
+            foreach (var tile in _tiles.Values) tile.RequestDisconnect();
+            await Task.Yield();
             await Task.WhenAll(_tiles.Values.Select(tile => tile.DisconnectAsync()));
             _viewModel.ClearAll();
             BuildGrid();

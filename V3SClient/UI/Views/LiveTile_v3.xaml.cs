@@ -102,6 +102,14 @@ namespace V3SClient.UI.Views
             return System.Threading.Tasks.Task.CompletedTask;
         }
 
+        public void RequestDisconnect()
+        {
+            _retryTimer.Stop();
+            _connectTimeoutTimer.Stop();
+            Player.RequestDisconnect();
+            if (Slot != null) Slot.State = Slot.Camera == null ? LiveConnectionState_v3.Empty : LiveConnectionState_v3.Offline;
+        }
+
         private void Player_PlaybackStateChanged(object sender, WhepPlaybackStateChangedEventArgs_v3 e)
         {
             if (Slot == null || _disposed) return;
