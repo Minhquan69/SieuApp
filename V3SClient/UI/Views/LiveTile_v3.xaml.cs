@@ -61,6 +61,11 @@ namespace V3SClient.UI.Views
         {
             if (_disposed || Slot == null || Slot.Camera == null) return;
             _retryTimer.Stop();
+            _connectTimeoutTimer.Stop();
+            Slot.State = LiveConnectionState_v3.Connecting;
+            Slot.ErrorMessage = null;
+            RefreshVisuals();
+            StateChanged?.Invoke(this, EventArgs.Empty);
             Player.SelectedStream = Slot.SelectedStream;
             await Player.ReconnectAsync();
         }
@@ -77,6 +82,24 @@ namespace V3SClient.UI.Views
                 Slot.RetryCount = 0;
             }
             RefreshVisuals();
+        }
+
+        public System.Threading.Tasks.Task DisconnectAsync()
+        {
+            _retryTimer.Stop();
+            _connectTimeoutTimer.Stop();
+            // GStreamer/WindowsFormsHost owns UI handles; disconnect must run on
+            // the WPF dispatcher thread. The bulk API is concurrent, while this
+            // UI cleanup remains thread-safe and non-blocking at the network layer.
+            Player.Disconnect();
+            if (Slot != null)
+            {
+                Slot.State = Slot.Camera == null ? LiveConnectionState_v3.Empty : LiveConnectionState_v3.Offline;
+                Slot.ErrorMessage = null;
+                Slot.RetryCount = 0;
+            }
+            RefreshVisuals();
+            return System.Threading.Tasks.Task.CompletedTask;
         }
 
         private void Player_PlaybackStateChanged(object sender, WhepPlaybackStateChangedEventArgs_v3 e)
@@ -173,10 +196,10 @@ namespace V3SClient.UI.Views
             ErrorOverlay.Visibility = !empty && Slot.HasError && Slot.State == LiveConnectionState_v3.Error ? Visibility.Visible : Visibility.Collapsed;
             var loading = !empty && Slot != null && (Slot.State == LiveConnectionState_v3.Connecting || Slot.State == LiveConnectionState_v3.Retrying);
             LoadingOverlay.Visibility = loading ? Visibility.Visible : Visibility.Collapsed;
-            LoadingText.Text = Slot != null && Slot.State == LiveConnectionState_v3.Retrying ? "Retrying " + Slot.RetryCount + "/3..." : "Connecting...";
+            LoadingText.Text = Slot != null && Slot.State == LiveConnectionState_v3.Retrying ? "Đang thử lại " + Slot.RetryCount + "/3..." : "Đang kết nối...";
             if (loading) _loadingStoryboard.Begin(this, true); else _loadingStoryboard.Remove(this);
             CameraName.Text = empty ? string.Empty : Slot.DisplayName + " · " + Slot.StreamLabel;
-            ErrorText.Text = "Check network, camera configuration, or the live stream relay.";
+            ErrorText.Text = "Kiểm tra mạng, cấu hình camera hoặc máy chủ phát trực tiếp.";
             StatusDot.Fill = (System.Windows.Media.Brush)FindResource(Slot != null && Slot.State == LiveConnectionState_v3.Connected
                 ? "VmsSuccessBrush_v3" : Slot != null && Slot.HasError ? "VmsErrorBrush_v3" : "VmsOfflineBrush_v3");
             ConnectButton.Visibility = !empty && (Slot == null || !Slot.IsConnected) ? Visibility.Visible : Visibility.Collapsed;

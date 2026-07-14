@@ -37,12 +37,12 @@ namespace V3SClient.viewModels
             {
                 switch (State)
                 {
-                    case LiveConnectionState_v3.Connecting: return "Connecting...";
-                    case LiveConnectionState_v3.Connected: return "Connected";
-                    case LiveConnectionState_v3.Error: return "Connection error";
-                    case LiveConnectionState_v3.Retrying: return "Retrying " + RetryCount + "/3...";
-                    case LiveConnectionState_v3.Offline: return "Offline";
-                    default: return "Empty";
+                    case LiveConnectionState_v3.Connecting: return "Đang kết nối...";
+                    case LiveConnectionState_v3.Connected: return "Đã kết nối";
+                    case LiveConnectionState_v3.Error: return "Lỗi kết nối";
+                    case LiveConnectionState_v3.Retrying: return "Đang thử lại " + RetryCount + "/3...";
+                    case LiveConnectionState_v3.Offline: return "Ngoại tuyến";
+                    default: return "Trống";
                 }
             }
         }
@@ -98,6 +98,7 @@ namespace V3SClient.viewModels
         public ObservableCollection<LiveCameraGroupViewModel_v3> CameraGroups { get; private set; }
         public ObservableCollection<LiveSlotViewModel_v3> Slots { get; private set; }
         public int CameraCount { get { return _allCameras.Count; } }
+        public int AiCameraCount { get { return _allCameras.Count(camera => string.Equals(camera.type, "ai_processed", StringComparison.OrdinalIgnoreCase) || (camera.Streams != null && camera.Streams.Any(stream => stream.IsAiMode == true))); } }
         public int GroupCount { get { return _sourceGroups.Count; } }
         public int ActiveCameraCount { get { return Slots.Count(slot => slot.Camera != null); } }
         public string StatusMessage { get; private set; }

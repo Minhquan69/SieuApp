@@ -255,7 +255,6 @@
     <Compile Include="Services\ProcessingPipeline.cs" />
     <Compile Include="Services\ProcessingModes.cs" />
     <Compile Include="Services\ProcessingQueue.cs" />
-    <Compile Include="Services\AuthenticationService_v3.cs" />
     <Compile Include="ucs\DonutChartControl.cs" />
     <Compile Include="ucs\ucWebVehicleRegisterManagement.xaml.cs">
       <DependentUpon>ucWebVehicleRegisterManagement.xaml</DependentUpon>
@@ -507,7 +506,6 @@
     </Compile>
     <Compile Include="viewModels\VMVideoStorage.cs" />
     <Compile Include="viewModels\VMViewSearchCustom.cs" />
-    <Compile Include="viewModels\LoginViewModel_v3.cs" />
     <Compile Include="viewModels\ShellViewModel_v3.cs" />
     <Compile Include="viewModels\LiveViewModel_v3.cs" />
     <Compile Include="ucs\SidebarControl_v3.xaml.cs">
@@ -544,12 +542,6 @@
     <Compile Include="UI\Views\AiMetadataOverlay_v3.cs" />
     <Compile Include="window\ShellWindow_v3.xaml.cs">
       <DependentUpon>ShellWindow_v3.xaml</DependentUpon>
-    </Compile>
-    <Compile Include="UI\Views\LoginPage_v3.xaml.cs">
-      <DependentUpon>LoginPage_v3.xaml</DependentUpon>
-    </Compile>
-    <Compile Include="window\LoginWindow_v3.xaml.cs">
-      <DependentUpon>LoginWindow_v3.xaml</DependentUpon>
     </Compile>
     <Compile Include="UI\Views\CameraFloatingWindow.xaml.cs">
       <DependentUpon>CameraFloatingWindow.xaml</DependentUpon>
@@ -964,10 +956,6 @@
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
-    <Page Include="UI\Views\LoginPage_v3.xaml">
-      <Generator>MSBuild:Compile</Generator>
-      <SubType>Designer</SubType>
-    </Page>
     <Page Include="UI\Views\ShellPage_v3.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
@@ -1085,10 +1073,6 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="window\LoginWindow.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
-    <Page Include="window\LoginWindow_v3.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>

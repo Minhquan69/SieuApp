@@ -47,7 +47,6 @@ namespace V3SClient.UI.Views
             // or reload cameras that are already running.
             var previousTiles = new Dictionary<int, LiveTile_v3>(_tiles);
             _tiles.Clear();
-            CameraGrid.Children.Clear();
             CameraGrid.RowDefinitions.Clear();
             CameraGrid.ColumnDefinitions.Clear();
             var dimensions = GetDimensions(_viewModel.Layout, _viewModel.Slots.Count);
@@ -74,12 +73,13 @@ namespace V3SClient.UI.Views
                 Grid.SetColumn(tile, placement.Item2);
                 Grid.SetRowSpan(tile, placement.Item3);
                 Grid.SetColumnSpan(tile, placement.Item4);
-                CameraGrid.Children.Add(tile);
+                if (!CameraGrid.Children.Contains(tile)) CameraGrid.Children.Add(tile);
                 _tiles[slot.SlotId] = tile;
                 previousTiles.Remove(slot.SlotId);
             }
             foreach (var stale in previousTiles.Values)
             {
+                CameraGrid.Children.Remove(stale);
                 stale.RemoveRequested -= Tile_RemoveRequested;
                 stale.FullscreenRequested -= Tile_FullscreenRequested;
                 stale.StateChanged -= Tile_StateChanged;
@@ -315,6 +315,18 @@ namespace V3SClient.UI.Views
             BuildGrid();
         }
 
+        private void VisibleCustomLayout_Click(object sender, RoutedEventArgs e)
+        {
+            int count;
+            if (!int.TryParse(VisibleCustomSlotText.Text, out count)) count = 10;
+            count = Math.Max(1, Math.Min(100, count));
+            _viewModel.ApplyCustomLayout(count);
+            VisibleCustomSlotText.Text = count.ToString();
+            LayoutMenuButton.Content = "Layout " + count;
+            BuildGrid();
+        }
+
+
         private void CustomPreset_Click(object sender, RoutedEventArgs e)
         {
             int count;
@@ -341,16 +353,21 @@ namespace V3SClient.UI.Views
         private async void DisconnectAll_Click(object sender, RoutedEventArgs e)
         {
             var ids = _viewModel.Slots.Where(slot => slot.Camera != null).Select(slot => GetStreamId(slot)).ToArray();
+            CameraGrid.Visibility = Visibility.Collapsed;
             try { await _streamService.DisconnectAsync(ids, _lifetime.Token); } catch (Exception ex) { LoggerManager.LogException(ex, "Live View _v3 bulk disconnect failed"); }
-            foreach (var tile in _tiles.Values) tile.Disconnect();
+            await Task.WhenAll(_tiles.Values.Select(tile => tile.DisconnectAsync()));
+            CameraGrid.Visibility = Visibility.Visible;
         }
 
         private async void RemoveAll_Click(object sender, RoutedEventArgs e)
         {
             var ids = _viewModel.Slots.Where(slot => slot.Camera != null).Select(slot => GetStreamId(slot)).ToArray();
+            CameraGrid.Visibility = Visibility.Collapsed;
             try { await _streamService.RemoveAsync(ids, _lifetime.Token); } catch (Exception ex) { LoggerManager.LogException(ex, "Live View _v3 bulk remove failed"); }
+            await Task.WhenAll(_tiles.Values.Select(tile => tile.DisconnectAsync()));
             _viewModel.ClearAll();
             BuildGrid();
+            CameraGrid.Visibility = Visibility.Visible;
         }
 
         private void RemoveErrors_Click(object sender, RoutedEventArgs e)
@@ -400,7 +417,9 @@ namespace V3SClient.UI.Views
         {
             var hide = CameraSidebar.Visibility == Visibility.Visible;
             CameraSidebar.Visibility = hide ? Visibility.Collapsed : Visibility.Visible;
-            SidebarColumn.Width = hide ? new GridLength(0) : new GridLength(280);
+            SidebarColumn.Width = hide ? new GridLength(0) : new GridLength(320);
+            SidebarOpenButton.Visibility = hide ? Visibility.Visible : Visibility.Collapsed;
+            SidebarOpenHeaderButton.Visibility = hide ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private static string GetStreamId(LiveSlotViewModel_v3 slot)
