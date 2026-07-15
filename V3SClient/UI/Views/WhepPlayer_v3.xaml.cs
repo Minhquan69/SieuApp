@@ -28,11 +28,19 @@ namespace V3SClient.UI.Views
         private CameraStreamInfo _selectedStream;
 
         public event EventHandler<WhepPlaybackStateChangedEventArgs_v3> PlaybackStateChanged;
+        public event EventHandler VideoMouseEnter;
+        public event EventHandler VideoMouseMove;
+        public event EventHandler VideoMouseLeave;
 
         public WhepPlayer_v3()
         {
             InitializeComponent();
             VideoHost.Child = _videoPanel;
+            // The GStreamer sink is hosted by a native WinForms child HWND,
+            // so WPF mouse routing cannot see hover inside the video area.
+            _videoPanel.MouseEnter += (s, e) => VideoMouseEnter?.Invoke(this, EventArgs.Empty);
+            _videoPanel.MouseMove += (s, e) => VideoMouseMove?.Invoke(this, EventArgs.Empty);
+            _videoPanel.MouseLeave += (s, e) => VideoMouseLeave?.Invoke(this, EventArgs.Empty);
             Loaded += async (s, e) =>
             {
                 if (_pipeline == null && _cancellation == null)
