@@ -17,6 +17,7 @@
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <TargetFrameworkProfile />
     <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <IsWebBootstrapper>false</IsWebBootstrapper>
     <PublishUrl>publish\</PublishUrl>
     <Install>true</Install>
