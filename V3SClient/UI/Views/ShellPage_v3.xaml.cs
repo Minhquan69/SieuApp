@@ -15,6 +15,12 @@ namespace V3SClient.UI.Views
             DataContextChanged += OnDataContextChanged;
         }
 
+        public void SetChromeVisible(bool visible)
+        {
+            ShellSidebar.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+            ShellHeader.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        }
+
         private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
         {
             if (_viewModel != null)

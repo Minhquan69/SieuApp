@@ -77,9 +77,32 @@ namespace V3SClient.UI.Views
             RaiseState(WhepPlaybackState_v3.Stopped);
         }
 
+        public void SetDisconnectedStatus()
+        {
+            StatusText.Text = _camera == null ? "Select a camera to connect." : "Camera disconnected.";
+            StatusPanel.Visibility = Visibility.Visible;
+            RaiseState(WhepPlaybackState_v3.Stopped);
+        }
+
         public void RequestDisconnect()
         {
             _cancellation?.Cancel();
+        }
+
+        /// <summary>
+        /// Matches the original V3 live view: native GStreamer disposal is run
+        /// concurrently for each camera. No WPF controls are touched here.
+        /// </summary>
+        public void DisposePipelineInBackground()
+        {
+            _cancellation?.Cancel();
+            _cancellation?.Dispose();
+            _cancellation = null;
+            var pipeline = System.Threading.Interlocked.Exchange(ref _pipeline, null);
+            if (pipeline == null) return;
+            pipeline.Bus.SyncMessage -= OnSyncMessage;
+            pipeline.SetState(State.Null);
+            pipeline.Dispose();
         }
 
         private async System.Threading.Tasks.Task ConnectAsync()

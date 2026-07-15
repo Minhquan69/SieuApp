@@ -4,7 +4,7 @@
              xmlns:local="clr-namespace:V3SClient.UI.Views"
              xmlns:Icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
              Background="{StaticResource VmsSurfaceBrush_v3}">
-    <Border x:Name="TileBorder" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" Background="{StaticResource VmsSurfaceBrush_v3}" Margin="1" ClipToBounds="True">
+    <Border x:Name="TileBorder" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" Background="{StaticResource VmsSurfaceBrush_v3}" Margin="1" ClipToBounds="True" MouseEnter="TileBorder_MouseEnter" MouseLeave="TileBorder_MouseLeave" MouseLeftButtonUp="TileBorder_MouseLeftButtonUp">
         <Grid>
             <local:WhepPlayer_v3 x:Name="Player" />
             <local:AiMetadataOverlay_v3 x:Name="MetadataOverlay" IsHitTestVisible="False" />
@@ -35,22 +35,26 @@
                 </StackPanel>
             </Border>
 
-            <Border x:Name="CameraBadge" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="7" Padding="7,4" Background="{StaticResource VmsElevatedBrush_v3}" BorderBrush="{StaticResource VmsBorderStrongBrush_v3}" BorderThickness="1" CornerRadius="3">
+            <Popup x:Name="CameraBadgePopup" PlacementTarget="{Binding ElementName=TileBorder}" Placement="Relative" HorizontalOffset="7" VerticalOffset="7" AllowsTransparency="True" IsHitTestVisible="False" IsOpen="False">
+            <Border x:Name="CameraBadge" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0" Padding="7,4" Background="{StaticResource VmsElevatedBrush_v3}" BorderBrush="{StaticResource VmsBorderStrongBrush_v3}" BorderThickness="1" CornerRadius="3">
                 <StackPanel Orientation="Horizontal">
                     <Ellipse x:Name="StatusDot" Width="7" Height="7" Fill="{StaticResource VmsOfflineBrush_v3}" Margin="0,0,6,0" VerticalAlignment="Center"/>
                     <TextBlock x:Name="CameraName" Foreground="{StaticResource VmsTextInverseBrush_v3}" FontWeight="SemiBold" FontSize="11" TextTrimming="CharacterEllipsis" MaxWidth="210"/>
                 </StackPanel>
             </Border>
+            </Popup>
 
-            <Border x:Name="ActionBar" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,7" Padding="3" Background="{StaticResource VmsElevatedBrush_v3}" BorderBrush="{StaticResource VmsBorderStrongBrush_v3}" BorderThickness="1" CornerRadius="3">
-                <Border.Style><Style TargetType="Border"><Setter Property="Opacity" Value="0"/><Setter Property="IsHitTestVisible" Value="False"/><Style.Triggers><DataTrigger Binding="{Binding IsMouseOver, ElementName=TileBorder}" Value="True"><Setter Property="Opacity" Value="1"/><Setter Property="IsHitTestVisible" Value="True"/></DataTrigger></Style.Triggers></Style></Border.Style>
+            <Popup x:Name="ActionPopup" PlacementTarget="{Binding ElementName=TileBorder}" Placement="Bottom" HorizontalOffset="0" VerticalOffset="-42" AllowsTransparency="True" StaysOpen="True" PopupAnimation="Fade">
+            <Border x:Name="ActionBar" Panel.ZIndex="30" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,10" Padding="4" Background="{StaticResource VmsElevatedBrush_v3}" BorderBrush="{StaticResource VmsPrimaryBorderBrush_v3}" BorderThickness="1" CornerRadius="5" Opacity="1" IsHitTestVisible="True" MouseEnter="ActionBar_MouseEnter" MouseLeave="ActionBar_MouseLeave">
                 <StackPanel Orientation="Horizontal">
                     <Button x:Name="ConnectButton" Click="Connect_Click" Style="{StaticResource PrimaryButtonStyle_v3}" Padding="7,4" Margin="1" ToolTip="Kết nối camera"><Icon:PackIconMaterial Kind="Play" Width="14" Height="14"/></Button>
                     <Button x:Name="DisconnectButton" Click="Disconnect_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="7,4" Margin="1" ToolTip="Ngắt kết nối"><Icon:PackIconMaterial Kind="PowerPlugOff" Width="14" Height="14"/></Button>
-                    <ComboBox x:Name="StreamSelector" Width="105" Height="26" DisplayMemberPath="StreamType" SelectionChanged="StreamSelector_SelectionChanged" Style="{StaticResource VmsComboBoxStyle_v3}" Margin="1"/>
-                    <Button Click="Remove_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="7,4" Margin="1" Foreground="{StaticResource VmsErrorBrush_v3}" ToolTip="Xóa camera"><Icon:PackIconMaterial Kind="DeleteOutline" Width="14" Height="14"/></Button>
+                    <ComboBox x:Name="StreamSelector" Width="105" Height="26" DisplayMemberPath="StreamType" SelectionChanged="StreamSelector_SelectionChanged" Style="{StaticResource VmsComboBoxStyle_v3}" Margin="1" Visibility="Collapsed"/>
+                    <Button Click="Fullscreen_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Width="32" Height="32" Padding="0" Margin="1" ToolTip="Toàn màn hình"><Icon:PackIconMaterial Kind="Fullscreen" Width="15" Height="15"/></Button>
+                    <Button Click="Remove_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Width="32" Height="32" Padding="0" Margin="1" Foreground="{StaticResource VmsErrorBrush_v3}" ToolTip="Xóa camera"><Icon:PackIconMaterial Kind="DeleteOutline" Width="15" Height="15"/></Button>
                 </StackPanel>
             </Border>
+            </Popup>
         </Grid>
     </Border>
 </UserControl>

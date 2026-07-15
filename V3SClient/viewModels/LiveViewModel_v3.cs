@@ -10,7 +10,7 @@ using V3SClient.models;
 namespace V3SClient.viewModels
 {
     public enum LiveLayoutMode_v3 { Layout1x1, Layout2x2, Layout5Plus1, Layout3x3, Layout16Plus1, Layout6x6, Custom }
-    public enum LiveConnectionState_v3 { Empty, Offline, Connecting, Connected, Error, Retrying }
+    public enum LiveConnectionState_v3 { Empty, Offline, Connecting, Disconnecting, Connected, Error, Retrying }
 
     public sealed class LiveSlotViewModel_v3 : INotifyPropertyChanged
     {
@@ -38,6 +38,7 @@ namespace V3SClient.viewModels
                 switch (State)
                 {
                     case LiveConnectionState_v3.Connecting: return "Đang kết nối...";
+                    case LiveConnectionState_v3.Disconnecting: return "Đang ngắt kết nối...";
                     case LiveConnectionState_v3.Connected: return "Đã kết nối";
                     case LiveConnectionState_v3.Error: return "Lỗi kết nối";
                     case LiveConnectionState_v3.Retrying: return "Đang thử lại " + RetryCount + "/3...";
@@ -64,6 +65,16 @@ namespace V3SClient.viewModels
     {
         public Camera Camera { get; private set; }
         public string DisplayName { get { return Camera == null ? "Camera" : (Camera.name ?? Camera.camID ?? "Camera"); } }
+        public bool IsAiCamera
+        {
+            get
+            {
+                return Camera != null &&
+                    (Camera.HasAIStream ||
+                     string.Equals(Camera.type, "ai_processed", StringComparison.OrdinalIgnoreCase) ||
+                     (Camera.Streams != null && Camera.Streams.Any(stream => stream != null && stream.IsAiMode == true)));
+            }
+        }
         private bool _isSelected;
         private string _stateText;
         public bool IsSelected { get { return _isSelected; } set { _isSelected = value; OnChanged(); } }

@@ -4,6 +4,7 @@
     <Border x:Name="StatusPanel" Background="{StaticResource VmsSurfaceBrush_v3}">
       <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
         <TextBlock x:Name="StatusText" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" Text="Select a camera to connect." HorizontalAlignment="Center" />
+        <TextBlock x:Name="PipelineStateText" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" Text="Pipeline: NULL" FontSize="10" HorizontalAlignment="Center" Margin="0,6,0,0" />
       </StackPanel>
     </Border>
   </Grid>

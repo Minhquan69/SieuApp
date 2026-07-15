@@ -1,9 +1,11 @@
 using System;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Threading;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Input;
 using V3SClient.libs;
 using V3SClient.viewModels;
 
@@ -13,13 +15,22 @@ namespace V3SClient.UI.Views
     {
         private readonly DispatcherTimer _retryTimer;
         private readonly DispatcherTimer _connectTimeoutTimer;
+        private readonly DispatcherTimer _hideActionsTimer;
         private bool _disposed;
         private bool _changingStream;
+        private bool _actionsPinned;
         private Storyboard _loadingStoryboard;
 
         public LiveTile_v3()
         {
             InitializeComponent();
+            // Match the web tile controls: compact square actions and a
+            // clearly destructive red disconnect action.
+            ConnectButton.Width = DisconnectButton.Width = 32;
+            ConnectButton.Height = DisconnectButton.Height = 32;
+            DisconnectButton.Background = (Brush)FindResource("VmsErrorBrush_v3");
+            DisconnectButton.BorderBrush = (Brush)FindResource("VmsErrorBrush_v3");
+            DisconnectButton.Foreground = (Brush)FindResource("VmsTextInverseBrush_v3");
             _loadingStoryboard = new Storyboard();
             var rotation = new DoubleAnimation(0, 360, new Duration(TimeSpan.FromSeconds(1))) { RepeatBehavior = RepeatBehavior.Forever };
             Storyboard.SetTarget(rotation, LoadingRotation);
@@ -29,6 +40,8 @@ namespace V3SClient.UI.Views
             _retryTimer.Tick += RetryTimer_Tick;
             _connectTimeoutTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
             _connectTimeoutTimer.Tick += ConnectTimeoutTimer_Tick;
+            _hideActionsTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(140) };
+            _hideActionsTimer.Tick += HideActionsTimer_Tick;
             Player.PlaybackStateChanged += Player_PlaybackStateChanged;
         }
 
@@ -57,6 +70,21 @@ namespace V3SClient.UI.Views
             UpdateMetadataSubscription();
         }
 
+        public void SetFullscreenVisibility(bool visible)
+        {
+            if (visible)
+            {
+                CameraBadgePopup.IsOpen = Slot != null && Slot.Camera != null;
+                return;
+            }
+
+            // Popup controls are separate native windows because the video
+            // renderer uses WindowsFormsHost. Collapsing the tile alone does
+            // not close them, so explicitly close overlays for hidden tiles.
+            ActionPopup.IsOpen = false;
+            CameraBadgePopup.IsOpen = false;
+        }
+
         public async System.Threading.Tasks.Task ConnectAsync()
         {
             if (_disposed || Slot == null || Slot.Camera == null) return;
@@ -82,6 +110,7 @@ namespace V3SClient.UI.Views
                 Slot.RetryCount = 0;
             }
             RefreshVisuals();
+            StateChanged?.Invoke(this, EventArgs.Empty);
         }
 
         public System.Threading.Tasks.Task DisconnectAsync()
@@ -99,6 +128,7 @@ namespace V3SClient.UI.Views
                 Slot.RetryCount = 0;
             }
             RefreshVisuals();
+            StateChanged?.Invoke(this, EventArgs.Empty);
             return System.Threading.Tasks.Task.CompletedTask;
         }
 
@@ -107,7 +137,35 @@ namespace V3SClient.UI.Views
             _retryTimer.Stop();
             _connectTimeoutTimer.Stop();
             Player.RequestDisconnect();
-            if (Slot != null) Slot.State = Slot.Camera == null ? LiveConnectionState_v3.Empty : LiveConnectionState_v3.Offline;
+            if (Slot != null)
+            {
+                Slot.State = Slot.Camera == null ? LiveConnectionState_v3.Empty : LiveConnectionState_v3.Disconnecting;
+                Slot.ErrorMessage = null;
+                Slot.RetryCount = 0;
+            }
+            RefreshVisuals();
+            StateChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        public async System.Threading.Tasks.Task DisconnectInBackgroundAsync()
+        {
+            _retryTimer.Stop();
+            _connectTimeoutTimer.Stop();
+            Player.RequestDisconnect();
+            await System.Threading.Tasks.Task.Run(() => Player.DisposePipelineInBackground());
+            if (_disposed) return;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (Slot != null)
+                {
+                    Slot.State = Slot.Camera == null ? LiveConnectionState_v3.Empty : LiveConnectionState_v3.Offline;
+                    Slot.ErrorMessage = null;
+                    Slot.RetryCount = 0;
+                }
+                Player.SetDisconnectedStatus();
+                RefreshVisuals();
+                StateChanged?.Invoke(this, EventArgs.Empty);
+            }));
         }
 
         private void Player_PlaybackStateChanged(object sender, WhepPlaybackStateChangedEventArgs_v3 e)
@@ -168,6 +226,76 @@ namespace V3SClient.UI.Views
         private void Disconnect_Click(object sender, RoutedEventArgs e) { Disconnect(); }
         private void Remove_Click(object sender, RoutedEventArgs e) { RemoveRequested?.Invoke(this, EventArgs.Empty); }
         private void Fullscreen_Click(object sender, RoutedEventArgs e) { FullscreenRequested?.Invoke(this, EventArgs.Empty); }
+
+        private void ShowActions()
+        {
+            if (ActionBar.Visibility != Visibility.Visible) return;
+            _hideActionsTimer.Stop();
+            ActionPopup.IsOpen = true;
+            ActionBar.Opacity = 1;
+            ActionBar.IsHitTestVisible = true;
+        }
+
+        private void HideActions()
+        {
+            if (_actionsPinned) return;
+            _hideActionsTimer.Stop();
+            ActionPopup.IsOpen = false;
+            ActionBar.Opacity = 0;
+            ActionBar.IsHitTestVisible = false;
+        }
+
+        private void ScheduleHideActions()
+        {
+            if (_actionsPinned) return;
+            _hideActionsTimer.Stop();
+            _hideActionsTimer.Start();
+        }
+
+        private void HideActionsTimer_Tick(object sender, EventArgs e)
+        {
+            _hideActionsTimer.Stop();
+            if (!_actionsPinned && !TileBorder.IsMouseOver && !ActionBar.IsMouseOver)
+                HideActions();
+        }
+
+        private void TileBorder_MouseEnter(object sender, MouseEventArgs e)
+        {
+            ShowActions();
+        }
+
+        private void TileBorder_MouseLeave(object sender, MouseEventArgs e)
+        {
+            ScheduleHideActions();
+        }
+
+        private void ActionBar_MouseEnter(object sender, MouseEventArgs e)
+        {
+            _hideActionsTimer.Stop();
+            ShowActions();
+        }
+
+        private void ActionBar_MouseLeave(object sender, MouseEventArgs e)
+        {
+            ScheduleHideActions();
+        }
+
+        private void TileBorder_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            // Clicking the video pins the web-style action bar. Clicking a
+            // button must remain reserved for that button's command.
+            var current = e.OriginalSource as DependencyObject;
+            while (current != null && current != TileBorder)
+            {
+                if (current is ButtonBase || current is ComboBox)
+                    return;
+                current = VisualTreeHelper.GetParent(current);
+            }
+
+            _actionsPinned = !_actionsPinned;
+            if (_actionsPinned) ShowActions();
+            else HideActions();
+        }
         private async void Retry_Click(object sender, RoutedEventArgs e)
         {
             if (Slot != null) { Slot.RetryCount = 0; Slot.ErrorMessage = null; }
@@ -200,11 +328,17 @@ namespace V3SClient.UI.Views
             var empty = Slot == null || Slot.Camera == null;
             EmptyOverlay.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
             CameraBadge.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
+            CameraBadgePopup.IsOpen = !empty;
             ActionBar.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
+            if (empty)
+            {
+                _actionsPinned = false;
+                HideActions();
+            }
             ErrorOverlay.Visibility = !empty && Slot.HasError && Slot.State == LiveConnectionState_v3.Error ? Visibility.Visible : Visibility.Collapsed;
-            var loading = !empty && Slot != null && (Slot.State == LiveConnectionState_v3.Connecting || Slot.State == LiveConnectionState_v3.Retrying);
+            var loading = !empty && Slot != null && (Slot.State == LiveConnectionState_v3.Connecting || Slot.State == LiveConnectionState_v3.Disconnecting || Slot.State == LiveConnectionState_v3.Retrying);
             LoadingOverlay.Visibility = loading ? Visibility.Visible : Visibility.Collapsed;
-            LoadingText.Text = Slot != null && Slot.State == LiveConnectionState_v3.Retrying ? "Đang thử lại " + Slot.RetryCount + "/3..." : "Đang kết nối...";
+            LoadingText.Text = Slot != null && Slot.State == LiveConnectionState_v3.Disconnecting ? "Đang ngắt kết nối..." : Slot != null && Slot.State == LiveConnectionState_v3.Retrying ? "Đang thử lại " + Slot.RetryCount + "/3..." : "Đang kết nối...";
             if (loading) _loadingStoryboard.Begin(this, true); else _loadingStoryboard.Remove(this);
             CameraName.Text = empty ? string.Empty : Slot.DisplayName + " · " + Slot.StreamLabel;
             ErrorText.Text = "Kiểm tra mạng, cấu hình camera hoặc máy chủ phát trực tiếp.";
@@ -214,7 +348,10 @@ namespace V3SClient.UI.Views
             DisconnectButton.Visibility = !empty && Slot != null && (Slot.IsConnected || Slot.State == LiveConnectionState_v3.Connecting) ? Visibility.Visible : Visibility.Collapsed;
             StreamSelector.ItemsSource = empty || Slot.Camera.Streams == null ? null : Slot.Camera.Streams;
             StreamSelector.SelectedItem = empty ? null : Slot.SelectedStream;
-            StreamSelector.Visibility = !empty && Slot.Camera.Streams != null && Slot.Camera.Streams.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+            // Stream selection is managed by the camera/session, while the
+            // tile action bar mirrors the web actions (connect, disconnect,
+            // fullscreen and remove) only.
+            StreamSelector.Visibility = Visibility.Collapsed;
             _changingStream = false;
         }
 
@@ -226,6 +363,10 @@ namespace V3SClient.UI.Views
             _retryTimer.Tick -= RetryTimer_Tick;
             _connectTimeoutTimer.Stop();
             _connectTimeoutTimer.Tick -= ConnectTimeoutTimer_Tick;
+            _hideActionsTimer.Stop();
+            _hideActionsTimer.Tick -= HideActionsTimer_Tick;
+            ActionPopup.IsOpen = false;
+            CameraBadgePopup.IsOpen = false;
             Player.PlaybackStateChanged -= Player_PlaybackStateChanged;
             MetadataOverlay.Dispose();
             Player.Dispose();

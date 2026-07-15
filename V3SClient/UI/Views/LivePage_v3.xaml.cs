@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Threading;
 using V3SClient.Services;
 using V3SClient.libs;
 using V3SClient.models;
@@ -21,6 +22,17 @@ namespace V3SClient.UI.Views
         private CancellationTokenSource _lifetime = new CancellationTokenSource();
         private bool _disposed;
         private LiveTile_v3 _fullscreenTile;
+        private WindowStyle _tileWindowStyle;
+        private ResizeMode _tileResizeMode;
+        private WindowState _tileWindowState;
+        private bool _tileTopmost;
+        private double _tileWindowLeft;
+        private double _tileWindowTop;
+        private double _tileWindowWidth;
+        private double _tileWindowHeight;
+        private Visibility _tileSidebarVisibility;
+        private GridLength _tileSidebarWidth;
+        private bool _tileWindowStateSaved;
         private LiveTile_v3 _dragTile;
         private Point _dragStart;
 
@@ -40,7 +52,7 @@ namespace V3SClient.UI.Views
             BuildGrid();
         }
 
-        private void BuildGrid()
+        private void BuildGrid(bool deferStaleCleanup = false, Action staleCleanupCompleted = null)
         {
             // Rebuild only the layout chrome. Keep tile/player instances for
             // unchanged slots so selecting another camera does not reconnect
@@ -77,7 +89,8 @@ namespace V3SClient.UI.Views
                 _tiles[slot.SlotId] = tile;
                 previousTiles.Remove(slot.SlotId);
             }
-            foreach (var stale in previousTiles.Values)
+            var staleTiles = previousTiles.Values.ToArray();
+            foreach (var stale in staleTiles)
             {
                 CameraGrid.Children.Remove(stale);
                 stale.RemoveRequested -= Tile_RemoveRequested;
@@ -86,8 +99,11 @@ namespace V3SClient.UI.Views
                 stale.PreviewMouseLeftButtonDown -= Tile_PreviewMouseLeftButtonDown;
                 stale.PreviewMouseMove -= Tile_PreviewMouseMove;
                 stale.Drop -= Tile_Drop;
-                stale.Dispose();
             }
+            if (deferStaleCleanup)
+                ScheduleTileCleanup(staleTiles, disposeTiles: true, completed: staleCleanupCompleted);
+            else
+                foreach (var stale in staleTiles) stale.Dispose();
             UpdateStatus();
         }
 
@@ -273,7 +289,7 @@ namespace V3SClient.UI.Views
             _viewModel.SetLayout(layout);
             LayoutMenuButton.Content = "▦ " + LayoutLabel(layout);
             LayoutPopup.IsOpen = false;
-            BuildGrid();
+            BuildGrid(deferStaleCleanup: true);
         }
 
         private void LayoutMenuButton_Click(object sender, RoutedEventArgs e) { LayoutPopup.IsOpen = !LayoutPopup.IsOpen; }
@@ -301,7 +317,7 @@ namespace V3SClient.UI.Views
             CustomSlotText.Text = _viewModel.CustomSlotCount.ToString();
             LayoutMenuButton.Content = "▦ Custom";
             LayoutPopup.IsOpen = false;
-            BuildGrid();
+            BuildGrid(deferStaleCleanup: true);
         }
 
         private void InlineCustomLayout_Click(object sender, RoutedEventArgs e)
@@ -312,7 +328,7 @@ namespace V3SClient.UI.Views
             _viewModel.ApplyCustomLayout(count);
             InlineCustomSlotText.Text = count.ToString();
             LayoutMenuButton.Content = "Layout " + count;
-            BuildGrid();
+            BuildGrid(deferStaleCleanup: true);
         }
 
         private void VisibleCustomLayout_Click(object sender, RoutedEventArgs e)
@@ -323,7 +339,7 @@ namespace V3SClient.UI.Views
             _viewModel.ApplyCustomLayout(count);
             VisibleCustomSlotText.Text = count.ToString();
             LayoutMenuButton.Content = "Layout " + count;
-            BuildGrid();
+            BuildGrid(deferStaleCleanup: true);
         }
 
 
@@ -335,7 +351,7 @@ namespace V3SClient.UI.Views
             CustomSlotText.Text = count.ToString();
             LayoutMenuButton.Content = "Layout " + count;
             LayoutPopup.IsOpen = false;
-            BuildGrid();
+            BuildGrid(deferStaleCleanup: true);
         }
 
         private async void ConnectAll_Click(object sender, RoutedEventArgs e)
@@ -347,31 +363,87 @@ namespace V3SClient.UI.Views
                 if (!bulkStarted) LoggerManager.LogWarn("Live View _v3 bulk connect was not accepted; falling back to per-tile connections.");
             }
             catch (Exception ex) { LoggerManager.LogException(ex, "Live View _v3 bulk connect failed; falling back to per-tile connections"); }
-            foreach (var tile in _tiles.Values.Where(tile => tile.Slot != null && tile.Slot.Camera != null)) await tile.ConnectAsync();
+            try
+            {
+                var connectTasks = _tiles.Values
+                    .Where(tile => tile.Slot != null && tile.Slot.Camera != null)
+                    .Select(tile => tile.ConnectAsync())
+                    .ToArray();
+                await Task.WhenAll(connectTasks);
+            }
+            finally
+            {
+                UpdateStatus();
+            }
         }
 
         private async void DisconnectAll_Click(object sender, RoutedEventArgs e)
         {
             var ids = _viewModel.Slots.Where(slot => slot.Camera != null).Select(slot => GetStreamId(slot)).ToArray();
-            CameraGrid.Visibility = Visibility.Collapsed;
-            try { await _streamService.DisconnectAsync(ids, _lifetime.Token); } catch (Exception ex) { LoggerManager.LogException(ex, "Live View _v3 bulk disconnect failed"); }
-            foreach (var tile in _tiles.Values) tile.RequestDisconnect();
-            await Task.Yield();
-            await Task.WhenAll(_tiles.Values.Select(tile => tile.DisconnectAsync()));
+            var tiles = _tiles.Values.ToArray();
+            var disconnectTask = _streamService.DisconnectAsync(ids, _lifetime.Token);
+            foreach (var tile in tiles) tile.RequestDisconnect();
             CameraGrid.Visibility = Visibility.Visible;
+            var cleanupTasks = tiles.Select(tile => tile.DisconnectInBackgroundAsync()).ToArray();
+            _ = Task.WhenAll(cleanupTasks).ContinueWith(_ => Dispatcher.BeginInvoke(new Action(UpdateStatus)));
+            try { await disconnectTask; } catch (Exception ex) { LoggerManager.LogException(ex, "Live View _v3 bulk disconnect failed"); }
         }
 
         private async void RemoveAll_Click(object sender, RoutedEventArgs e)
         {
             var ids = _viewModel.Slots.Where(slot => slot.Camera != null).Select(slot => GetStreamId(slot)).ToArray();
-            CameraGrid.Visibility = Visibility.Collapsed;
-            try { await _streamService.RemoveAsync(ids, _lifetime.Token); } catch (Exception ex) { LoggerManager.LogException(ex, "Live View _v3 bulk remove failed"); }
-            foreach (var tile in _tiles.Values) tile.RequestDisconnect();
-            await Task.Yield();
-            await Task.WhenAll(_tiles.Values.Select(tile => tile.DisconnectAsync()));
+            var tiles = _tiles.Values.ToArray();
+            var removeTask = _streamService.RemoveAsync(ids, _lifetime.Token);
+            foreach (var tile in tiles) tile.RequestDisconnect();
+            CameraGrid.Visibility = Visibility.Visible;
+            var cleanupTasks = tiles.Select(tile => tile.DisconnectInBackgroundAsync()).ToArray();
+            try { await Task.WhenAll(cleanupTasks); }
+            catch (Exception ex) { LoggerManager.LogException(ex, "Live View _v3 background remove cleanup failed"); }
             _viewModel.ClearAll();
             BuildGrid();
-            CameraGrid.Visibility = Visibility.Visible;
+            UpdateStatus();
+            try { await removeTask; } catch (Exception ex) { LoggerManager.LogException(ex, "Live View _v3 bulk remove failed"); }
+        }
+
+        /// <summary>
+        /// GStreamer owns WPF/WinForms handles, so pipeline disposal must remain
+        /// on the dispatcher thread. The bulk command schedules one dispatcher
+        /// batch, so all local stops begin in the same UI turn rather than being
+        /// visibly staggered camera-by-camera.
+        /// </summary>
+        private void ScheduleTileCleanup(IEnumerable<LiveTile_v3> tiles, bool disposeTiles = false, Action completed = null)
+        {
+            var queue = new Queue<LiveTile_v3>((tiles ?? Enumerable.Empty<LiveTile_v3>()).Where(tile => tile != null));
+            Action cleanupBatch = () =>
+            {
+                if (_disposed) return;
+                if (disposeTiles)
+                {
+                    var staleTiles = queue.ToArray();
+                    var backgroundDisposals = staleTiles.Select(tile => tile.DisconnectInBackgroundAsync()).ToArray();
+                    _ = Task.WhenAll(backgroundDisposals).ContinueWith(_ => Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        foreach (var tile in staleTiles)
+                            try { tile.Dispose(); } catch (Exception ex) { LoggerManager.LogException(ex, "Live View _v3 stale tile dispose failed"); }
+                        completed?.Invoke();
+                    })));
+                    return;
+                }
+                while (queue.Count > 0)
+                {
+                    try
+                    {
+                        var tile = queue.Dequeue();
+                        tile.Disconnect();
+                    }
+                    catch (Exception ex) { LoggerManager.LogException(ex, "Live View _v3 deferred tile cleanup failed"); }
+                }
+                completed?.Invoke();
+            };
+            if (queue.Count > 0)
+                Dispatcher.BeginInvoke(DispatcherPriority.Background, cleanupBatch);
+            else
+                completed?.Invoke();
         }
 
         private void RemoveErrors_Click(object sender, RoutedEventArgs e)
@@ -396,24 +468,88 @@ namespace V3SClient.UI.Views
             if (_fullscreenTile == null)
             {
                 _fullscreenTile = tile;
-                foreach (UIElement child in CameraGrid.Children) child.Visibility = ReferenceEquals(child, tile) ? Visibility.Visible : Visibility.Collapsed;
+                EnterTileFullscreen();
+                foreach (UIElement child in CameraGrid.Children)
+                {
+                    var cameraTile = child as LiveTile_v3;
+                    if (cameraTile != null) cameraTile.SetFullscreenVisibility(ReferenceEquals(cameraTile, tile));
+                    child.Visibility = ReferenceEquals(child, tile) ? Visibility.Visible : Visibility.Collapsed;
+                }
                 Grid.SetRow(tile, 0); Grid.SetColumn(tile, 0); Grid.SetRowSpan(tile, Math.Max(1, CameraGrid.RowDefinitions.Count)); Grid.SetColumnSpan(tile, Math.Max(1, CameraGrid.ColumnDefinitions.Count));
             }
             else
             {
-                _fullscreenTile = null;
-                BuildGrid();
+                ExitTileFullscreen();
             }
+        }
+
+        private void EnterTileFullscreen()
+        {
+            var window = Window.GetWindow(this);
+            if (window == null) return;
+            _tileWindowStyle = window.WindowStyle;
+            _tileResizeMode = window.ResizeMode;
+            _tileWindowState = window.WindowState;
+            _tileTopmost = window.Topmost;
+            _tileWindowLeft = window.Left;
+            _tileWindowTop = window.Top;
+            _tileWindowWidth = window.Width;
+            _tileWindowHeight = window.Height;
+            _tileSidebarVisibility = CameraSidebar.Visibility;
+            _tileSidebarWidth = SidebarColumn.Width;
+            _tileWindowStateSaved = true;
+            CameraSidebar.Visibility = Visibility.Collapsed;
+            SidebarColumn.Width = new GridLength(0);
+            FullscreenToolbar.Visibility = Visibility.Visible;
+            var shell = window.Content as ShellPage_v3;
+            if (shell != null) shell.SetChromeVisible(false);
+            window.WindowStyle = WindowStyle.None;
+            window.ResizeMode = ResizeMode.NoResize;
+            window.WindowState = WindowState.Normal;
+            window.Left = 0;
+            window.Top = 0;
+            window.Width = SystemParameters.PrimaryScreenWidth;
+            window.Height = SystemParameters.PrimaryScreenHeight;
+            window.Topmost = true;
+        }
+
+        private void ExitTileFullscreen()
+        {
+            var window = Window.GetWindow(this);
+            _fullscreenTile = null;
+            if (window != null && _tileWindowStateSaved)
+            {
+                var shell = window.Content as ShellPage_v3;
+                if (shell != null) shell.SetChromeVisible(true);
+                window.WindowState = _tileWindowState;
+                window.WindowStyle = _tileWindowStyle;
+                window.ResizeMode = _tileResizeMode;
+                window.Left = _tileWindowLeft;
+                window.Top = _tileWindowTop;
+                window.Width = _tileWindowWidth;
+                window.Height = _tileWindowHeight;
+                window.Topmost = _tileTopmost;
+            }
+            _tileWindowStateSaved = false;
+            CameraSidebar.Visibility = _tileSidebarVisibility;
+            SidebarColumn.Width = _tileSidebarWidth.Value > 0 ? _tileSidebarWidth : new GridLength(300);
+            FullscreenToolbar.Visibility = Visibility.Collapsed;
+            BuildGrid();
         }
 
         private void FullscreenButton_Click(object sender, RoutedEventArgs e)
         {
+            if (_fullscreenTile != null)
+            {
+                ExitTileFullscreen();
+                return;
+            }
             var window = Window.GetWindow(this);
             if (window == null) return;
             var entering = window.WindowState != WindowState.Maximized;
             window.WindowState = entering ? WindowState.Maximized : WindowState.Normal;
             CameraSidebar.Visibility = entering ? Visibility.Collapsed : Visibility.Visible;
-            SidebarColumn.Width = entering ? new GridLength(0) : new GridLength(280);
+            SidebarColumn.Width = entering ? new GridLength(0) : new GridLength(300);
             FullscreenToolbar.Visibility = entering ? Visibility.Visible : Visibility.Collapsed;
         }
 
@@ -421,7 +557,7 @@ namespace V3SClient.UI.Views
         {
             var hide = CameraSidebar.Visibility == Visibility.Visible;
             CameraSidebar.Visibility = hide ? Visibility.Collapsed : Visibility.Visible;
-            SidebarColumn.Width = hide ? new GridLength(0) : new GridLength(320);
+            SidebarColumn.Width = hide ? new GridLength(0) : new GridLength(300);
             SidebarOpenButton.Visibility = hide ? Visibility.Visible : Visibility.Collapsed;
             SidebarOpenHeaderButton.Visibility = hide ? Visibility.Visible : Visibility.Collapsed;
         }
@@ -457,6 +593,7 @@ namespace V3SClient.UI.Views
         public void Dispose()
         {
             if (_disposed) return;
+            if (_fullscreenTile != null) ExitTileFullscreen();
             _disposed = true;
             _lifetime.Cancel();
             _lifetime.Dispose();
