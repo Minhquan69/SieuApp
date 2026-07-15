@@ -28,11 +28,19 @@ namespace V3SClient.UI.Views
         private CameraStreamInfo _selectedStream;
 
         public event EventHandler<WhepPlaybackStateChangedEventArgs_v3> PlaybackStateChanged;
+        public event EventHandler VideoMouseEnter;
+        public event EventHandler VideoMouseMove;
+        public event EventHandler VideoMouseLeave;
 
         public WhepPlayer_v3()
         {
             InitializeComponent();
             VideoHost.Child = _videoPanel;
+            // The GStreamer sink is hosted by a native WinForms child HWND,
+            // so WPF mouse routing cannot see hover inside the video area.
+            _videoPanel.MouseEnter += (s, e) => VideoMouseEnter?.Invoke(this, EventArgs.Empty);
+            _videoPanel.MouseMove += (s, e) => VideoMouseMove?.Invoke(this, EventArgs.Empty);
+            _videoPanel.MouseLeave += (s, e) => VideoMouseLeave?.Invoke(this, EventArgs.Empty);
             Loaded += async (s, e) =>
             {
                 if (_pipeline == null && _cancellation == null)
@@ -160,7 +168,7 @@ namespace V3SClient.UI.Views
             _pipeline.Bus.EnableSyncMessageEmission();
             _pipeline.Bus.SyncMessage += OnSyncMessage;
             if (_pipeline.SetState(State.Playing) == StateChangeReturn.Failure)
-                throw new InvalidOperationException("GStreamer could not start the WHEP playback pipeline.");
+                throw new InvalidOperationException("GStreamer could not start the direct RTSP playback pipeline.");
         }
 
         private static string GetRtspUrl(Camera camera, CameraStreamInfo selectedStream)
@@ -176,7 +184,19 @@ namespace V3SClient.UI.Views
             candidate = selectedStream == null ? null : selectedStream.RtspRelayRaw;
             if (!string.IsNullOrWhiteSpace(candidate) && System.Uri.IsWellFormedUriString(candidate, System.UriKind.Absolute))
                 return candidate;
-            return camera.rtps;
+            return IsDirectRtspUrl(camera.rtps) ? camera.rtps : null;
+        }
+
+        private static bool IsDirectRtspUrl(string value)
+        {
+            System.Uri uri;
+            if (string.IsNullOrWhiteSpace(value) || !System.Uri.TryCreate(value, UriKind.Absolute, out uri))
+                return false;
+            if (!string.Equals(uri.Scheme, "rtsp", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(uri.Scheme, "rtsps", StringComparison.OrdinalIgnoreCase))
+                return false;
+            return !string.IsNullOrWhiteSpace(uri.Host) &&
+                   uri.Host.IndexOf("mediamtx", StringComparison.OrdinalIgnoreCase) < 0;
         }
 
         private void OnSyncMessage(object sender, SyncMessageArgs args)

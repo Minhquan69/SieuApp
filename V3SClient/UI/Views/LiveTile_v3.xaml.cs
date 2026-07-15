@@ -20,15 +20,19 @@ namespace V3SClient.UI.Views
         private bool _changingStream;
         private bool _actionsPinned;
         private bool _fullscreenMode;
+        private bool _positioningBadge;
+        private Window _ownerWindow;
         private Storyboard _loadingStoryboard;
 
         public LiveTile_v3()
         {
             InitializeComponent();
+            // Popup namescopes cannot reliably resolve ElementName bindings
+            // across the HwndHost boundary; bind the target explicitly.
             // Match the web tile controls: compact square actions and a
             // clearly destructive red disconnect action.
-            ConnectButton.Width = DisconnectButton.Width = 32;
-            ConnectButton.Height = DisconnectButton.Height = 32;
+            ConnectButton.Width = DisconnectButton.Width = 28;
+            ConnectButton.Height = DisconnectButton.Height = 28;
             DisconnectButton.Background = (Brush)FindResource("VmsErrorBrush_v3");
             DisconnectButton.BorderBrush = (Brush)FindResource("VmsErrorBrush_v3");
             DisconnectButton.Foreground = (Brush)FindResource("VmsTextInverseBrush_v3");
@@ -44,6 +48,88 @@ namespace V3SClient.UI.Views
             _hideActionsTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(140) };
             _hideActionsTimer.Tick += HideActionsTimer_Tick;
             Player.PlaybackStateChanged += Player_PlaybackStateChanged;
+            Player.VideoMouseEnter += Player_VideoMouseEnter;
+            Player.VideoMouseMove += Player_VideoMouseMove;
+            Player.VideoMouseLeave += Player_VideoMouseLeave;
+            Loaded += LiveTile_Loaded;
+            Unloaded += LiveTile_Unloaded;
+            LayoutUpdated += LiveTile_LayoutUpdated;
+        }
+
+        private void LiveTile_Loaded(object sender, RoutedEventArgs e)
+        {
+            var window = Window.GetWindow(this);
+            if (ReferenceEquals(_ownerWindow, window)) return;
+            if (_ownerWindow != null)
+            {
+                _ownerWindow.Deactivated -= OwnerWindow_Deactivated;
+                _ownerWindow.Activated -= OwnerWindow_Activated;
+                _ownerWindow.LocationChanged -= OwnerWindow_LocationChanged;
+                _ownerWindow.SizeChanged -= OwnerWindow_SizeChanged;
+            }
+            _ownerWindow = window;
+            if (_ownerWindow != null)
+            {
+                _ownerWindow.Deactivated += OwnerWindow_Deactivated;
+                _ownerWindow.Activated += OwnerWindow_Activated;
+                _ownerWindow.LocationChanged += OwnerWindow_LocationChanged;
+                _ownerWindow.SizeChanged += OwnerWindow_SizeChanged;
+            }
+        }
+
+        private void LiveTile_Unloaded(object sender, RoutedEventArgs e)
+        {
+            if (_ownerWindow == null) return;
+            _ownerWindow.Deactivated -= OwnerWindow_Deactivated;
+            _ownerWindow.Activated -= OwnerWindow_Activated;
+            _ownerWindow.LocationChanged -= OwnerWindow_LocationChanged;
+            _ownerWindow.SizeChanged -= OwnerWindow_SizeChanged;
+            _ownerWindow = null;
+        }
+
+        private void OwnerWindow_LocationChanged(object sender, EventArgs e)
+        {
+            if (CameraBadgePopup.IsOpen)
+                PositionCameraBadgePopup();
+            if (ActionPopup.IsOpen)
+                PositionActionPopup();
+        }
+
+        private void OwnerWindow_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (CameraBadgePopup.IsOpen) PositionCameraBadgePopup();
+                if (ActionPopup.IsOpen) PositionActionPopup();
+            }), DispatcherPriority.Render);
+        }
+
+        private void LiveTile_LayoutUpdated(object sender, EventArgs e)
+        {
+            if (CameraBadgePopup.IsOpen)
+                PositionCameraBadgePopup();
+            if (ActionPopup.IsOpen)
+                PositionActionPopup();
+        }
+
+        private void OwnerWindow_Deactivated(object sender, EventArgs e)
+        {
+            _hideActionsTimer.Stop();
+            _actionsPinned = false;
+            ActionPopup.IsOpen = false;
+            CameraBadgePopup.IsOpen = false;
+        }
+
+        private void OwnerWindow_Activated(object sender, EventArgs e)
+        {
+            if (_disposed || Slot == null || Slot.Camera == null) return;
+            CameraBadgePopup.IsOpen = true;
+            Dispatcher.BeginInvoke(new Action(PositionCameraBadgePopup), DispatcherPriority.Render);
+            if (_fullscreenMode)
+            {
+                _actionsPinned = true;
+                ShowActions();
+            }
         }
 
         public LiveSlotViewModel_v3 Slot { get; private set; }
@@ -90,6 +176,7 @@ namespace V3SClient.UI.Views
         {
             _fullscreenMode = active;
             _actionsPinned = active;
+            FullscreenButton.ToolTip = active ? "Thu nhỏ màn hình" : "Toàn màn hình";
             if (active)
                 ShowActions();
             else
@@ -97,6 +184,25 @@ namespace V3SClient.UI.Views
                 _actionsPinned = false;
                 HideActions();
             }
+        }
+
+        public void RefreshPopupPlacement()
+        {
+            if (_disposed) return;
+            var reopenBadge = CameraBadgePopup.IsOpen && Slot != null && Slot.Camera != null;
+            var reopenActions = ActionPopup.IsOpen;
+            CameraBadgePopup.IsOpen = false;
+            ActionPopup.IsOpen = false;
+            Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(() =>
+            {
+                if (_disposed) return;
+                if (reopenBadge)
+                {
+                    CameraBadgePopup.IsOpen = true;
+                    PositionCameraBadgePopup();
+                }
+                if (reopenActions) ShowActions();
+            }));
         }
 
         public async System.Threading.Tasks.Task ConnectAsync()
@@ -251,17 +357,64 @@ namespace V3SClient.UI.Views
             Dispatcher.BeginInvoke(new Action(PositionActionPopup), DispatcherPriority.Loaded);
         }
 
+        private void PositionCameraBadgePopup()
+        {
+            if (_positioningBadge || !CameraBadgePopup.IsOpen || !IsLoaded || !TileBorder.IsVisible) return;
+            var source = PresentationSource.FromVisual(TileBorder);
+            if (source == null || source.CompositionTarget == null) return;
+            try
+            {
+                _positioningBadge = true;
+                // PointToScreen returns device pixels. Popup offsets are WPF
+                // device-independent units, so convert through the current
+                // presentation source before assigning absolute coordinates.
+                var screenPoint = TileBorder.PointToScreen(new Point(7, 7));
+                var dipPoint = source.CompositionTarget.TransformFromDevice.Transform(screenPoint);
+                if (Math.Abs(CameraBadgePopup.HorizontalOffset - dipPoint.X) > 0.1 ||
+                    Math.Abs(CameraBadgePopup.VerticalOffset - dipPoint.Y) > 0.1)
+                {
+                    CameraBadgePopup.HorizontalOffset = dipPoint.X;
+                    CameraBadgePopup.VerticalOffset = dipPoint.Y;
+                }
+            }
+            catch (InvalidOperationException) { }
+            finally
+            {
+                _positioningBadge = false;
+            }
+        }
+
         private void PositionActionPopup()
         {
-            if (!ActionPopup.IsOpen || TileBorder.ActualWidth <= 0 || TileBorder.ActualHeight <= 0) return;
-            var left = Math.Max(0, (TileBorder.ActualWidth - ActionBar.ActualWidth) / 2.0);
-            var top = Math.Max(0, TileBorder.ActualHeight - ActionBar.ActualHeight - 10.0);
-            ActionPopup.HorizontalOffset = left;
-            ActionPopup.VerticalOffset = top;
+            if (!ActionPopup.IsOpen || !IsLoaded || !TileBorder.IsVisible ||
+                TileBorder.ActualWidth <= 0 || TileBorder.ActualHeight <= 0 ||
+                ActionBar.ActualWidth <= 0 || ActionBar.ActualHeight <= 0) return;
+            var source = PresentationSource.FromVisual(TileBorder);
+            if (source == null || source.CompositionTarget == null) return;
+            try
+            {
+                // Anchor the action bar to the center of the tile's bottom
+                // edge, independent of the tile's previous layout/fullscreen
+                // size. Popup offsets are WPF DIPs, so convert from screen
+                // device pixels using the current presentation source.
+                var bottomCenter = TileBorder.PointToScreen(new Point(TileBorder.ActualWidth / 2.0, TileBorder.ActualHeight));
+                var dipPoint = source.CompositionTarget.TransformFromDevice.Transform(bottomCenter);
+                var x = dipPoint.X - (ActionBar.ActualWidth / 2.0);
+                var y = dipPoint.Y - ActionBar.ActualHeight - 10.0;
+                if (Math.Abs(ActionPopup.HorizontalOffset - x) > 0.1 ||
+                    Math.Abs(ActionPopup.VerticalOffset - y) > 0.1)
+                {
+                    ActionPopup.HorizontalOffset = x;
+                    ActionPopup.VerticalOffset = y;
+                }
+            }
+            catch (InvalidOperationException) { }
         }
 
         private void TileBorder_SizeChanged(object sender, SizeChangedEventArgs e)
         {
+            if (CameraBadgePopup.IsOpen)
+                Dispatcher.BeginInvoke(new Action(PositionCameraBadgePopup), DispatcherPriority.Render);
             if (ActionPopup.IsOpen)
                 Dispatcher.BeginInvoke(new Action(PositionActionPopup), DispatcherPriority.Loaded);
         }
@@ -294,7 +447,32 @@ namespace V3SClient.UI.Views
             ShowActions();
         }
 
+        private void HoverSurface_MouseEnter(object sender, MouseEventArgs e)
+        {
+            ShowActions();
+        }
+
         private void TileBorder_MouseLeave(object sender, MouseEventArgs e)
+        {
+            ScheduleHideActions();
+        }
+
+        private void HoverSurface_MouseLeave(object sender, MouseEventArgs e)
+        {
+            ScheduleHideActions();
+        }
+
+        private void Player_VideoMouseEnter(object sender, EventArgs e)
+        {
+            ShowActions();
+        }
+
+        private void Player_VideoMouseMove(object sender, EventArgs e)
+        {
+            ShowActions();
+        }
+
+        private void Player_VideoMouseLeave(object sender, EventArgs e)
         {
             ScheduleHideActions();
         }
@@ -359,6 +537,8 @@ namespace V3SClient.UI.Views
             EmptyOverlay.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
             CameraBadge.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
             CameraBadgePopup.IsOpen = !empty;
+            if (!empty)
+                Dispatcher.BeginInvoke(new Action(PositionCameraBadgePopup), DispatcherPriority.Render);
             ActionBar.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
             if (empty)
             {
@@ -397,7 +577,21 @@ namespace V3SClient.UI.Views
             _hideActionsTimer.Tick -= HideActionsTimer_Tick;
             ActionPopup.IsOpen = false;
             CameraBadgePopup.IsOpen = false;
+            Loaded -= LiveTile_Loaded;
+            Unloaded -= LiveTile_Unloaded;
+            LayoutUpdated -= LiveTile_LayoutUpdated;
+            if (_ownerWindow != null)
+            {
+                _ownerWindow.Deactivated -= OwnerWindow_Deactivated;
+                _ownerWindow.Activated -= OwnerWindow_Activated;
+                _ownerWindow.LocationChanged -= OwnerWindow_LocationChanged;
+                _ownerWindow.SizeChanged -= OwnerWindow_SizeChanged;
+                _ownerWindow = null;
+            }
             Player.PlaybackStateChanged -= Player_PlaybackStateChanged;
+            Player.VideoMouseEnter -= Player_VideoMouseEnter;
+            Player.VideoMouseMove -= Player_VideoMouseMove;
+            Player.VideoMouseLeave -= Player_VideoMouseLeave;
             MetadataOverlay.Dispose();
             Player.Dispose();
         }

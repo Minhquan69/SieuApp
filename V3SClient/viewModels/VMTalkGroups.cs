@@ -73,6 +73,8 @@ namespace V3SClient.viewModels
                 // Build Multi-Stream URLs
                 string endpoint = null;
                 string protocol = "rtsp"; // default
+                string relayUsername = "admin";
+                string relayPassword = "ivista";
 
                 if (camInfo.ServerRelay_Endpoints != null)
                 {
@@ -86,14 +88,22 @@ namespace V3SClient.viewModels
                         if (camInfo.ServerRelay_Endpoints.ContainsKey(p))
                         {
                             var epDict = camInfo.ServerRelay_Endpoints[p];
-                            endpoint = ApiManager.Instance.NetworkMode == "Internal" 
-                                ? (epDict.ContainsKey("internal") ? epDict["internal"] : null) 
-                                : (epDict.ContainsKey("public") ? epDict["public"] : null);
-                            
-                            if (string.IsNullOrEmpty(endpoint)) // fallback
+                            // GStreamer runs outside the Docker network. Prefer the
+                            // public relay for every network mode, then fall back
+                            // to an internal endpoint only when no public relay is
+                            // supplied. Container-only MediaMTX hosts are rejected.
+                            var publicEndpoint = epDict.ContainsKey("public") ? epDict["public"] : null;
+                            var internalEndpoint = epDict.ContainsKey("internal") ? epDict["internal"] : null;
+                            endpoint = IsUsableRelayEndpoint(publicEndpoint)
+                                ? publicEndpoint
+                                : (IsUsableRelayEndpoint(internalEndpoint) ? internalEndpoint : null);
+
+                            if (!string.IsNullOrWhiteSpace(endpoint))
                             {
-                                endpoint = epDict.ContainsKey("public") ? epDict["public"] : 
-                                          (epDict.ContainsKey("internal") ? epDict["internal"] : null);
+                                relayUsername = epDict.ContainsKey("username") && !string.IsNullOrWhiteSpace(epDict["username"])
+                                    ? epDict["username"] : relayUsername;
+                                relayPassword = epDict.ContainsKey("password") && !string.IsNullOrWhiteSpace(epDict["password"])
+                                    ? epDict["password"] : relayPassword;
                             }
                             
                             if (!string.IsNullOrEmpty(endpoint))
@@ -108,11 +118,10 @@ namespace V3SClient.viewModels
                 // If no endpoint found from new structure, fallback to old structure
                 if (string.IsNullOrEmpty(endpoint))
                 {
-                    endpoint = ApiManager.Instance.NetworkMode == "Internal" 
-                        ? camInfo.ServerRelay_InternalEndpoint 
-                        : camInfo.ServerRelay_PublicEndpoint;
-                    if (string.IsNullOrEmpty(endpoint)) 
-                        endpoint = camInfo.ServerRelay_PublicEndpoint ?? camInfo.ServerRelay_InternalEndpoint;
+                    endpoint = IsUsableRelayEndpoint(camInfo.ServerRelay_PublicEndpoint)
+                        ? camInfo.ServerRelay_PublicEndpoint
+                        : (IsUsableRelayEndpoint(camInfo.ServerRelay_InternalEndpoint)
+                            ? camInfo.ServerRelay_InternalEndpoint : null);
 #if USE_STREAM_TLS
                     protocol = "rtsps";
 #else
@@ -120,7 +129,40 @@ namespace V3SClient.viewModels
 #endif
                 }
 
-                string baseUrl = $"{protocol}://admin:ivista@{endpoint}";
+                // The migrated desktop client uses GStreamer directly; it
+                // must never depend on a Docker/MediaMTX hostname. Prefer a
+                // public relay endpoint when the selected internal endpoint
+                // is a container name, and otherwise derive the authority
+                // from the camera's own RTSP source URL.
+                if (!string.IsNullOrEmpty(endpoint) && endpoint.IndexOf("mediamtx", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    endpoint = camInfo.ServerRelay_PublicEndpoint;
+                    protocol = "rtsp";
+                    if (!string.IsNullOrEmpty(endpoint) && endpoint.IndexOf("mediamtx", StringComparison.OrdinalIgnoreCase) >= 0)
+                        endpoint = null;
+                }
+                if (string.IsNullOrEmpty(endpoint) && Uri.TryCreate(camInfo.CamInfo_Source_Path, UriKind.Absolute, out var sourceUri) &&
+                    (sourceUri.Scheme == "rtsp" || sourceUri.Scheme == "rtsps"))
+                {
+                    endpoint = sourceUri.Host + (sourceUri.IsDefaultPort ? string.Empty : ":" + sourceUri.Port);
+                    protocol = sourceUri.Scheme;
+                    if (!string.IsNullOrWhiteSpace(sourceUri.UserInfo))
+                    {
+                        var userInfo = sourceUri.UserInfo.Split(new[] { ':' }, 2);
+                        relayUsername = Uri.UnescapeDataString(userInfo[0]);
+                        if (userInfo.Length > 1) relayPassword = Uri.UnescapeDataString(userInfo[1]);
+                    }
+                }
+                if (string.IsNullOrEmpty(endpoint))
+                    LoggerManager.LogWarn("Camera " + camInfo.CamInfo_CamId +
+                        " has no usable direct RTSP endpoint. public=" + (camInfo.ServerRelay_PublicEndpoint ?? "<none>") +
+                        ", internal=" + (camInfo.ServerRelay_InternalEndpoint ?? "<none>") +
+                        ", source=" + (camInfo.CamInfo_Source_Path ?? "<none>") +
+                        ". MediaMTX/Docker fallback was not used.");
+
+                string baseUrl = string.IsNullOrEmpty(endpoint)
+                    ? null
+                    : $"{protocol}://{Uri.EscapeDataString(relayUsername)}:{Uri.EscapeDataString(relayPassword)}@{endpoint}";
 
                 if (camInfo.Streams != null && camInfo.Streams.Count > 0)
                 {
@@ -146,11 +188,11 @@ namespace V3SClient.viewModels
 
                     // URL RAW
                     var targetRaw = bestSubStreamRaw ?? mainStreamRaw ?? camInfo.Streams.FirstOrDefault();
-                    camera.RtspUrlRaw = targetRaw != null && !string.IsNullOrEmpty(targetRaw.RtspRelayRaw) ? $"{baseUrl}{targetRaw.RtspRelayRaw}" : null;
+                    camera.RtspUrlRaw = !string.IsNullOrEmpty(endpoint) && targetRaw != null && !string.IsNullOrEmpty(targetRaw.RtspRelayRaw) ? $"{baseUrl}{targetRaw.RtspRelayRaw}" : null;
                     camera.IsH264Raw = isCodecH264(targetRaw?.Codec, camera.is_H264);
                     
                     var targetMainRaw = mainStreamRaw ?? targetRaw;
-                    camera.RtspUrlMainRaw = targetMainRaw != null && !string.IsNullOrEmpty(targetMainRaw.RtspRelayRaw) ? $"{baseUrl}{targetMainRaw.RtspRelayRaw}" : null;
+                    camera.RtspUrlMainRaw = !string.IsNullOrEmpty(endpoint) && targetMainRaw != null && !string.IsNullOrEmpty(targetMainRaw.RtspRelayRaw) ? $"{baseUrl}{targetMainRaw.RtspRelayRaw}" : null;
                     camera.IsH264MainRaw = isCodecH264(targetMainRaw?.Codec, camera.is_H264);
 
                     // URL AI
@@ -158,14 +200,14 @@ namespace V3SClient.viewModels
                     string aiPath = targetAI?.RtspRelayAi;
                     if (string.IsNullOrEmpty(aiPath)) aiPath = targetAI?.RtspRelayRaw;
                     
-                    camera.RtspUrlAI = targetAI != null && !string.IsNullOrEmpty(aiPath) ? $"{baseUrl}{aiPath}" : null;
+                    camera.RtspUrlAI = !string.IsNullOrEmpty(endpoint) && targetAI != null && !string.IsNullOrEmpty(aiPath) ? $"{baseUrl}{aiPath}" : null;
                     camera.IsH264AI = isCodecH264(targetAI?.Codec, camera.is_H264);
                     
                     var targetMainAI = mainStreamAI ?? targetAI;
                     string mainAiPath = targetMainAI?.RtspRelayAi;
                     if (string.IsNullOrEmpty(mainAiPath)) mainAiPath = targetMainAI?.RtspRelayRaw;
 
-                    camera.RtspUrlMainAI = targetMainAI != null && !string.IsNullOrEmpty(mainAiPath) ? $"{baseUrl}{mainAiPath}" : null;
+                    camera.RtspUrlMainAI = !string.IsNullOrEmpty(endpoint) && targetMainAI != null && !string.IsNullOrEmpty(mainAiPath) ? $"{baseUrl}{mainAiPath}" : null;
                     camera.IsH264MainAI = isCodecH264(targetMainAI?.Codec, camera.is_H264);
 
                     camera.HasAIStream = camInfo.Streams.Any(s => s.IsAiMode == true);
@@ -173,7 +215,7 @@ namespace V3SClient.viewModels
                 else
                 {
                     // Fallback to legacy logic if no streams available
-                    if (camInfo.CamInfo_ViewMode == "raw_data")
+                    if (camInfo.CamInfo_ViewMode == "raw_data" && IsDirectRtspUrl(camInfo.CamInfo_Source_Path))
                     {
 #if USE_STREAM_TLS
                         camera.RtspUrlRaw = camInfo.CamInfo_Source_Path?.Replace("rtsp://", "rtsps://");
@@ -186,16 +228,17 @@ namespace V3SClient.viewModels
                     else
                     {
                         //fallback 
-                        camera.RtspUrlRaw = $"{baseUrl}/live/{camInfo.CamInfo_CamId}/main";
+                        camera.RtspUrlRaw = string.IsNullOrEmpty(endpoint) ? null : $"{baseUrl}/live/{camInfo.CamInfo_CamId}/main";
                         camera.RtspUrlMainRaw = camera.RtspUrlRaw;
                     }
                 }
 
                 // Default backward compatibility
+                var directFallback = IsDirectRtspUrl(camInfo.CamInfo_Source_Path) ? camInfo.CamInfo_Source_Path : null;
 #if USE_STREAM_TLS
-                camera.rtps = (camera.RtspUrlRaw ?? camera.RtspUrlMainRaw ?? camInfo.CamInfo_Source_Path)?.Replace("rtsp://", "rtsps://");
+                camera.rtps = (camera.RtspUrlRaw ?? camera.RtspUrlMainRaw ?? directFallback)?.Replace("rtsp://", "rtsps://");
 #else
-                camera.rtps = camera.RtspUrlRaw ?? camera.RtspUrlMainRaw ?? camInfo.CamInfo_Source_Path;
+                camera.rtps = camera.RtspUrlRaw ?? camera.RtspUrlMainRaw ?? directFallback;
 #endif
 
                 camActives.Add(camera);
@@ -260,6 +303,24 @@ namespace V3SClient.viewModels
                 g.NotifyItemsChanged(); // Ensure UI refresh for root items
                 CamGroupList.Add(g);
             }
+        }
+
+        private static bool IsDirectRtspUrl(string value)
+        {
+            Uri uri;
+            if (string.IsNullOrWhiteSpace(value) || !Uri.TryCreate(value, UriKind.Absolute, out uri))
+                return false;
+            if (!string.Equals(uri.Scheme, "rtsp", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(uri.Scheme, "rtsps", StringComparison.OrdinalIgnoreCase))
+                return false;
+            var host = uri.Host ?? string.Empty;
+            return host.Length > 0 && host.IndexOf("mediamtx", StringComparison.OrdinalIgnoreCase) < 0;
+        }
+
+        private static bool IsUsableRelayEndpoint(string value)
+        {
+            return !string.IsNullOrWhiteSpace(value) &&
+                   value.IndexOf("mediamtx", StringComparison.OrdinalIgnoreCase) < 0;
         }
 
         private void SortGroupsRecursive(List<VMTalkGroup> groups, NaturalStringComparer comparer)

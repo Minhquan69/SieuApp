@@ -47,7 +47,40 @@ namespace V3SClient.UI.Views
         {
             CameraStatus.Text = string.Format("{0} cameras · {1} groups · {2}/{3} active", _viewModel.CameraCount, _viewModel.GroupCount, _viewModel.ActiveCameraCount, _viewModel.Slots.Count);
             EmptyState.Visibility = _viewModel.CameraCount == 0 ? Visibility.Visible : Visibility.Collapsed;
+            AllCameraFilterButton.IsEnabled = false;
+            AiCameraFilterButton.IsEnabled = true;
+            UpdateFilterButtonVisuals();
+            NormalizeCameraSidebarLayout();
             BuildGrid();
+        }
+
+        private void NormalizeCameraSidebarLayout()
+        {
+            var panel = CameraSidebar.Child as Grid;
+            if (panel == null) return;
+            foreach (UIElement child in panel.Children)
+            {
+                if (child is ScrollViewer)
+                    Grid.SetRow(child, 5);
+                else if (child is TextBox && Grid.GetRow(child) == 2)
+                    child.Visibility = Visibility.Collapsed;
+                else if (child is Grid && Grid.GetRow(child) == 3)
+                    child.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private void UpdateFilterButtonVisuals()
+        {
+            var selected = (System.Windows.Media.Brush)FindResource("VmsPrimarySoftBrush_v3");
+            var normal = (System.Windows.Media.Brush)FindResource("VmsSurface2Brush_v3");
+            var selectedBorder = (System.Windows.Media.Brush)FindResource("VmsPrimaryBrush_v3");
+            var normalBorder = (System.Windows.Media.Brush)FindResource("VmsBorderBrush_v3");
+            AllCameraFilterButton.Background = _viewModel.AiOnly ? normal : selected;
+            AllCameraFilterButton.BorderBrush = _viewModel.AiOnly ? normalBorder : selectedBorder;
+            AiCameraFilterButton.Background = _viewModel.AiOnly ? selected : normal;
+            AiCameraFilterButton.BorderBrush = _viewModel.AiOnly ? selectedBorder : normalBorder;
+            AllCameraFilterButton.IsEnabled = true;
+            AiCameraFilterButton.IsEnabled = true;
         }
 
         private void BuildGrid(bool deferStaleCleanup = false, Action staleCleanupCompleted = null)
@@ -63,6 +96,7 @@ namespace V3SClient.UI.Views
             for (var row = 0; row < dimensions.Item1; row++) CameraGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star), MinHeight = 120 });
             for (var column = 0; column < dimensions.Item2; column++) CameraGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 150 });
 
+            var visualIndex = 0;
             foreach (var slot in _viewModel.Slots)
             {
                 LiveTile_v3 tile;
@@ -78,7 +112,7 @@ namespace V3SClient.UI.Views
                     tile.Drop += Tile_Drop;
                 }
                 tile.Bind(slot);
-                var placement = GetPlacement(_viewModel.Layout, slot.SlotId, dimensions.Item2);
+                var placement = GetPlacement(_viewModel.Layout, visualIndex++, dimensions.Item2);
                 Grid.SetRow(tile, placement.Item1);
                 Grid.SetColumn(tile, placement.Item2);
                 Grid.SetRowSpan(tile, placement.Item3);
@@ -103,6 +137,12 @@ namespace V3SClient.UI.Views
             else
                 foreach (var stale in staleTiles) stale.Dispose();
             UpdateStatus();
+            var popupTiles = _tiles.Values.ToArray();
+            Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(() =>
+            {
+                foreach (var popupTile in popupTiles)
+                    popupTile.RefreshPopupPlacement();
+            }));
         }
 
         private void Tile_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -146,22 +186,21 @@ namespace V3SClient.UI.Views
             return Tuple.Create((int)Math.Ceiling((double)count / columns), columns);
         }
 
-        private static Tuple<int, int, int, int> GetPlacement(LiveLayoutMode_v3 layout, int slotId, int columns)
+        private static Tuple<int, int, int, int> GetPlacement(LiveLayoutMode_v3 layout, int position, int columns)
         {
             if (layout == LiveLayoutMode_v3.Layout5Plus1)
             {
                 var places = new[] { Tuple.Create(0, 0, 2, 2), Tuple.Create(0, 2, 1, 1), Tuple.Create(1, 2, 1, 1), Tuple.Create(2, 0, 1, 1), Tuple.Create(2, 1, 1, 1), Tuple.Create(2, 2, 1, 1) };
-                return places[slotId - 1];
+                return places[position];
             }
             if (layout == LiveLayoutMode_v3.Layout16Plus1)
             {
-                if (slotId == 1) return Tuple.Create(1, 1, 3, 3);
+                if (position == 0) return Tuple.Create(1, 1, 3, 3);
                 var ring = new[] { Tuple.Create(0,0),Tuple.Create(0,1),Tuple.Create(0,2),Tuple.Create(0,3),Tuple.Create(0,4),Tuple.Create(1,4),Tuple.Create(2,4),Tuple.Create(3,4),Tuple.Create(4,4),Tuple.Create(4,3),Tuple.Create(4,2),Tuple.Create(4,1),Tuple.Create(4,0),Tuple.Create(3,0),Tuple.Create(2,0),Tuple.Create(1,0) };
-                var point = ring[slotId - 2];
+                var point = ring[position - 1];
                 return Tuple.Create(point.Item1, point.Item2, 1, 1);
             }
-            var index = slotId - 1;
-            return Tuple.Create(index / columns, index % columns, 1, 1);
+            return Tuple.Create(position / columns, position % columns, 1, 1);
         }
 
         private async void Camera_Click(object sender, RoutedEventArgs e)
@@ -181,6 +220,18 @@ namespace V3SClient.UI.Views
             if (slot == null) return;
             BuildGrid();
             _viewModel.RefreshCameraIndicators();
+        }
+
+        private void AllCameraFilter_Click(object sender, RoutedEventArgs e)
+        {
+            _viewModel.AiOnly = false;
+            UpdateFilterButtonVisuals();
+        }
+
+        private void AiCameraFilter_Click(object sender, RoutedEventArgs e)
+        {
+            _viewModel.AiOnly = true;
+            UpdateFilterButtonVisuals();
         }
 
         private async void Camera_DoubleClick(object sender, MouseButtonEventArgs e)
@@ -488,6 +539,8 @@ namespace V3SClient.UI.Views
             _tileSidebarWidth = SidebarColumn.Width;
             _tileWindowStateSaved = true;
             CameraSidebar.Visibility = Visibility.Collapsed;
+            SidebarColumn.MinWidth = 0;
+            SidebarColumn.MaxWidth = double.PositiveInfinity;
             SidebarColumn.Width = new GridLength(0);
             LivePageHeader.Visibility = Visibility.Collapsed;
             FullscreenToolbar.Visibility = Visibility.Collapsed;
@@ -522,12 +575,31 @@ namespace V3SClient.UI.Views
             }
             _tileWindowStateSaved = false;
             foreach (var tile in _tiles.Values)
+            {
+                // Fullscreen temporarily collapses every non-selected tile.
+                // Restore both the native tile visibility and its overlays
+                // before rebuilding the grid, otherwise only the fullscreen
+                // camera remains visible after returning.
+                tile.Visibility = Visibility.Visible;
+                tile.SetFullscreenVisibility(true);
                 tile.SetFullscreenMode(false);
+            }
             CameraSidebar.Visibility = _tileSidebarVisibility;
-            SidebarColumn.Width = _tileSidebarWidth.Value > 0 ? _tileSidebarWidth : new GridLength(300);
+            SidebarColumn.MinWidth = 240;
+            SidebarColumn.MaxWidth = 420;
+            SidebarColumn.Width = _tileSidebarWidth.Value > 0 ? _tileSidebarWidth : new GridLength(0.24, GridUnitType.Star);
             LivePageHeader.Visibility = Visibility.Visible;
             FullscreenToolbar.Visibility = Visibility.Collapsed;
             BuildGrid();
+            Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(() =>
+            {
+                CameraGrid.InvalidateMeasure();
+                CameraGrid.InvalidateArrange();
+                CameraGrid.UpdateLayout();
+                BuildGrid();
+                CameraGrid.InvalidateMeasure();
+                CameraGrid.InvalidateArrange();
+            }));
         }
 
         private void FullscreenButton_Click(object sender, RoutedEventArgs e)
@@ -544,7 +616,9 @@ namespace V3SClient.UI.Views
             var shell = window.Content as ShellPage_v3;
             if (shell != null) shell.SetChromeVisible(!entering);
             CameraSidebar.Visibility = entering ? Visibility.Collapsed : Visibility.Visible;
-            SidebarColumn.Width = entering ? new GridLength(0) : new GridLength(300);
+            SidebarColumn.MinWidth = entering ? 0 : 240;
+            SidebarColumn.MaxWidth = entering ? double.PositiveInfinity : 420;
+            SidebarColumn.Width = entering ? new GridLength(0) : new GridLength(0.24, GridUnitType.Star);
             FullscreenToolbar.Visibility = entering ? Visibility.Visible : Visibility.Collapsed;
         }
 
@@ -552,7 +626,9 @@ namespace V3SClient.UI.Views
         {
             var hide = CameraSidebar.Visibility == Visibility.Visible;
             CameraSidebar.Visibility = hide ? Visibility.Collapsed : Visibility.Visible;
-            SidebarColumn.Width = hide ? new GridLength(0) : new GridLength(300);
+            SidebarColumn.MinWidth = hide ? 0 : 240;
+            SidebarColumn.MaxWidth = hide ? double.PositiveInfinity : 420;
+            SidebarColumn.Width = hide ? new GridLength(0) : new GridLength(0.24, GridUnitType.Star);
             SidebarOpenButton.Visibility = hide ? Visibility.Visible : Visibility.Collapsed;
             SidebarOpenHeaderButton.Visibility = hide ? Visibility.Visible : Visibility.Collapsed;
         }

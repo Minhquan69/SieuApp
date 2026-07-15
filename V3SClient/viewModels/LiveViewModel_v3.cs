@@ -89,6 +89,7 @@ namespace V3SClient.viewModels
         private readonly List<Camera> _allCameras;
         private readonly List<VMTalkGroup> _sourceGroups;
         private string _searchText;
+        private bool _aiOnly;
         private LiveLayoutMode_v3 _layout = LiveLayoutMode_v3.Layout2x2;
         private int _customSlotCount = 10;
 
@@ -116,6 +117,7 @@ namespace V3SClient.viewModels
         public LiveLayoutMode_v3 Layout { get { return _layout; } }
         public int CustomSlotCount { get { return _customSlotCount; } set { _customSlotCount = Math.Max(1, Math.Min(100, value)); OnPropertyChanged(); } }
         public string SearchText { get { return _searchText; } set { if (_searchText == value) return; _searchText = value; OnPropertyChanged(); ApplySearch(); } }
+        public bool AiOnly { get { return _aiOnly; } set { if (_aiOnly == value) return; _aiOnly = value; OnPropertyChanged(); ApplySearch(); } }
 
         public void SetLayout(LiveLayoutMode_v3 layout)
         {
@@ -241,6 +243,7 @@ namespace V3SClient.viewModels
             {
                 var groupMatch = Contains(group.name, query);
                 var cameras = (group.Cameras ?? new ObservableCollection<Camera>())
+                    .Where(camera => !_aiOnly || IsAiCamera(camera))
                     .Where(camera => groupMatch || CameraMatches(camera, query))
                     .OrderBy(camera => camera.name)
                     .ToList();
@@ -271,6 +274,11 @@ namespace V3SClient.viewModels
         {
             return string.IsNullOrEmpty(query) || Contains(camera.name, query) || Contains(camera.camID, query) ||
                    Contains(camera.long_Name, query) || Contains(camera.description, query);
+        }
+        private static bool IsAiCamera(Camera camera)
+        {
+            return camera != null && (string.Equals(camera.type, "ai_processed", StringComparison.OrdinalIgnoreCase) ||
+                (camera.Streams != null && camera.Streams.Any(stream => stream.IsAiMode == true)));
         }
         private static bool Contains(string value, string query) { return string.IsNullOrEmpty(query) || (!string.IsNullOrEmpty(value) && value.IndexOf(query, StringComparison.CurrentCultureIgnoreCase) >= 0); }
         private static bool SameCamera(Camera left, Camera right) { return left != null && right != null && string.Equals(left.camID, right.camID, StringComparison.OrdinalIgnoreCase); }

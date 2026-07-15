@@ -15,6 +15,11 @@ namespace V3SClient.window
         public ShellWindow_v3()
         {
             InitializeComponent();
+            // Keep the Live View usable when the shell is resized from a
+            // corner. The minimum is 40% of the current work area, while the
+            // XAML values provide a safe fallback before the window is shown.
+            MinWidth = Math.Max(MinWidth, SystemParameters.WorkArea.Width * 0.40);
+            MinHeight = Math.Max(MinHeight, SystemParameters.WorkArea.Height * 0.40);
             InitializeGStreamer_v3();
             _viewModel = new ShellViewModel_v3();
             DataContext = _viewModel;
