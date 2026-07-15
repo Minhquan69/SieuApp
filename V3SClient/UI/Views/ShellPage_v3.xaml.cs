@@ -45,17 +45,17 @@ namespace V3SClient.UI.Views
             if (_viewModel == null || _viewModel.SelectedNavigationItem == null)
                 return;
 
-            if (_viewModel.SelectedNavigationItem.Title == "Live View")
+            if (_viewModel.SelectedNavigationItem.Route == "/live")
             {
                 ContentFrame.Content = new LivePage_v3();
                 return;
             }
-            if (_viewModel.SelectedNavigationItem.Title == "Playback")
+            if (_viewModel.SelectedNavigationItem.Route == "/playback")
             {
                 ContentFrame.Content = new PlaybackPage_v3();
                 return;
             }
-            if (_viewModel.SelectedNavigationItem.Title == "E-Map")
+            if (_viewModel.SelectedNavigationItem.Route == "/emap")
             {
                 ContentFrame.Content = new MapPage_v3();
                 return;

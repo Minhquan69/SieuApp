@@ -541,6 +541,8 @@ namespace V3SClient.UI.Views
             if (window == null) return;
             var entering = window.WindowState != WindowState.Maximized;
             window.WindowState = entering ? WindowState.Maximized : WindowState.Normal;
+            var shell = window.Content as ShellPage_v3;
+            if (shell != null) shell.SetChromeVisible(!entering);
             CameraSidebar.Visibility = entering ? Visibility.Collapsed : Visibility.Visible;
             SidebarColumn.Width = entering ? new GridLength(0) : new GridLength(300);
             FullscreenToolbar.Visibility = entering ? Visibility.Visible : Visibility.Collapsed;
