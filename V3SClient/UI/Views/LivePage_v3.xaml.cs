@@ -7,7 +7,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
-using V3SClient.Services;
 using V3SClient.libs;
 using V3SClient.models;
 using V3SClient.viewModels;
@@ -17,7 +16,6 @@ namespace V3SClient.UI.Views
     public partial class LivePage_v3 : UserControl, IDisposable
     {
         private readonly LiveViewModel_v3 _viewModel;
-        private readonly LiveStreamService_v3 _streamService = new LiveStreamService_v3();
         private readonly Dictionary<int, LiveTile_v3> _tiles = new Dictionary<int, LiveTile_v3>();
         private CancellationTokenSource _lifetime = new CancellationTokenSource();
         private bool _disposed;
@@ -235,7 +233,6 @@ namespace V3SClient.UI.Views
             var slot = camera == null ? null : _viewModel.Slots.FirstOrDefault(item => SameCamera(item.Camera, camera));
             if (slot != null && _tiles.ContainsKey(slot.SlotId))
             {
-                try { await _streamService.DisconnectAsync(new[] { GetStreamId(slot) }, _lifetime.Token); } catch (Exception ex) { LoggerManager.LogException(ex, "Live View _v3 context disconnect failed"); }
                 _tiles[slot.SlotId].Disconnect();
             }
         }
@@ -245,7 +242,6 @@ namespace V3SClient.UI.Views
             var camera = ContextCamera(sender);
             var slot = camera == null ? null : _viewModel.Slots.FirstOrDefault(item => SameCamera(item.Camera, camera));
             if (slot == null) return;
-            try { await _streamService.RemoveAsync(new[] { GetStreamId(slot) }, _lifetime.Token); } catch (Exception ex) { LoggerManager.LogException(ex, "Live View _v3 context remove failed"); }
             if (_tiles.ContainsKey(slot.SlotId)) _tiles[slot.SlotId].Disconnect();
             _viewModel.ClearSlot(slot);
             BuildGrid();
@@ -359,12 +355,6 @@ namespace V3SClient.UI.Views
             var targets = _viewModel.Slots.Where(slot => slot.Camera != null).ToList();
             try
             {
-                var bulkStarted = await _streamService.ConnectBulkAsync(targets, _lifetime.Token);
-                if (!bulkStarted) LoggerManager.LogWarn("Live View _v3 bulk connect was not accepted; falling back to per-tile connections.");
-            }
-            catch (Exception ex) { LoggerManager.LogException(ex, "Live View _v3 bulk connect failed; falling back to per-tile connections"); }
-            try
-            {
                 var connectTasks = _tiles.Values
                     .Where(tile => tile.Slot != null && tile.Slot.Camera != null)
                     .Select(tile => tile.ConnectAsync())
@@ -379,21 +369,16 @@ namespace V3SClient.UI.Views
 
         private async void DisconnectAll_Click(object sender, RoutedEventArgs e)
         {
-            var ids = _viewModel.Slots.Where(slot => slot.Camera != null).Select(slot => GetStreamId(slot)).ToArray();
             var tiles = _tiles.Values.ToArray();
-            var disconnectTask = _streamService.DisconnectAsync(ids, _lifetime.Token);
             foreach (var tile in tiles) tile.RequestDisconnect();
             CameraGrid.Visibility = Visibility.Visible;
             var cleanupTasks = tiles.Select(tile => tile.DisconnectInBackgroundAsync()).ToArray();
             _ = Task.WhenAll(cleanupTasks).ContinueWith(_ => Dispatcher.BeginInvoke(new Action(UpdateStatus)));
-            try { await disconnectTask; } catch (Exception ex) { LoggerManager.LogException(ex, "Live View _v3 bulk disconnect failed"); }
         }
 
         private async void RemoveAll_Click(object sender, RoutedEventArgs e)
         {
-            var ids = _viewModel.Slots.Where(slot => slot.Camera != null).Select(slot => GetStreamId(slot)).ToArray();
             var tiles = _tiles.Values.ToArray();
-            var removeTask = _streamService.RemoveAsync(ids, _lifetime.Token);
             foreach (var tile in tiles) tile.RequestDisconnect();
             CameraGrid.Visibility = Visibility.Visible;
             var cleanupTasks = tiles.Select(tile => tile.DisconnectInBackgroundAsync()).ToArray();
@@ -402,7 +387,6 @@ namespace V3SClient.UI.Views
             _viewModel.ClearAll();
             BuildGrid();
             UpdateStatus();
-            try { await removeTask; } catch (Exception ex) { LoggerManager.LogException(ex, "Live View _v3 bulk remove failed"); }
         }
 
         /// <summary>
@@ -560,11 +544,6 @@ namespace V3SClient.UI.Views
             SidebarColumn.Width = hide ? new GridLength(0) : new GridLength(300);
             SidebarOpenButton.Visibility = hide ? Visibility.Visible : Visibility.Collapsed;
             SidebarOpenHeaderButton.Visibility = hide ? Visibility.Visible : Visibility.Collapsed;
-        }
-
-        private static string GetStreamId(LiveSlotViewModel_v3 slot)
-        {
-            return slot.SelectedStream != null && !string.IsNullOrWhiteSpace(slot.SelectedStream.RtspRelayRaw) ? slot.SelectedStream.RtspRelayRaw : slot.Camera.camID;
         }
 
         private void UpdateStatus()

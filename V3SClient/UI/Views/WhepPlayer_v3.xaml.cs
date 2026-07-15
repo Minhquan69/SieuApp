@@ -5,7 +5,6 @@ using System.Windows;
 using System.Windows.Controls;
 using Gst;
 using Gst.Video;
-using V3SClient.Services;
 using V3SClient.libs;
 using V3SClient.models;
 
@@ -23,7 +22,6 @@ namespace V3SClient.UI.Views
     public partial class WhepPlayer_v3 : System.Windows.Controls.UserControl, IDisposable
     {
         private readonly System.Windows.Forms.Panel _videoPanel = new System.Windows.Forms.Panel { Dock = System.Windows.Forms.DockStyle.Fill };
-        private readonly LiveStreamService_v3 _streamService = new LiveStreamService_v3();
         private CancellationTokenSource _cancellation;
         private Pipeline _pipeline;
         private Camera _camera;
@@ -122,21 +120,23 @@ namespace V3SClient.UI.Views
             try
             {
                 var selectedStream = _selectedStream;
-                var connection = await _streamService.ConnectAsync(selectedCamera, selectedStream, cancellation.Token);
+                var rtspUrl = GetRtspUrl(selectedCamera, selectedStream);
+                if (string.IsNullOrWhiteSpace(rtspUrl))
+                    throw new InvalidOperationException("Camera does not provide a direct RTSP relay URL.");
                 if (cancellation.IsCancellationRequested ||
                     !ReferenceEquals(_cancellation, cancellation) ||
                     !ReferenceEquals(_camera, selectedCamera))
                     return;
 
-                CreatePipeline(connection.PlaybackUrl, IsH264(selectedCamera, selectedStream));
-                LoggerManager.LogInfo("Live View _v3 started GStreamer WHEP for camera " +
-                    (selectedCamera.camID ?? selectedCamera.name ?? "unknown") + ": " + connection.PlaybackUrl);
+                CreatePipeline(rtspUrl, IsH264(selectedCamera, selectedStream));
+                LoggerManager.LogInfo("Live View _v3 started direct GStreamer RTSP for camera " +
+                    (selectedCamera.camID ?? selectedCamera.name ?? "unknown") + ": " + rtspUrl);
             }
             catch (OperationCanceledException) { }
             catch (Exception ex)
             {
                 if (!ReferenceEquals(_cancellation, cancellation)) return;
-                LoggerManager.LogException(ex, "Live View _v3 WHEP connection failed for camera " +
+                LoggerManager.LogException(ex, "Live View _v3 direct RTSP connection failed for camera " +
                     (selectedCamera.camID ?? selectedCamera.name ?? "unknown"));
                 StatusText.Text = "Unable to connect to this camera through the live stream relay.";
                 StatusPanel.Visibility = Visibility.Visible;
@@ -144,25 +144,39 @@ namespace V3SClient.UI.Views
             }
         }
 
-        private void CreatePipeline(string whepUrl, bool isH264)
+        private void CreatePipeline(string rtspUrl, bool isH264)
         {
-            var depay = isH264 ? "rtph264depay ! h264parse ! d3d11h264dec" : "rtph265depay ! h265parse ! d3d11h265dec";
-            // The relay cameras can carry G.711 audio even though this control renders
-            // video only. whepsrc defaults to OPUS-only audio, and MediaMTX rejects the
-            // complete WHEP offer when the camera's PCMU/PCMA track has no common codec.
-            const string audioCaps =
-                "application/x-rtp,media=(string)audio,encoding-name=(string)PCMU,payload=(int)0,clock-rate=(int)8000;" +
-                "application/x-rtp,media=(string)audio,encoding-name=(string)PCMA,payload=(int)8,clock-rate=(int)8000;" +
-                "application/x-rtp,media=(string)audio,encoding-name=(string)OPUS,payload=(int)96,clock-rate=(int)48000";
-            var pipelineText = "whepsrc name=videoSource timeout=15 use-link-headers=true audio-caps=\"" + audioCaps + "\" ! queue ! " + depay +
-                " ! d3d11convert ! d3d11overlay name=videoOverlay ! d3d11videosink async=false sync=false";
+            var videoChain = isH264
+                ? "rtph264depay ! h264parse ! d3d11h264dec qos=false"
+                : "rtph265depay ! h265parse ! d3d11h265dec";
+            var pipelineText =
+                "rtspsrc name=videoSource protocols=tcp latency=300 timeout=15000000 do-retransmission=false " +
+                "videoSource. ! queue leaky=downstream max-size-buffers=8 ! application/x-rtp,media=video ! " +
+                videoChain + " ! d3d11convert ! d3d11overlay name=videoOverlay ! " +
+                "d3d11videosink async=false sync=false qos=false";
             _pipeline = (Pipeline)Parse.Launch(pipelineText);
             var source = _pipeline.GetByName("videoSource");
-            source["whep-endpoint"] = whepUrl;
+            source["location"] = rtspUrl;
             _pipeline.Bus.EnableSyncMessageEmission();
             _pipeline.Bus.SyncMessage += OnSyncMessage;
             if (_pipeline.SetState(State.Playing) == StateChangeReturn.Failure)
                 throw new InvalidOperationException("GStreamer could not start the WHEP playback pipeline.");
+        }
+
+        private static string GetRtspUrl(Camera camera, CameraStreamInfo selectedStream)
+        {
+            if (camera == null) return null;
+            var isAi = selectedStream != null && selectedStream.IsAiMode == true;
+            var candidate = isAi
+                ? (camera.RtspUrlAI ?? camera.RtspUrlMainAI)
+                : (camera.RtspUrlRaw ?? camera.RtspUrlMainRaw);
+            if (!string.IsNullOrWhiteSpace(candidate) && System.Uri.IsWellFormedUriString(candidate, System.UriKind.Absolute))
+                return candidate;
+
+            candidate = selectedStream == null ? null : selectedStream.RtspRelayRaw;
+            if (!string.IsNullOrWhiteSpace(candidate) && System.Uri.IsWellFormedUriString(candidate, System.UriKind.Absolute))
+                return candidate;
+            return camera.rtps;
         }
 
         private void OnSyncMessage(object sender, SyncMessageArgs args)
