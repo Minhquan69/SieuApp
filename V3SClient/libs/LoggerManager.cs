@@ -14,6 +14,11 @@ namespace V3SClient.libs
         {
             // Tải cấu hình từ file NLog.config
             LogManager.LoadConfiguration("NLog.config");
+
+#if DEBUG
+            // Tự động enable console logging trong DEBUG mode
+            EnableConsoleLogging();
+#endif
         }
 
         private static readonly Logger generalLogger = LogManager.GetLogger("GeneralLogger");
@@ -54,25 +59,20 @@ namespace V3SClient.libs
         #region Info Log (Thông tin vận hành bình thường)
         public static void LogInfo(string message)
         {
-#if LOG_INFO
             generalLogger.Info(message);
-#endif
         }
         #endregion
 
         #region Warning Log (Cảnh báo không gây dừng ứng dụng)
         public static void LogWarn(string message)
         {
-#if LOG_WARN
             generalLogger.Warn(message);
-#endif
         }
         #endregion
 
         #region Error Log (Lỗi gây gián đoạn hoặc ngoại lệ kỹ thuật)
         public static void LogError(string message, Exception ex = null)
         {
-#if LOG_ERROR
             if (ex != null)
             {
                 generalLogger.Error(ex, message);
@@ -81,7 +81,6 @@ namespace V3SClient.libs
             {
                 generalLogger.Error(message);
             }
-#endif
         }
 
         /// <summary>
@@ -89,7 +88,6 @@ namespace V3SClient.libs
         /// </summary>
         public static void LogException(Exception ex, string contextMessage = "Exception occurred")
         {
-#if LOG_ERROR
             StringBuilder sb = new StringBuilder();
             sb.AppendLine($"[EXCEPTION_DETAILS] Context: {contextMessage}");
             sb.AppendLine($"Message: {ex.Message}");
@@ -99,7 +97,6 @@ namespace V3SClient.libs
                 sb.AppendLine($"Inner Exception: {ex.InnerException.Message}");
             }
             generalLogger.Error(sb.ToString());
-#endif
         }
         #endregion
 
@@ -115,6 +112,43 @@ namespace V3SClient.libs
         {
             var logEvent = LogEventInfo.Create(logLevel, "FileProcessingLogger", message);
             fileProcessingLogger.Log(logEvent);
+        }
+        #endregion
+
+        #region Console Logging Control
+        /// <summary>
+        /// Bật console logging - chỉ dùng trong development
+        /// </summary>
+        public static void EnableConsoleLogging()
+        {
+            var rule = LogManager.Configuration.LoggingRules.FirstOrDefault(r => r.LoggerNamePattern == "GeneralLogger");
+            if (rule != null)
+            {
+                // Thêm console target nếu chưa có
+                var consoleTarget = LogManager.Configuration.FindTargetByName("console");
+                if (consoleTarget != null && !rule.Targets.Contains(consoleTarget))
+                {
+                    rule.Targets.Add(consoleTarget);
+                    LogManager.ReconfigExistingLoggers();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Tắt console logging
+        /// </summary>
+        public static void DisableConsoleLogging()
+        {
+            var rule = LogManager.Configuration.LoggingRules.FirstOrDefault(r => r.LoggerNamePattern == "GeneralLogger");
+            if (rule != null)
+            {
+                var consoleTarget = LogManager.Configuration.FindTargetByName("console");
+                if (consoleTarget != null && rule.Targets.Contains(consoleTarget))
+                {
+                    rule.Targets.Remove(consoleTarget);
+                    LogManager.ReconfigExistingLoggers();
+                }
+            }
         }
         #endregion
     }
