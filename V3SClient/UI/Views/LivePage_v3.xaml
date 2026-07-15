@@ -25,7 +25,7 @@
     <Grid>
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
 
-        <Border Background="{StaticResource VmsHeaderBrush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="0,0,0,1" Padding="10,6">
+        <Border x:Name="LivePageHeader" Background="{StaticResource VmsHeaderBrush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="0,0,0,1" Padding="10,6">
             <Grid>
                 <Grid.Resources>
                     <Style x:Key="LiveHeaderActionStyle_v3" TargetType="Button">

@@ -4,7 +4,7 @@
              xmlns:local="clr-namespace:V3SClient.UI.Views"
              xmlns:Icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
              Background="{StaticResource VmsSurfaceBrush_v3}">
-    <Border x:Name="TileBorder" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" Background="{StaticResource VmsSurfaceBrush_v3}" Margin="1" ClipToBounds="True" MouseEnter="TileBorder_MouseEnter" MouseLeave="TileBorder_MouseLeave" MouseLeftButtonUp="TileBorder_MouseLeftButtonUp">
+    <Border x:Name="TileBorder" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" Background="{StaticResource VmsSurfaceBrush_v3}" Margin="1" ClipToBounds="True" SizeChanged="TileBorder_SizeChanged" MouseEnter="TileBorder_MouseEnter" MouseLeave="TileBorder_MouseLeave" MouseLeftButtonUp="TileBorder_MouseLeftButtonUp">
         <Grid>
             <local:WhepPlayer_v3 x:Name="Player" />
             <local:AiMetadataOverlay_v3 x:Name="MetadataOverlay" IsHitTestVisible="False" />
@@ -44,7 +44,7 @@
             </Border>
             </Popup>
 
-            <Popup x:Name="ActionPopup" PlacementTarget="{Binding ElementName=TileBorder}" Placement="Bottom" HorizontalOffset="0" VerticalOffset="-42" AllowsTransparency="True" StaysOpen="True" PopupAnimation="Fade">
+            <Popup x:Name="ActionPopup" PlacementTarget="{Binding ElementName=TileBorder}" Placement="Relative" HorizontalOffset="0" VerticalOffset="0" AllowsTransparency="True" StaysOpen="True" PopupAnimation="Fade">
             <Border x:Name="ActionBar" Panel.ZIndex="30" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,10" Padding="4" Background="{StaticResource VmsElevatedBrush_v3}" BorderBrush="{StaticResource VmsPrimaryBorderBrush_v3}" BorderThickness="1" CornerRadius="5" Opacity="1" IsHitTestVisible="True" MouseEnter="ActionBar_MouseEnter" MouseLeave="ActionBar_MouseLeave">
                 <StackPanel Orientation="Horizontal">
                     <Button x:Name="ConnectButton" Click="Connect_Click" Style="{StaticResource PrimaryButtonStyle_v3}" Padding="7,4" Margin="1" ToolTip="Kết nối camera"><Icon:PackIconMaterial Kind="Play" Width="14" Height="14"/></Button>

@@ -456,7 +456,12 @@ namespace V3SClient.UI.Views
                 foreach (UIElement child in CameraGrid.Children)
                 {
                     var cameraTile = child as LiveTile_v3;
-                    if (cameraTile != null) cameraTile.SetFullscreenVisibility(ReferenceEquals(cameraTile, tile));
+                    if (cameraTile != null)
+                    {
+                        var selected = ReferenceEquals(cameraTile, tile);
+                        cameraTile.SetFullscreenVisibility(selected);
+                        cameraTile.SetFullscreenMode(selected);
+                    }
                     child.Visibility = ReferenceEquals(child, tile) ? Visibility.Visible : Visibility.Collapsed;
                 }
                 Grid.SetRow(tile, 0); Grid.SetColumn(tile, 0); Grid.SetRowSpan(tile, Math.Max(1, CameraGrid.RowDefinitions.Count)); Grid.SetColumnSpan(tile, Math.Max(1, CameraGrid.ColumnDefinitions.Count));
@@ -484,7 +489,8 @@ namespace V3SClient.UI.Views
             _tileWindowStateSaved = true;
             CameraSidebar.Visibility = Visibility.Collapsed;
             SidebarColumn.Width = new GridLength(0);
-            FullscreenToolbar.Visibility = Visibility.Visible;
+            LivePageHeader.Visibility = Visibility.Collapsed;
+            FullscreenToolbar.Visibility = Visibility.Collapsed;
             var shell = window.Content as ShellPage_v3;
             if (shell != null) shell.SetChromeVisible(false);
             window.WindowStyle = WindowStyle.None;
@@ -515,8 +521,11 @@ namespace V3SClient.UI.Views
                 window.Topmost = _tileTopmost;
             }
             _tileWindowStateSaved = false;
+            foreach (var tile in _tiles.Values)
+                tile.SetFullscreenMode(false);
             CameraSidebar.Visibility = _tileSidebarVisibility;
             SidebarColumn.Width = _tileSidebarWidth.Value > 0 ? _tileSidebarWidth : new GridLength(300);
+            LivePageHeader.Visibility = Visibility.Visible;
             FullscreenToolbar.Visibility = Visibility.Collapsed;
             BuildGrid();
         }
