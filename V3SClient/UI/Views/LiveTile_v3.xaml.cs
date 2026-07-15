@@ -19,6 +19,7 @@ namespace V3SClient.UI.Views
         private bool _disposed;
         private bool _changingStream;
         private bool _actionsPinned;
+        private bool _fullscreenMode;
         private Storyboard _loadingStoryboard;
 
         public LiveTile_v3()
@@ -83,6 +84,19 @@ namespace V3SClient.UI.Views
             // not close them, so explicitly close overlays for hidden tiles.
             ActionPopup.IsOpen = false;
             CameraBadgePopup.IsOpen = false;
+        }
+
+        public void SetFullscreenMode(bool active)
+        {
+            _fullscreenMode = active;
+            _actionsPinned = active;
+            if (active)
+                ShowActions();
+            else
+            {
+                _actionsPinned = false;
+                HideActions();
+            }
         }
 
         public async System.Threading.Tasks.Task ConnectAsync()
@@ -234,11 +248,27 @@ namespace V3SClient.UI.Views
             ActionPopup.IsOpen = true;
             ActionBar.Opacity = 1;
             ActionBar.IsHitTestVisible = true;
+            Dispatcher.BeginInvoke(new Action(PositionActionPopup), DispatcherPriority.Loaded);
+        }
+
+        private void PositionActionPopup()
+        {
+            if (!ActionPopup.IsOpen || TileBorder.ActualWidth <= 0 || TileBorder.ActualHeight <= 0) return;
+            var left = Math.Max(0, (TileBorder.ActualWidth - ActionBar.ActualWidth) / 2.0);
+            var top = Math.Max(0, TileBorder.ActualHeight - ActionBar.ActualHeight - 10.0);
+            ActionPopup.HorizontalOffset = left;
+            ActionPopup.VerticalOffset = top;
+        }
+
+        private void TileBorder_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (ActionPopup.IsOpen)
+                Dispatcher.BeginInvoke(new Action(PositionActionPopup), DispatcherPriority.Loaded);
         }
 
         private void HideActions()
         {
-            if (_actionsPinned) return;
+            if (_actionsPinned || _fullscreenMode) return;
             _hideActionsTimer.Stop();
             ActionPopup.IsOpen = false;
             ActionBar.Opacity = 0;
@@ -340,7 +370,7 @@ namespace V3SClient.UI.Views
             LoadingOverlay.Visibility = loading ? Visibility.Visible : Visibility.Collapsed;
             LoadingText.Text = Slot != null && Slot.State == LiveConnectionState_v3.Disconnecting ? "Đang ngắt kết nối..." : Slot != null && Slot.State == LiveConnectionState_v3.Retrying ? "Đang thử lại " + Slot.RetryCount + "/3..." : "Đang kết nối...";
             if (loading) _loadingStoryboard.Begin(this, true); else _loadingStoryboard.Remove(this);
-            CameraName.Text = empty ? string.Empty : Slot.DisplayName + " · " + Slot.StreamLabel;
+            CameraName.Text = empty ? string.Empty : Slot.DisplayName;
             ErrorText.Text = "Kiểm tra mạng, cấu hình camera hoặc máy chủ phát trực tiếp.";
             StatusDot.Fill = (System.Windows.Media.Brush)FindResource(Slot != null && Slot.State == LiveConnectionState_v3.Connected
                 ? "VmsSuccessBrush_v3" : Slot != null && Slot.HasError ? "VmsErrorBrush_v3" : "VmsOfflineBrush_v3");
