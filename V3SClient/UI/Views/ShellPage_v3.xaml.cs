@@ -2,6 +2,11 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using V3SClient.viewModels;
+using V3SClient.Services;
+using V3SClient.ucs;
+using V3SClient.libs;
+using V3SClient.window;
+using System.Threading;
 
 namespace V3SClient.UI.Views
 {
@@ -13,6 +18,29 @@ namespace V3SClient.UI.Views
         {
             InitializeComponent();
             DataContextChanged += OnDataContextChanged;
+            ShellHeader.SwitchClientRequested += OnSwitchClientRequested;
+            ShellHeader.LogoutRequested += OnLogoutRequested;
+        }
+
+        private async void OnSwitchClientRequested(object sender, System.EventArgs e)
+        {
+            var picker = new ClientSwitchWindow(GlobalUserInfo.Instance.AuthorizedProfiles) { Owner = Window.GetWindow(this) };
+            if (picker.ShowDialog() != true || picker.SelectedProfile == null) return;
+            try
+            {
+                await new ClientSessionService().SwitchClientAsync(picker.SelectedProfile, CancellationToken.None);
+                _viewModel.RefreshSessionDisplay();
+                NavigateToSelectedModule();
+            }
+            catch (System.Exception ex) { MessageBox.Show(ex.Message, "Đổi client", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        }
+
+        private void OnLogoutRequested(object sender, System.EventArgs e)
+        {
+            if (MessageBox.Show("Bạn có muốn đăng xuất không?", "Đăng xuất", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+            var shell = Window.GetWindow(this) as ShellWindow_v3;
+            new ClientSessionService().ClearSession();
+            if (shell != null) shell.LogoutAndReturnToLogin();
         }
 
         public void SetChromeVisible(bool visible)

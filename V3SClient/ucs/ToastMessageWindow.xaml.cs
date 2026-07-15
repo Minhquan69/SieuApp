@@ -89,7 +89,7 @@ namespace V3SClient.ucs
 
         private ImageSource GetIcon(ToastType type)
         {
-            string path = "pack://application:,,,/images/toast/";
+            string path = "/V3SClient;component/images/toast/";
             switch (type)
             {
                 case ToastType.Success:
@@ -102,7 +102,20 @@ namespace V3SClient.ucs
                 default:
                     path += "toast_info.png"; break;
             }
-            return new BitmapImage(new Uri(path));
+            try
+            {
+                var image = new BitmapImage();
+                image.BeginInit();
+                image.UriSource = new Uri(path, UriKind.Relative);
+                image.CacheOption = BitmapCacheOption.OnLoad;
+                image.EndInit();
+                return image;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("Toast icon unavailable: " + ex.Message);
+                return null;
+            }
         }
     }
 

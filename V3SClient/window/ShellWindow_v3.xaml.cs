@@ -4,6 +4,7 @@ using System.IO;
 using System.Windows;
 using V3SClient.UI.Views;
 using V3SClient.viewModels;
+using V3SClient.libs;
 
 namespace V3SClient.window
 {
@@ -11,6 +12,7 @@ namespace V3SClient.window
     {
         private readonly ShellViewModel_v3 _viewModel;
         private static bool _gstreamerInitialized;
+        private bool _logoutRequested;
 
         public ShellWindow_v3()
         {
@@ -25,6 +27,22 @@ namespace V3SClient.window
             DataContext = _viewModel;
             ShellView.DataContext = _viewModel;
             Closed += (s, e) => _viewModel.Dispose();
+        }
+
+        public void LogoutAndReturnToLogin()
+        {
+            _logoutRequested = true;
+            Close();
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                var login = new LoginWindow();
+                if (login.ShowDialog() == true)
+                {
+                    var next = new ShellWindow_v3();
+                    next.Show();
+                }
+                else Application.Current.Shutdown();
+            }), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         }
 
         private static void InitializeGStreamer_v3()

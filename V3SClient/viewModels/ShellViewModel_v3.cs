@@ -16,16 +16,16 @@ namespace V3SClient.viewModels
         {
             NavigationItems = new ObservableCollection<ShellNavigationItem_v3>
             {
-                new ShellNavigationItem_v3("Dashboard", PackIconMaterialKind.ViewDashboardOutline, null, null),
-                new ShellNavigationItem_v3("Live View", PackIconMaterialKind.CameraOutline, "/live", null),
-                new ShellNavigationItem_v3("Events", PackIconMaterialKind.RobotOutline, null, null),
-                new ShellNavigationItem_v3("Playback", PackIconMaterialKind.PlayCircleOutline, "/playback", null),
-                new ShellNavigationItem_v3("Map", PackIconMaterialKind.MapOutline, "/emap", null),
-                new ShellNavigationItem_v3("Devices", PackIconMaterialKind.PackageVariantClosed, null, null),
-                new ShellNavigationItem_v3("Analysis", PackIconMaterialKind.ChartBar, null, null),
-                new ShellNavigationItem_v3("Reports", PackIconMaterialKind.FileDocumentOutline, null, null),
-                new ShellNavigationItem_v3("Configuration", PackIconMaterialKind.CogOutline, null, null),
-                new ShellNavigationItem_v3("System", PackIconMaterialKind.Server, null, null)
+                new ShellNavigationItem_v3("Tổng quan", PackIconMaterialKind.ViewDashboardOutline, null, null),
+                new ShellNavigationItem_v3("Trực tiếp", PackIconMaterialKind.CameraOutline, "/live", null),
+                new ShellNavigationItem_v3("Sự kiện", PackIconMaterialKind.RobotOutline, null, null),
+                new ShellNavigationItem_v3("Phát lại", PackIconMaterialKind.PlayCircleOutline, "/playback", null),
+                new ShellNavigationItem_v3("Bản đồ", PackIconMaterialKind.MapOutline, "/emap", null),
+                new ShellNavigationItem_v3("Thiết bị", PackIconMaterialKind.PackageVariantClosed, null, null),
+                new ShellNavigationItem_v3("Phân tích", PackIconMaterialKind.ChartBar, null, null),
+                new ShellNavigationItem_v3("Báo cáo", PackIconMaterialKind.FileDocumentOutline, null, null),
+                new ShellNavigationItem_v3("Cấu hình", PackIconMaterialKind.CogOutline, null, null),
+                new ShellNavigationItem_v3("Hệ thống", PackIconMaterialKind.Server, null, null)
             };
             ActiveRoute = "/live";
             SelectedNavigationItem = NavigationItems[1];
@@ -39,6 +39,15 @@ namespace V3SClient.viewModels
         public ObservableCollection<ShellNavigationItem_v3> NavigationItems { get; private set; }
         public RelayCommand SelectNavigationCommand { get; private set; }
         public string Username { get { return GlobalUserInfo.Instance.UserName ?? "User"; } }
+        public string UserInitials
+        {
+            get
+            {
+                var value = Username.Trim();
+                if (string.IsNullOrEmpty(value)) return "US";
+                return value.Length == 1 ? value.ToUpperInvariant() : value.Substring(0, 2).ToUpperInvariant();
+            }
+        }
         public string SelectedProfileName { get { return GlobalUserInfo.Instance.SelectedClientName ?? "No profile selected"; } }
         public DateTime ServerTime { get; private set; }
         public string Theme { get; private set; } = "dark";
@@ -46,6 +55,7 @@ namespace V3SClient.viewModels
         public string ActiveRoute { get { return _activeRoute; } private set { _activeRoute = value; OnPropertyChanged(); } }
         public ShellNavigationItem_v3 SelectedNavigationItem { get { return _selectedNavigationItem; } private set { _selectedNavigationItem = value; OnPropertyChanged(); OnPropertyChanged(nameof(PageTitle)); } }
         public string PageTitle { get { return SelectedNavigationItem == null ? "VMS" : SelectedNavigationItem.Title; } }
+        public void RefreshSessionDisplay() { OnPropertyChanged(nameof(Username)); OnPropertyChanged(nameof(UserInitials)); OnPropertyChanged(nameof(SelectedProfileName)); }
 
         private void SelectNavigation(ShellNavigationItem_v3 item)
         {

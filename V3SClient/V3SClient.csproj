@@ -141,6 +141,8 @@
     <Compile Include="models\ProcessingJobStatusItem.cs" />
     <Compile Include="models\PlaybackHLS.cs" />
     <Compile Include="Services\DatabaseHelper.cs" />
+    <Compile Include="Services\ClientSessionService.cs" />
+    <Compile Include="window\ClientSwitchWindow.cs" />
     <Compile Include="Services\DocumentProcessingManager.cs" />
     <Compile Include="Services\FileNamingService.cs" />
     <Compile Include="Services\FileWatcherService.cs" />
@@ -1137,7 +1139,7 @@
     <Resource Include="images\layout\layout_15_1big.PNG" />
     <Resource Include="images\base_camera.png" />
     <Resource Include="images\close.png" />
-    <Resource Include="images\logo\ivista_logo.png" />
+    <Resource Include="images\logo\*.*" />
     <EmbeddedResource Include="audios\abnormal_warning.wav" />
     <Resource Include="images\layout\layout_custom.png" />
     <Resource Include="images\mouse_action.png" />
