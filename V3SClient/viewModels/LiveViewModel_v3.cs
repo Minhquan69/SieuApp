@@ -19,18 +19,33 @@ namespace V3SClient.viewModels
         private LiveConnectionState_v3 _state = LiveConnectionState_v3.Empty;
         private string _errorMessage;
         private int _retryCount;
+        private DateTime _connectedAtUtc = DateTime.MinValue;
 
         public int SlotId { get; internal set; }
         public Camera Camera { get { return _camera; } internal set { _camera = value; OnChanged(); OnChanged(nameof(HasCamera)); OnChanged(nameof(DisplayName)); } }
         public CameraStreamInfo SelectedStream { get { return _selectedStream; } set { _selectedStream = value; OnChanged(); OnChanged(nameof(StreamLabel)); } }
         public bool HasCamera { get { return Camera != null; } }
-        public string DisplayName { get { return Camera == null ? "Empty camera tile" : (Camera.name ?? Camera.camID ?? "Camera"); } }
+        // Camera IDs are the stable identity used by the live tile. Some API
+        // responses contain an empty name, so null-coalescing alone can
+        // produce a badge with only its status dot. Prefer camID and reject
+        // whitespace values explicitly.
+        public string DisplayName
+        {
+            get
+            {
+                if (Camera == null) return "Empty camera tile";
+                if (!string.IsNullOrWhiteSpace(Camera.camID)) return Camera.camID.Trim();
+                if (!string.IsNullOrWhiteSpace(Camera.name)) return Camera.name.Trim();
+                return "Camera";
+            }
+        }
         public string StreamLabel { get { return SelectedStream == null ? "main" : (SelectedStream.StreamType ?? "main"); } }
         public LiveConnectionState_v3 State { get { return _state; } set { _state = value; OnChanged(); OnChanged(nameof(StatusText)); OnChanged(nameof(HasError)); OnChanged(nameof(IsConnected)); } }
         public string ErrorMessage { get { return _errorMessage; } set { _errorMessage = value; OnChanged(); } }
         public int RetryCount { get { return _retryCount; } set { _retryCount = value; OnChanged(); } }
         public bool HasError { get { return State == LiveConnectionState_v3.Error || State == LiveConnectionState_v3.Retrying; } }
         public bool IsConnected { get { return State == LiveConnectionState_v3.Connected; } }
+        public DateTime ConnectedAtUtc { get { return _connectedAtUtc; } internal set { _connectedAtUtc = value; OnChanged(); } }
         public string StatusText
         {
             get
@@ -64,7 +79,16 @@ namespace V3SClient.viewModels
     public sealed class LiveCameraItemViewModel_v3 : INotifyPropertyChanged
     {
         public Camera Camera { get; private set; }
-        public string DisplayName { get { return Camera == null ? "Camera" : (Camera.name ?? Camera.camID ?? "Camera"); } }
+        public string DisplayName
+        {
+            get
+            {
+                if (Camera == null) return "Camera";
+                if (!string.IsNullOrWhiteSpace(Camera.camID)) return Camera.camID.Trim();
+                if (!string.IsNullOrWhiteSpace(Camera.name)) return Camera.name.Trim();
+                return "Camera";
+            }
+        }
         public bool IsAiCamera
         {
             get
@@ -77,8 +101,14 @@ namespace V3SClient.viewModels
         }
         private bool _isSelected;
         private string _stateText;
+        private bool _isConnecting;
+        private bool _isConnected;
+        private bool _hasConnectionError;
         public bool IsSelected { get { return _isSelected; } set { _isSelected = value; OnChanged(); } }
         public string StateText { get { return _stateText; } set { _stateText = value; OnChanged(); } }
+        public bool IsConnecting { get { return _isConnecting; } set { _isConnecting = value; OnChanged(); } }
+        public bool IsConnected { get { return _isConnected; } set { _isConnected = value; OnChanged(); } }
+        public bool HasConnectionError { get { return _hasConnectionError; } set { _hasConnectionError = value; OnChanged(); } }
         public LiveCameraItemViewModel_v3(Camera camera) { Camera = camera; StateText = "Available"; }
         public event PropertyChangedEventHandler PropertyChanged;
         private void OnChanged([CallerMemberName] string name = null) { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name)); }
@@ -121,7 +151,15 @@ namespace V3SClient.viewModels
 
         public void SetLayout(LiveLayoutMode_v3 layout)
         {
-            var previous = Slots.Select(slot => new { slot.Camera, slot.SelectedStream }).ToList();
+            var previous = Slots.Select(slot => new
+            {
+                slot.Camera,
+                slot.SelectedStream,
+                slot.State,
+                slot.ErrorMessage,
+                slot.RetryCount,
+                slot.ConnectedAtUtc
+            }).ToList();
             _layout = layout;
             var count = GetSlotCount(layout);
             Slots.Clear();
@@ -132,7 +170,10 @@ namespace V3SClient.viewModels
                 {
                     slot.Camera = previous[index].Camera;
                     slot.SelectedStream = previous[index].SelectedStream;
-                    slot.State = LiveConnectionState_v3.Offline;
+                    slot.State = previous[index].State;
+                    slot.ErrorMessage = previous[index].ErrorMessage;
+                    slot.RetryCount = previous[index].RetryCount;
+                    slot.ConnectedAtUtc = previous[index].ConnectedAtUtc;
                 }
                 Slots.Add(slot);
             }
@@ -167,13 +208,28 @@ namespace V3SClient.viewModels
             var start = visible.FindIndex(item => SameCamera(item, camera));
             if (start < 0) return new List<LiveSlotViewModel_v3>();
             var assigned = new List<LiveSlotViewModel_v3>();
-            var sourceIndex = start;
-            foreach (var slot in Slots.Where(item => item.Camera == null))
+            // Double-click fills forward without rebuilding the grid. Keep
+            // every existing camera/pipeline and use only currently empty
+            // slots for the selected camera and its following cameras.
+            var selectedSlot = Slots.FirstOrDefault(slot => SameCamera(slot.Camera, camera));
+            if (selectedSlot != null)
+                assigned.Add(selectedSlot);
+            else
             {
-                while (sourceIndex < visible.Count && Slots.Any(item => SameCamera(item.Camera, visible[sourceIndex]))) sourceIndex++;
-                if (sourceIndex >= visible.Count) break;
-                AssignCamera(slot, visible[sourceIndex++]);
-                assigned.Add(slot);
+                selectedSlot = Slots.FirstOrDefault(slot => slot.Camera == null);
+                if (selectedSlot == null) return assigned;
+                AssignCamera(selectedSlot, camera);
+                assigned.Add(selectedSlot);
+            }
+
+            for (var sourceIndex = start + 1; sourceIndex < visible.Count; sourceIndex++)
+            {
+                var next = visible[sourceIndex];
+                if (Slots.Any(slot => SameCamera(slot.Camera, next))) continue;
+                var emptySlot = Slots.FirstOrDefault(slot => slot.Camera == null);
+                if (emptySlot == null) break;
+                AssignCamera(emptySlot, next);
+                assigned.Add(emptySlot);
             }
             return assigned;
         }
@@ -267,6 +323,13 @@ namespace V3SClient.viewModels
                 var slot = Slots.FirstOrDefault(candidate => SameCamera(candidate.Camera, item.Camera));
                 item.IsSelected = slot != null;
                 item.StateText = slot == null ? "Available" : slot.StatusText;
+                item.IsConnected = slot != null && slot.State == LiveConnectionState_v3.Connected;
+                item.IsConnecting = slot != null &&
+                    (slot.State == LiveConnectionState_v3.Connecting ||
+                     slot.State == LiveConnectionState_v3.Disconnecting);
+                item.HasConnectionError = slot != null &&
+                    (slot.State == LiveConnectionState_v3.Error ||
+                     slot.State == LiveConnectionState_v3.Retrying);
             }
         }
 

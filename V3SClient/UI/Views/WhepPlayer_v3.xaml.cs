@@ -11,21 +11,45 @@ using V3SClient.models;
 namespace V3SClient.UI.Views
 {
     public enum WhepPlaybackState_v3 { Connecting, Playing, Stopped, Error }
+    public enum WhepPlaybackErrorKind_v3 { None, MissingStream, Server, Connection, Decoder, NoVideoFrame, StreamEnded, Playback }
 
     public sealed class WhepPlaybackStateChangedEventArgs_v3 : EventArgs
     {
-        public WhepPlaybackStateChangedEventArgs_v3(WhepPlaybackState_v3 state, string message = null) { State = state; Message = message; }
+        public WhepPlaybackStateChangedEventArgs_v3(WhepPlaybackState_v3 state, string message = null,
+            WhepPlaybackErrorKind_v3 errorKind = WhepPlaybackErrorKind_v3.None,
+            string userMessage = null, bool isRetryable = false)
+        {
+            State = state;
+            Message = message;
+            ErrorKind = errorKind;
+            UserMessage = userMessage;
+            IsRetryable = isRetryable;
+        }
         public WhepPlaybackState_v3 State { get; private set; }
         public string Message { get; private set; }
+        public WhepPlaybackErrorKind_v3 ErrorKind { get; private set; }
+        public string UserMessage { get; private set; }
+        public bool IsRetryable { get; private set; }
     }
 
     public partial class WhepPlayer_v3 : System.Windows.Controls.UserControl, IDisposable
     {
+        private sealed class RtspSource_v3
+        {
+            public string Url { get; set; }
+            public bool IsH264 { get; set; }
+        }
+
         private readonly System.Windows.Forms.Panel _videoPanel = new System.Windows.Forms.Panel { Dock = System.Windows.Forms.DockStyle.Fill };
+        private readonly System.Windows.Forms.Label _cameraBadge = new System.Windows.Forms.Label();
         private CancellationTokenSource _cancellation;
         private Pipeline _pipeline;
         private Camera _camera;
         private CameraStreamInfo _selectedStream;
+        private readonly SemaphoreSlim _connectionGate = new SemaphoreSlim(1, 1);
+        private IntPtr _videoWindowHandle;
+        private bool _useAlternateCodec;
+        private bool _alternateCodecAttempted;
 
         public event EventHandler<WhepPlaybackStateChangedEventArgs_v3> PlaybackStateChanged;
         public event EventHandler VideoMouseEnter;
@@ -36,16 +60,22 @@ namespace V3SClient.UI.Views
         {
             InitializeComponent();
             VideoHost.Child = _videoPanel;
+            _cameraBadge.AutoSize = true;
+            _cameraBadge.BackColor = System.Drawing.Color.FromArgb(15, 45, 70);
+            _cameraBadge.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            _cameraBadge.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
+            _cameraBadge.ForeColor = System.Drawing.Color.FromArgb(33, 197, 93);
+            _cameraBadge.Padding = new System.Windows.Forms.Padding(6, 3, 6, 3);
+            _cameraBadge.Location = new System.Drawing.Point(7, 7);
+            _cameraBadge.Visible = false;
+            _cameraBadge.TabStop = false;
+            _videoPanel.Controls.Add(_cameraBadge);
+            _cameraBadge.BringToFront();
             // The GStreamer sink is hosted by a native WinForms child HWND,
             // so WPF mouse routing cannot see hover inside the video area.
             _videoPanel.MouseEnter += (s, e) => VideoMouseEnter?.Invoke(this, EventArgs.Empty);
             _videoPanel.MouseMove += (s, e) => VideoMouseMove?.Invoke(this, EventArgs.Empty);
             _videoPanel.MouseLeave += (s, e) => VideoMouseLeave?.Invoke(this, EventArgs.Empty);
-            Loaded += async (s, e) =>
-            {
-                if (_pipeline == null && _cancellation == null)
-                    await ConnectAsync();
-            };
             Unloaded += (s, e) => Dispose();
         }
 
@@ -56,7 +86,8 @@ namespace V3SClient.UI.Views
             {
                 if (ReferenceEquals(_camera, value)) return;
                 _camera = value;
-                if (IsLoaded) _ = ConnectAsync();
+                _useAlternateCodec = false;
+                _alternateCodecAttempted = false;
             }
         }
 
@@ -70,6 +101,34 @@ namespace V3SClient.UI.Views
             }
         }
 
+        public void SetVideoSurfaceVisible(bool visible)
+        {
+            VideoHost.Visibility = visible ? Visibility.Visible : Visibility.Hidden;
+            _videoPanel.Visible = visible;
+            // Do not infer badge visibility from the video surface. During a
+            // reconnect GStreamer briefly makes the surface visible before
+            // the tile state is updated; inferring here would resurrect the
+            // previous camera ID for one frame. SetCameraBadge is the single
+            // owner of the badge visibility.
+            if (!visible) _cameraBadge.Visible = false;
+        }
+
+        public void SetCameraBadge(string cameraId, bool visible, bool connected, bool error)
+        {
+            // Camera IDs are rendered by LiveTile_v3's WPF badge. This
+            // WinForms label was the legacy overlay painted inside the video
+            // surface and could remain visible over stale frames.
+            _cameraBadge.Text = string.IsNullOrWhiteSpace(cameraId) ? string.Empty : "●  " + cameraId;
+            _cameraBadge.ForeColor = error
+                ? System.Drawing.Color.FromArgb(255, 145, 145)
+                : connected
+                ? System.Drawing.Color.FromArgb(33, 197, 93)
+                    : System.Drawing.Color.FromArgb(255, 193, 7);
+            // The WPF Popup in LiveTile_v3 is the only visible badge. Keep
+            // this legacy in-video label disabled in every state.
+            _cameraBadge.Visible = false;
+        }
+
         public System.Threading.Tasks.Task ReconnectAsync() { return ConnectAsync(); }
 
         public void Disconnect()
@@ -77,7 +136,11 @@ namespace V3SClient.UI.Views
             _cancellation?.Cancel();
             _cancellation?.Dispose();
             _cancellation = null;
-            DisposePipeline();
+            // Stopping an RTSP source can wait for the source timeout. Keep
+            // that native teardown off the dispatcher just like startup.
+            var pipeline = System.Threading.Interlocked.Exchange(ref _pipeline, null);
+            if (pipeline != null)
+                _ = System.Threading.Tasks.Task.Run(() => DisposePipelineInstance(pipeline));
             StatusText.Text = _camera == null ? "Select a camera to connect." : "Camera disconnected.";
             StatusPanel.Visibility = Visibility.Visible;
             RaiseState(WhepPlaybackState_v3.Stopped);
@@ -105,15 +168,11 @@ namespace V3SClient.UI.Views
             _cancellation?.Dispose();
             _cancellation = null;
             var pipeline = System.Threading.Interlocked.Exchange(ref _pipeline, null);
-            if (pipeline == null) return;
-            pipeline.Bus.SyncMessage -= OnSyncMessage;
-            pipeline.SetState(State.Null);
-            pipeline.Dispose();
+            DisposePipelineInstance(pipeline);
         }
 
         private async System.Threading.Tasks.Task ConnectAsync()
         {
-            DisposePipeline();
             if (_camera == null) return;
 
             _cancellation?.Cancel();
@@ -127,18 +186,57 @@ namespace V3SClient.UI.Views
             RaiseState(WhepPlaybackState_v3.Connecting);
             try
             {
+                // GStreamer state changes can wait on an RTSP handshake. Never
+                // perform them on WPF's dispatcher thread; doing so freezes all
+                // input and layout while a camera is slow or unreachable.
+                await _connectionGate.WaitAsync(cancellation.Token).ConfigureAwait(true);
+                try
+                {
+                    await System.Threading.Tasks.Task.Run(() => DisposePipeline(), cancellation.Token).ConfigureAwait(true);
+                }
+                finally
+                {
+                    _connectionGate.Release();
+                }
+
                 var selectedStream = _selectedStream;
-                var rtspUrl = GetRtspUrl(selectedCamera, selectedStream);
-                if (string.IsNullOrWhiteSpace(rtspUrl))
-                    throw new InvalidOperationException("Camera does not provide a direct RTSP relay URL.");
+                var source = GetRtspSource(selectedCamera, selectedStream);
+                if (source == null || string.IsNullOrWhiteSpace(source.Url))
+                {
+                    PublishError(WhepPlaybackErrorKind_v3.MissingStream,
+                        "Camera does not provide a direct RTSP URL.", false);
+                    return;
+                }
+                if (_useAlternateCodec)
+                {
+                    source.IsH264 = !source.IsH264;
+                    LoggerManager.LogWarn("Live View _v3 retrying camera " +
+                        (selectedCamera.camID ?? selectedCamera.name ?? "unknown") +
+                        " with the alternate " + (source.IsH264 ? "H.264" : "H.265") + " decoder.");
+                }
                 if (cancellation.IsCancellationRequested ||
                     !ReferenceEquals(_cancellation, cancellation) ||
                     !ReferenceEquals(_camera, selectedCamera))
                     return;
 
-                CreatePipeline(rtspUrl, IsH264(selectedCamera, selectedStream));
+                // Capture the HWND while on the dispatcher. The sync bus
+                // callback runs on a GStreamer thread and must not call
+                // Control.Invoke back into a dispatcher that may be busy.
+                _videoWindowHandle = GetVideoWindowHandle();
+                await _connectionGate.WaitAsync(cancellation.Token).ConfigureAwait(true);
+                try
+                {
+                    await System.Threading.Tasks.Task.Run(() => CreatePipeline(
+                        source.Url,
+                        source.IsH264,
+                        _videoWindowHandle), cancellation.Token).ConfigureAwait(true);
+                }
+                finally
+                {
+                    _connectionGate.Release();
+                }
                 LoggerManager.LogInfo("Live View _v3 started direct GStreamer RTSP for camera " +
-                    (selectedCamera.camID ?? selectedCamera.name ?? "unknown") + ": " + rtspUrl);
+                    (selectedCamera.camID ?? selectedCamera.name ?? "unknown") + ": " + source.Url);
             }
             catch (OperationCanceledException) { }
             catch (Exception ex)
@@ -146,22 +244,27 @@ namespace V3SClient.UI.Views
                 if (!ReferenceEquals(_cancellation, cancellation)) return;
                 LoggerManager.LogException(ex, "Live View _v3 direct RTSP connection failed for camera " +
                     (selectedCamera.camID ?? selectedCamera.name ?? "unknown"));
-                StatusText.Text = "Unable to connect to this camera through the live stream relay.";
-                StatusPanel.Visibility = Visibility.Visible;
-                RaiseState(WhepPlaybackState_v3.Error, ex.Message);
+                var kind = ClassifyError(ex.Message);
+                PublishError(kind, ex.Message, IsRetryableError(kind));
             }
         }
 
-        private void CreatePipeline(string rtspUrl, bool isH264)
+        private void CreatePipeline(string rtspUrl, bool isH264, IntPtr videoWindowHandle)
         {
+            _videoWindowHandle = videoWindowHandle;
+            // Keep the same Direct3D11 decode and render path as the original
+            // V3 client.  This avoids software decode and the CPU-side
+            // videoconvert copy once several cameras are open.  The URL and
+            // codec are resolved together above so that the parser and decoder
+            // always match the actual selected RTSP stream.
             var videoChain = isH264
-                ? "rtph264depay ! h264parse ! d3d11h264dec qos=false"
-                : "rtph265depay ! h265parse ! d3d11h265dec";
+                ? "rtph264depay ! h264parse ! video/x-h264,stream-format=(string)avc,alignment=(string)au ! d3d11h264dec qos=false"
+                : "rtph265depay ! h265parse ! video/x-h265,stream-format=(string)hvc1,alignment=(string)au ! d3d11h265dec";
             var pipelineText =
-                "rtspsrc name=videoSource protocols=tcp latency=300 timeout=15000000 do-retransmission=false " +
+                "rtspsrc name=videoSource protocols=tcp latency=300 timeout=15000000 drop-on-latency=true " +
                 "videoSource. ! queue leaky=downstream max-size-buffers=8 ! application/x-rtp,media=video ! " +
-                videoChain + " ! d3d11convert ! d3d11overlay name=videoOverlay ! " +
-                "d3d11videosink async=false sync=false qos=false";
+                videoChain + " ! d3d11convert ! queue leaky=downstream max-size-buffers=4 ! " +
+                "d3d11overlay name=videoOverlay ! d3d11videosink async=false sync=false qos=false";
             _pipeline = (Pipeline)Parse.Launch(pipelineText);
             var source = _pipeline.GetByName("videoSource");
             source["location"] = rtspUrl;
@@ -171,20 +274,26 @@ namespace V3SClient.UI.Views
                 throw new InvalidOperationException("GStreamer could not start the direct RTSP playback pipeline.");
         }
 
-        private static string GetRtspUrl(Camera camera, CameraStreamInfo selectedStream)
+        private static RtspSource_v3 GetRtspSource(Camera camera, CameraStreamInfo selectedStream)
         {
             if (camera == null) return null;
             var isAi = selectedStream != null && selectedStream.IsAiMode == true;
+            var isMain = selectedStream != null && string.Equals(selectedStream.StreamType, "main", StringComparison.OrdinalIgnoreCase);
             var candidate = isAi
-                ? (camera.RtspUrlAI ?? camera.RtspUrlMainAI)
-                : (camera.RtspUrlRaw ?? camera.RtspUrlMainRaw);
+                ? (isMain ? camera.RtspUrlMainAI : camera.RtspUrlAI)
+                : (isMain ? camera.RtspUrlMainRaw : camera.RtspUrlRaw);
+            var isH264 = isAi
+                ? (isMain ? camera.IsH264MainAI : camera.IsH264AI)
+                : (isMain ? camera.IsH264MainRaw : camera.IsH264Raw);
             if (!string.IsNullOrWhiteSpace(candidate) && System.Uri.IsWellFormedUriString(candidate, System.UriKind.Absolute))
-                return candidate;
+                return new RtspSource_v3 { Url = candidate, IsH264 = isH264 };
 
             candidate = selectedStream == null ? null : selectedStream.RtspRelayRaw;
             if (!string.IsNullOrWhiteSpace(candidate) && System.Uri.IsWellFormedUriString(candidate, System.UriKind.Absolute))
-                return candidate;
-            return IsDirectRtspUrl(camera.rtps) ? camera.rtps : null;
+                return new RtspSource_v3 { Url = candidate, IsH264 = IsH264(camera, selectedStream) };
+            return IsDirectRtspUrl(camera.rtps)
+                ? new RtspSource_v3 { Url = camera.rtps, IsH264 = camera.is_H264 }
+                : null;
         }
 
         private static bool IsDirectRtspUrl(string value)
@@ -209,9 +318,16 @@ namespace V3SClient.UI.Views
                 LoggerManager.LogError("Live View _v3 GStreamer error: " + errorMessage, error);
                 Dispatcher.BeginInvoke(new Action(() =>
                 {
-                    StatusText.Text = "Video playback failed. Check the camera and live stream relay.";
-                    StatusPanel.Visibility = Visibility.Visible;
-                    RaiseState(WhepPlaybackState_v3.Error, errorMessage);
+                    var kind = ClassifyError(errorMessage);
+                    if (IsCodecNegotiationError(errorMessage) && !_alternateCodecAttempted)
+                    {
+                        // API metadata can be stale or a camera can change
+                        // its encoder profile. Retry once with the paired
+                        // H.264/H.265 pipeline before declaring failure.
+                        _alternateCodecAttempted = true;
+                        _useAlternateCodec = true;
+                    }
+                    PublishError(kind, errorMessage, IsRetryableError(kind));
                 }));
                 return;
             }
@@ -220,9 +336,7 @@ namespace V3SClient.UI.Views
                 LoggerManager.LogWarn("Live View _v3 stream ended for camera " + (_camera == null ? "unknown" : _camera.camID));
                 Dispatcher.BeginInvoke(new Action(() =>
                 {
-                    StatusText.Text = "The camera stream ended.";
-                    StatusPanel.Visibility = Visibility.Visible;
-                    RaiseState(WhepPlaybackState_v3.Error, "The camera stream ended.");
+                    PublishError(WhepPlaybackErrorKind_v3.StreamEnded, "The camera stream ended.", false);
                 }));
                 return;
             }
@@ -230,12 +344,17 @@ namespace V3SClient.UI.Views
             var overlay = _pipeline == null ? null : _pipeline.GetByInterface(VideoOverlayAdapter.GType);
             if (overlay == null) return;
             var adapter = new VideoOverlayAdapter(overlay.Handle);
-                adapter.WindowHandle = GetVideoWindowHandle();
+            // This callback is raised by GStreamer, not WPF. Using the
+            // handle captured before pipeline creation avoids a cross-thread
+            // Control.Invoke deadlock when SetState is in progress.
+            adapter.WindowHandle = _videoWindowHandle;
             adapter.HandleEvents(true);
             overlay.Dispose();
             Dispatcher.BeginInvoke(new Action(() =>
             {
                 StatusPanel.Visibility = Visibility.Collapsed;
+                _useAlternateCodec = false;
+                _alternateCodecAttempted = false;
                 RaiseState(WhepPlaybackState_v3.Playing);
             }));
         }
@@ -260,18 +379,92 @@ namespace V3SClient.UI.Views
             return camera.is_H264;
         }
 
-        private void RaiseState(WhepPlaybackState_v3 state, string message = null)
+        private static WhepPlaybackErrorKind_v3 ClassifyError(string message)
         {
-            PlaybackStateChanged?.Invoke(this, new WhepPlaybackStateChangedEventArgs_v3(state, message));
+            var value = (message ?? string.Empty).ToLowerInvariant();
+            if (value.Contains("404") || value.Contains("not found") || value.Contains("unauthorized") ||
+                value.Contains("forbidden") || value.Contains("server") || value.Contains("no such stream"))
+                return WhepPlaybackErrorKind_v3.Server;
+            if (value.Contains("connection refused") || value.Contains("could not connect") ||
+                value.Contains("network") || value.Contains("host unreachable") || value.Contains("no route") ||
+                value.Contains("timed out") || value.Contains("timeout"))
+                return WhepPlaybackErrorKind_v3.Connection;
+            if (value.Contains("not-negotiated") || value.Contains("decode") || value.Contains("decoder") ||
+                value.Contains("h264") || value.Contains("h265") || value.Contains("hevc") ||
+                value.Contains("corrupt") || value.Contains("not-linked"))
+                return WhepPlaybackErrorKind_v3.Decoder;
+            return WhepPlaybackErrorKind_v3.Playback;
+        }
+
+        private static bool IsCodecNegotiationError(string message)
+        {
+            var value = (message ?? string.Empty).ToLowerInvariant();
+            return value.Contains("not-negotiated") || value.Contains("not-linked");
+        }
+
+        private static bool IsRetryableError(WhepPlaybackErrorKind_v3 kind)
+        {
+            return kind == WhepPlaybackErrorKind_v3.Connection || kind == WhepPlaybackErrorKind_v3.Decoder;
+        }
+
+        private static string GetUserMessage(WhepPlaybackErrorKind_v3 kind)
+        {
+            switch (kind)
+            {
+                case WhepPlaybackErrorKind_v3.MissingStream:
+                    return "Máy chủ chưa trả về đường dẫn phát trực tiếp cho camera này.";
+                case WhepPlaybackErrorKind_v3.Server:
+                    return "Máy chủ phát trực tiếp không trả được luồng camera. Kiểm tra dịch vụ hoặc cấu hình camera.";
+                case WhepPlaybackErrorKind_v3.Connection:
+                    return "Không thể kết nối đến camera. Kiểm tra mạng, nguồn camera hoặc đường truyền RTSP.";
+                case WhepPlaybackErrorKind_v3.Decoder:
+                    return "Không thể giải mã luồng video. Ứng dụng sẽ thử kết nối lại bằng luồng camera hiện có.";
+                case WhepPlaybackErrorKind_v3.NoVideoFrame:
+                    return "Đã kết nối nhưng không nhận được khung hình video từ camera.";
+                case WhepPlaybackErrorKind_v3.StreamEnded:
+                    return "Luồng camera đã kết thúc. Vui lòng kiểm tra trạng thái camera.";
+                default:
+                    return "Không thể phát luồng camera. Kiểm tra cấu hình và thử lại.";
+            }
+        }
+
+        private void PublishError(WhepPlaybackErrorKind_v3 kind, string technicalMessage, bool isRetryable)
+        {
+            StatusText.Text = GetUserMessage(kind);
+            StatusPanel.Visibility = Visibility.Visible;
+            RaiseState(WhepPlaybackState_v3.Error, technicalMessage, kind, GetUserMessage(kind), isRetryable);
+        }
+
+        private void RaiseState(WhepPlaybackState_v3 state, string message = null,
+            WhepPlaybackErrorKind_v3 errorKind = WhepPlaybackErrorKind_v3.None,
+            string userMessage = null, bool isRetryable = false)
+        {
+            PlaybackStateChanged?.Invoke(this, new WhepPlaybackStateChangedEventArgs_v3(state, message, errorKind, userMessage, isRetryable));
         }
 
         private void DisposePipeline()
         {
-            if (_pipeline == null) return;
-            _pipeline.Bus.SyncMessage -= OnSyncMessage;
-            _pipeline.SetState(State.Null);
-            _pipeline.Dispose();
-            _pipeline = null;
+            var pipeline = System.Threading.Interlocked.Exchange(ref _pipeline, null);
+            DisposePipelineInstance(pipeline);
+        }
+
+        private void DisposePipelineInstance(Pipeline pipeline)
+        {
+            if (pipeline == null) return;
+            try
+            {
+                pipeline.Bus.SyncMessage -= OnSyncMessage;
+                pipeline.SetState(State.Null);
+            }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Live View _v3 GStreamer pipeline cleanup failed");
+            }
+            finally
+            {
+                try { pipeline.Dispose(); }
+                catch (Exception ex) { LoggerManager.LogException(ex, "Live View _v3 GStreamer pipeline dispose failed"); }
+            }
         }
 
         private IntPtr GetVideoWindowHandle()

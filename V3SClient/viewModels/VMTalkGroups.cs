@@ -255,44 +255,22 @@ namespace V3SClient.viewModels
                 if (camInfo.Device_Role == "central_radio") continue; 
                 // REMOVED: if (cam.is_Master) continue; // Allow all cameras assigned to talk groups
 
-                if (camInfo.Talk_Group_Path != null && camInfo.Talk_Group_Path.Count > 0)
+                // The camera sidebar is grouped by the API unit name. Do not
+                // use talk_group_path here: that hierarchy is for a different
+                // business view and causes cameras to appear under the wrong
+                // client/unit in Live View.
+                var unitName = !string.IsNullOrWhiteSpace(camInfo.Unit_Name)
+                    ? camInfo.Unit_Name.Trim()
+                    : (!string.IsNullOrWhiteSpace(camInfo.Unit_Id) ? camInfo.Unit_Id.Trim() : "None");
+                var unitId = !string.IsNullOrWhiteSpace(camInfo.Unit_Id)
+                    ? camInfo.Unit_Id.Trim() : unitName;
+                var unitGroup = rootGroups.FirstOrDefault(g => string.Equals(g.name, unitName, StringComparison.OrdinalIgnoreCase));
+                if (unitGroup == null)
                 {
-                    VMTalkGroup currentGroup = null;
-                    for (int i = 0; i < camInfo.Talk_Group_Path.Count; i++)
-                    {
-                        var pathInfo = camInfo.Talk_Group_Path[i];
-                        if (i == 0)
-                        {
-                            currentGroup = rootGroups.FirstOrDefault(g => g.name == pathInfo.Name);
-                            if (currentGroup == null)
-                            {
-                                currentGroup = new VMTalkGroup { name = pathInfo.Name, groupID = pathInfo.Id };
-                                rootGroups.Add(currentGroup);
-                            }
-                        }
-                        else
-                        {
-                            var subGroup = currentGroup.SubGroups.FirstOrDefault(g => g.name == pathInfo.Name);
-                            if (subGroup == null)
-                            {
-                                subGroup = new VMTalkGroup { name = pathInfo.Name, groupID = pathInfo.Id };
-                                currentGroup.SubGroups.Add(subGroup);
-                            }
-                            currentGroup = subGroup;
-                        }
-                    }
-                    currentGroup?.Cameras.Add(cam);
+                    unitGroup = new VMTalkGroup { name = unitName, groupID = unitId };
+                    rootGroups.Add(unitGroup);
                 }
-                else
-                {
-                    var noneGroup = rootGroups.FirstOrDefault(g => g.name == "None");
-                    if (noneGroup == null)
-                    {
-                        noneGroup = new VMTalkGroup { name = "None", groupID = "None" };
-                        rootGroups.Add(noneGroup);
-                    }
-                    noneGroup.Cameras.Add(cam);
-                }
+                unitGroup.Cameras.Add(cam);
             }
 
             // Sort everything recursively
