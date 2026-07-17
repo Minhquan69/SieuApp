@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Text.RegularExpressions;
 using NLog;
 
 namespace V3SClient.libs
@@ -25,12 +26,21 @@ namespace V3SClient.libs
         private static readonly Logger deviceLogger = LogManager.GetLogger("DeviceLogger");
         private static readonly Logger fileProcessingLogger = LogManager.GetLogger("FileProcessingLogger");
 
+        private static string RedactSensitiveQueryValues(string message)
+        {
+            return Regex.Replace(
+                message ?? string.Empty,
+                @"([?&](?:token|access_token|playback_token)=)[^&\s]+",
+                "$1***",
+                RegexOptions.IgnoreCase);
+        }
+
         #region Debug Log (Dành cho nhà phát triển - Chi tiết nhất)
         public static void LogDebug(string message, [System.Runtime.CompilerServices.CallerMemberName] string memberName = "", [System.Runtime.CompilerServices.CallerFilePath] string filePath = "")
         {
 #if LOG_DEBUG
             string className = System.IO.Path.GetFileNameWithoutExtension(filePath);
-            generalLogger.Debug($"[{className}.{memberName}] {message}");
+            generalLogger.Debug($"[{className}.{memberName}] {RedactSensitiveQueryValues(message)}");
 #endif
         }
 
@@ -40,18 +50,18 @@ namespace V3SClient.libs
             if (logLevel == LogLevel.Debug)
             {
 #if LOG_DEBUG
-                generalLogger.Log(logLevel, message);
+                generalLogger.Log(logLevel, RedactSensitiveQueryValues(message));
 #endif
             }
             else if (logLevel == LogLevel.Info)
             {
 #if LOG_INFO
-                generalLogger.Log(logLevel, message);
+                generalLogger.Log(logLevel, RedactSensitiveQueryValues(message));
 #endif
             }
             else
             {
-                generalLogger.Log(logLevel, message);
+                generalLogger.Log(logLevel, RedactSensitiveQueryValues(message));
             }
         }
         #endregion
@@ -59,14 +69,14 @@ namespace V3SClient.libs
         #region Info Log (Thông tin vận hành bình thường)
         public static void LogInfo(string message)
         {
-            generalLogger.Info(message);
+            generalLogger.Info(RedactSensitiveQueryValues(message));
         }
         #endregion
 
         #region Warning Log (Cảnh báo không gây dừng ứng dụng)
         public static void LogWarn(string message)
         {
-            generalLogger.Warn(message);
+            generalLogger.Warn(RedactSensitiveQueryValues(message));
         }
         #endregion
 
@@ -75,11 +85,11 @@ namespace V3SClient.libs
         {
             if (ex != null)
             {
-                generalLogger.Error(ex, message);
+                generalLogger.Error(ex, RedactSensitiveQueryValues(message));
             }
             else
             {
-                generalLogger.Error(message);
+                generalLogger.Error(RedactSensitiveQueryValues(message));
             }
         }
 

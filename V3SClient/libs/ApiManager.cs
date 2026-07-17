@@ -962,6 +962,17 @@ namespace V3SClient.libs
 
         public string GetEndpointUrl(string keyword)
         {
+            if (string.Equals(keyword, "_playback", StringComparison.OrdinalIgnoreCase))
+            {
+                string source;
+                string playbackUrl = PlaybackEndpointResolver_v3.Resolve(
+                    _endpointRegistry,
+                    _networkMode,
+                    out source);
+                LoggerManager.LogDebug($"Playback endpoint resolved from {source}: {playbackUrl}");
+                return playbackUrl;
+            }
+
             var profile = _endpointRegistry.FirstOrDefault(x => x.Keyword.Equals(keyword, StringComparison.OrdinalIgnoreCase));
             if (profile == null) return null;
 
@@ -970,6 +981,15 @@ namespace V3SClient.libs
 
         public string GetEndpointToken(string keyword)
         {
+            if (string.Equals(keyword, "_playback", StringComparison.OrdinalIgnoreCase))
+            {
+                string localPlaybackToken = PlaybackTokenStore.Load();
+                if (!string.IsNullOrWhiteSpace(localPlaybackToken))
+                {
+                    return localPlaybackToken;
+                }
+            }
+
             var profile = _endpointRegistry.FirstOrDefault(x => x.Keyword.Equals(keyword, StringComparison.OrdinalIgnoreCase));
             return (profile != null && !string.IsNullOrEmpty(profile.Token)) ? profile.Token : _backendToken;
         }

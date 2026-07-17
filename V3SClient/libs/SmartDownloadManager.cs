@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -194,9 +194,123 @@ namespace V3SClient.libs
                 }
             }
         }
+
+        public void QueueDirectDownload(string url, string destinationPath, string cameraName, DateTime start, DateTime end, string token = null, string headerName = null)
+        {
+            if (string.IsNullOrWhiteSpace(url)) throw new ArgumentException("Download URL is required.", nameof(url));
+            if (string.IsNullOrWhiteSpace(destinationPath)) throw new ArgumentException("Destination path is required.", nameof(destinationPath));
+
+            string savePath = Path.GetDirectoryName(destinationPath);
+            if (!Directory.Exists(savePath))
+            {
+                Directory.CreateDirectory(savePath);
+            }
+
+            DownloadTask task = new DownloadTask
+            {
+                CameraNames = string.IsNullOrWhiteSpace(cameraName) ? Path.GetFileName(destinationPath) : cameraName,
+                StartTime = start,
+                EndTime = end,
+                SavePath = savePath,
+                Status = "Queued",
+                Progress = 0,
+                Speed = ""
+            };
+
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                Tasks.Add(task);
+            });
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    task.Status = "Downloading...";
+                    DateTime startedAt = DateTime.Now;
+                    await DownloadFileStreamedAsync(
+                        url,
+                        destinationPath,
+                        new Progress<long>(downloadedBytes =>
+                        {
+                            double elapsedSeconds = Math.Max(0.1, (DateTime.Now - startedAt).TotalSeconds);
+                            double speedMb = downloadedBytes / 1048576.0 / elapsedSeconds;
+                            task.Speed = $"{speedMb:F2} MB/s";
+                        }),
+                        CancellationToken.None,
+                        totalBytes =>
+                        {
+                            if (totalBytes > 0)
+                            {
+                                return new Progress<long>(downloadedBytes =>
+                                {
+                                    task.Progress = Math.Min(100.0, downloadedBytes * 100.0 / totalBytes);
+                                });
+                            }
+
+                            return new Progress<long>(downloadedBytes =>
+                            {
+                                task.Progress = 0;
+                            });
+                        },
+                        token,
+                        headerName).ConfigureAwait(false);
+
+                    task.Progress = 100.0;
+                    task.Status = "Completed";
+                }
+                catch (Exception ex)
+                {
+                    task.Status = "Failed";
+                    task.Speed = ex.GetBaseException().Message;
+                    Debug.WriteLine("Direct download error: " + ex.Message);
+                }
+            });
+        }
+
+        private async Task DownloadFileStreamedAsync(
+            string url,
+            string destinationPath,
+            IProgress<long> speedProgress,
+            CancellationToken ct,
+            Func<long, IProgress<long>> progressFactory,
+            string token,
+            string headerName)
+        {
+            using (HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, url))
+            {
+                if (!string.IsNullOrEmpty(token) && !string.IsNullOrEmpty(headerName))
+                {
+                    request.Headers.Add(headerName, token);
+                }
+
+                using (HttpResponseMessage response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct))
+                {
+                    response.EnsureSuccessStatusCode();
+                    long totalBytes = response.Content.Headers.ContentLength ?? 0;
+                    IProgress<long> progress = progressFactory?.Invoke(totalBytes);
+
+                    using (Stream contentStream = await response.Content.ReadAsStreamAsync())
+                    using (FileStream fileStream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, useAsync: true))
+                    {
+                        byte[] buffer = new byte[65536];
+                        long totalRead = 0L;
+                        while (true)
+                        {
+                            int read = await contentStream.ReadAsync(buffer, 0, buffer.Length, ct);
+                            if (read <= 0) break;
+
+                            await fileStream.WriteAsync(buffer, 0, read, ct);
+                            totalRead += read;
+                            speedProgress?.Report(totalRead);
+                            progress?.Report(totalRead);
+                        }
+                    }
+                }
+            }
+        }
     }
 }
-
 
 
 

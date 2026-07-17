@@ -202,7 +202,7 @@ namespace V3SClient.ucs
         {
             if (e == "abnormal")
             {
-                TTSManager.Instance.EnqueueWarning("Bất thường");
+                TTSManager.Instance.EnqueueWarning("Báº¥t thÆ°á»ng");
             }
             else
             {
@@ -264,7 +264,7 @@ namespace V3SClient.ucs
             }
             catch (Exception ex)
             {
-                LoggerManager.LogException(ex, "Lỗi ConnectedCamera");
+                LoggerManager.LogException(ex, "Lá»—i ConnectedCamera");
             }
         }
 
@@ -535,6 +535,56 @@ namespace V3SClient.ucs
             }
 
             RenderMiniTimeline();
+        }
+
+        public List<PlaybackSegment> GetTimelineSegments()
+        {
+            return _segments.Select(seg => new PlaybackSegment
+            {
+                Duration = seg.Duration,
+                Url = seg.Url,
+                StartOffset = seg.StartOffset,
+                HasVideo = seg.HasVideo,
+                RealStartTime = seg.RealStartTime
+            }).ToList();
+        }
+
+        public void SeekToRealTime(System.DateTime targetTime, bool forceSeek = false)
+        {
+            if (_totalRealDurationSeconds <= 0)
+            {
+                return;
+            }
+
+            double realTimeOffset = (targetTime - _searchStartTime).TotalSeconds;
+            realTimeOffset = Math.Max(0, Math.Min(realTimeOffset, _totalRealDurationSeconds));
+            double gstTargetTime = MapRealTimeOffsetToVideoPosition(realTimeOffset);
+
+            this.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                double width = canvasMiniTimeline.ActualWidth;
+                if (width > 0 && !double.IsNaN(width) && miniPlayhead != null)
+                {
+                    double x = (realTimeOffset / _totalRealDurationSeconds) * width;
+                    Canvas.SetLeft(miniPlayhead, Math.Max(0, Math.Min(x, width)));
+                    txtCurrentTime.Text = _searchStartTime.AddSeconds(realTimeOffset).ToString("HH:mm:ss");
+
+                    if (currentTimeBorder != null)
+                    {
+                        currentTimeBorder.Visibility = Visibility.Visible;
+                        Canvas.SetLeft(currentTimeBorder, Math.Max(0, x - 25));
+                    }
+                }
+            }));
+
+            if (forceSeek || (System.DateTime.Now - _lastSeekInteractionTime).TotalMilliseconds > SeekThrottleMs)
+            {
+                _lastSeekInteractionTime = System.DateTime.Now;
+                if (Player != null && Player.player != null)
+                {
+                    Player.SeekAbsolute((long)(gstTargetTime * Gst.Constants.SECOND));
+                }
+            }
         }
 
         public double TimelineHeight => 35.0;

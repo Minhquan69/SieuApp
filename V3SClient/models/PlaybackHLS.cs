@@ -74,19 +74,12 @@ namespace V3SClient.models
                 // 1. Create Base Elements
                 videoSource = ElementFactory.Make("souphttpsrc", "videoSource");
                 if (!string.IsNullOrEmpty(hlsUrl))
-                    videoSource["location"] = hlsUrl;
-                videoSource["is-live"] = true;
-
-                string token = ApiManager.Instance.GetEndpointToken("_playback");
-                if (!string.IsNullOrEmpty(token))
-                {
-                    Gst.Structure extraHeaders = new Gst.Structure("extra-headers");
-                    extraHeaders.SetValue("X-Playback-Token", new GLib.Value(token));
-                    videoSource["extra-headers"] = extraHeaders;
-                }
+                videoSource["location"] = hlsUrl;
+                videoSource["ssl-use-system-ca-file"] = true;
+                videoSource["ssl-strict"] = true;
 
                 Element hlsDemux = ElementFactory.Make("hlsdemux", "hlsDemux");
-                demux = ElementFactory.Make("qtdemux", "tsDemux");
+                demux = ElementFactory.Make("parsebin", "tsDemux");
 
                 player.Add(videoSource, hlsDemux, demux);
                 videoSource.Link(hlsDemux);
@@ -111,9 +104,10 @@ namespace V3SClient.models
                         string capsName = caps.GetStructure(0).Name;
 
                         // --- VIDEO BRANCH ---
-                        if (capsName == "video/x-h264" || capsName == "video/x-h265")
+                        if (capsName.StartsWith("video/x-h264", StringComparison.OrdinalIgnoreCase) ||
+                            capsName.StartsWith("video/x-h265", StringComparison.OrdinalIgnoreCase))
                         {
-                            bool isH265 = capsName == "video/x-h265";
+                            bool isH265 = capsName.StartsWith("video/x-h265", StringComparison.OrdinalIgnoreCase);
                             this.IsH264 = !isH265;
 
                             string parseName = isH265 ? "h265parse" : "h264parse";
@@ -135,6 +129,7 @@ namespace V3SClient.models
                             vSink["async"] = true;
                             vSink["sync"] = true;
                             vSink["qos"] = true;
+                            vSink["force-aspect-ratio"] = true;
 
                             player.Add(videoQueue, vParse, identity, decoder, converter, videoOverlay, vSink);
 
@@ -203,12 +198,12 @@ namespace V3SClient.models
                     caps?.Dispose();
                 };
 
-                LoggerManager.GeneralLog(NLog.LogLevel.Info, $"HLS Playback created OK: {hlsUrl}");
+                LoggerManager.GeneralLog(NLog.LogLevel.Info, $" Playback created OK");
                 return true;
             }
             catch (Exception e)
             {
-                LoggerManager.GeneralLog(NLog.LogLevel.Error, $"HLS Playback error create pipeline fail: {e.ToString()}");
+                LoggerManager.GeneralLog(NLog.LogLevel.Error, $"Playback error create pipeline fail: {e.ToString()}");
                 return false;
             }
         }

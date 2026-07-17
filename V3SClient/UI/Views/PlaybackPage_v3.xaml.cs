@@ -21,7 +21,7 @@ namespace V3SClient.UI.Views
 
             try
             {
-                PlaybackHost.Navigate(new VPlayback(GlobalSystem.Instance.CameraGroups.CamGroupList));
+                PlaybackHost.Navigate(new VPlaybackHLS(GlobalSystem.Instance.CameraGroups.CamGroupList));
             }
             catch (Exception ex)
             {

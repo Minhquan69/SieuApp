@@ -180,6 +180,8 @@
     <Compile Include="libs\ActionButtonDefinition.cs" />
     <Compile Include="libs\AIEvent.cs" />
     <Compile Include="libs\ApiManager.cs" />
+    <Compile Include="libs\PlaybackEndpointResolver_v3.cs" />
+    <Compile Include="libs\PlaybackTokenStore.cs" />
     <Compile Include="libs\AsyncRelayCommand.cs" />
     <Compile Include="UI\Converters\Base64ToBitmapConverter.cs" />
     <Compile Include="libs\BaseColumnDefinition.cs" />
