@@ -81,6 +81,20 @@
                     </Border>
                 </Grid>
 
+                <!-- The playlist is being generated/validated. Keep this separate
+                     from the no-data state so a transient HLS delay is never shown
+                     to users as a permanent playback error. -->
+                <Grid x:Name="PreparingPlaybackOverlay" Panel.ZIndex="9" Background="#FF0B1A2A" Visibility="Collapsed" IsHitTestVisible="False">
+                    <Border Width="390" MaxWidth="390" Margin="20" Padding="24,18" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Background="#FF0B1A2A" BorderBrush="#243E5B" BorderThickness="1" CornerRadius="6">
+                        <StackPanel HorizontalAlignment="Center">
+                            <TextBlock Text="&#xE9F5;" FontFamily="Segoe MDL2 Assets" Foreground="#FF2F80FF" FontSize="27" HorizontalAlignment="Center"/>
+                            <TextBlock x:Name="PreparingPlaybackText" Text="Đang chuẩn bị dữ liệu..." Foreground="White" FontSize="14" FontWeight="SemiBold" Margin="0,10,0,0" TextAlignment="Center" TextWrapping="NoWrap"/>
+                            <TextBlock Text="Vui lòng chờ đồng bộ dữ liệu phát lại" Foreground="#FF9DB4C8" FontSize="11" Margin="0,6,0,0" TextAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
                 <Grid Height="34" VerticalAlignment="Top">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />

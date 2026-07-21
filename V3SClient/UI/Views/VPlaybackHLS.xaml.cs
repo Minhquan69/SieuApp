@@ -82,6 +82,7 @@ namespace V3SClient.UI.Views
         private Button _playbackDownloadCancelButton;
         private readonly DispatcherTimer _playbackDownloadProgressTimer;
         private enum CameraPickAction { None, Snapshot, Download }
+        private enum PlaybackDownloadMode { MergeIntoSingleVideo, SaveApiSegments }
         private CameraPickAction _cameraPickAction;
         private ViewCameraPlayback _snapshotHoverTile;
         private Button _snapshotSelectedButton;
@@ -103,6 +104,9 @@ namespace V3SClient.UI.Views
 
 
         public bool IsPlaying { get; set; } = true;
+        private System.DateTime _lastRealtimePlaylistSynchronizationUtc = System.DateTime.MinValue;
+        private const double PlaylistSyncDriftThresholdSeconds = 1.25;
+        private const int PlaylistSyncIntervalMilliseconds = 2000;
 
         private void TogglePlaybackSidebar_Click(object sender, RoutedEventArgs e)
         {
@@ -147,6 +151,10 @@ namespace V3SClient.UI.Views
 
         private float _currentRate;
         private Dictionary<string, string> _camWithHlsUrls = new Dictionary<string, string>();
+        // The exact playlist text that passed validation. Reusing it to initialise
+        // each tile prevents a second request from racing the playback server and
+        // producing a false "no data" state for a valid camera.
+        private readonly Dictionary<string, string> _camWithPlaylistContent = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         
         private System.DateTime? _searchStartTime;
         private System.DateTime? _searchEndTime;
@@ -158,6 +166,7 @@ namespace V3SClient.UI.Views
         private readonly List<AggregateTimelineRow> _aggregateTimelineRows = new List<AggregateTimelineRow>();
         private bool _isDraggingAggregateTimeline = false;
         private System.DateTime? _aggregateCurrentTime = null;
+        private System.DateTime? _aggregateHoverTime;
         private System.DateTime? _aggregatePendingSeekTime;
         private System.DateTime _aggregateSeekHoldUntil = System.DateTime.MinValue;
         private const int AggregateTimelineSeekThrottleMs = 150;
@@ -167,14 +176,26 @@ namespace V3SClient.UI.Views
         private const double AggregateLegendHeight = 22;
         private const double AggregateMinHeight = 78;
         private const double AggregateMaxHeight = 132;
-        private static readonly Color AggregateBackgroundColor = Color.FromRgb(17, 19, 24);
-        private static readonly Color AggregatePanelColor = Color.FromRgb(13, 15, 18);
-        private static readonly Color AggregateTextColor = Color.FromRgb(202, 214, 224);
-        private static readonly Color AggregateMutedTextColor = Color.FromRgb(142, 158, 172);
-        private static readonly Color AggregateGridLineColor = Color.FromArgb(135, 72, 92, 108);
-        private static readonly Color AggregateVideoColor = Color.FromRgb(0, 224, 176);
-        private static readonly Color AggregateLossColor = Color.FromRgb(54, 68, 78);
-        private static readonly Color AggregatePlayheadColor = Color.FromRgb(255, 132, 38);
+        private Border _aggregateHoverLabel;
+        private Rectangle _aggregateHoverLine;
+        private const double AggregateTimeLabelWidth = 74;
+
+        private double CenterTimelineLabel(double x, double width)
+        {
+            double canvasWidth = aggregateTimelineCanvas == null ? 0 : aggregateTimelineCanvas.ActualWidth;
+            double left = x - width / 2;
+            if (canvasWidth > 0)
+                left = Math.Max(AggregateLabelWidth, Math.Min(left, canvasWidth - width - 2));
+            return Math.Max(0, left);
+        }
+        private Color TimelineColor(string resourceKey)
+        {
+            var value = TryFindResource(resourceKey);
+            var brush = value as SolidColorBrush;
+            if (brush != null) return brush.Color;
+            if (value is Color) return (Color)value;
+            return Colors.Transparent;
+        }
 
         private class AggregateTimelineRow
         {
@@ -1157,6 +1178,40 @@ namespace V3SClient.UI.Views
                     UpdateAggregateTimelinePlayhead();
                 }
             }
+
+            SynchronizePlaybackCamerasToPlaylistClock();
+        }
+
+        // Every player reports a media-playlist position.  That position is not
+        // comparable between cameras because their playlists can begin at
+        // different real timestamps.  ViewCameraPlayback translates it through
+        // the API segment timestamps before we compare/correct it here.
+        private void SynchronizePlaybackCamerasToPlaylistClock()
+        {
+            if (!IsPlaying || (System.DateTime.UtcNow - _lastRealtimePlaylistSynchronizationUtc).TotalMilliseconds < PlaylistSyncIntervalMilliseconds)
+                return;
+
+            var cameras = GetPlaybackCameras()
+                .Where(camera => camera != null && camera.Player != null && camera.VideoDuration > 0)
+                .ToList();
+            if (cameras.Count < 2)
+                return;
+
+            var master = cameras[0];
+            var targetTime = master.GetCurrentPlaybackRealTime();
+            if (targetTime == System.DateTime.MinValue)
+                return;
+
+            _lastRealtimePlaylistSynchronizationUtc = System.DateTime.UtcNow;
+            foreach (var camera in cameras.Skip(1))
+            {
+                var currentTime = camera.GetCurrentPlaybackRealTime();
+                if (currentTime == System.DateTime.MinValue ||
+                    Math.Abs((currentTime - targetTime).TotalSeconds) > PlaylistSyncDriftThresholdSeconds)
+                {
+                    camera.SeekToRealTime(targetTime, true);
+                }
+            }
         }
 
         private static string FormatPlaybackTime(double seconds)
@@ -1268,6 +1323,7 @@ namespace V3SClient.UI.Views
                                             gridCameraList.Children.OfType<ViewCameraPlayback>().Any();
 
                 _camWithHlsUrls.Clear();
+                _camWithPlaylistContent.Clear();
                 btnDownload.Visibility = Visibility.Collapsed;
                 _searchStartTime = fromdate;
                 _searchEndTime = todate;
@@ -1283,14 +1339,25 @@ namespace V3SClient.UI.Views
                 string hlsServer = ApiManager.Instance.GetEndpointUrl("_playback");
                 string playbackToken = ApiManager.Instance.GetEndpointToken("_playback") ?? "";
                 
-                foreach (var cam in selectedForSearch)
+                // Generate and validate all requested playlists concurrently. The
+                // server may need a moment to materialise a playlist; retrying here
+                // avoids treating that transient state as missing video data.
+                var playlistTasks = selectedForSearch.Select(async cam => new
                 {
-                    string hlsUrl = BuildPlaylistUrl(hlsServer, cam.camID, fromdate, todate, playbackToken);
-                    if (await HasPlaybackSegmentsAsync(hlsUrl, playbackToken))
-                    {
-                        _camWithHlsUrls[cam.camID] = hlsUrl;
-                        LoggerManager.LogDebug($"Playback playlist verified for {cam.camID}");
-                    }
+                    Camera = cam,
+                    Url = BuildPlaylistUrl(hlsServer, cam.camID, fromdate, todate, playbackToken),
+                    Playlist = await GetPlaybackPlaylistWithRetryAsync(
+                        BuildPlaylistUrl(hlsServer, cam.camID, fromdate, todate, playbackToken), playbackToken)
+                }).ToArray();
+                var playlistResults = await System.Threading.Tasks.Task.WhenAll(playlistTasks);
+                foreach (var result in playlistResults)
+                {
+                    if (string.IsNullOrWhiteSpace(result.Playlist))
+                        continue;
+
+                    _camWithHlsUrls[result.Camera.camID] = result.Url;
+                    _camWithPlaylistContent[result.Camera.camID] = result.Playlist;
+                    LoggerManager.LogDebug($"Playback playlist synchronized for {result.Camera.camID}");
                 }
 
                 _viewSearch.txtResultSearch.Inlines.Clear();
@@ -1359,7 +1426,45 @@ namespace V3SClient.UI.Views
 
         private void btnDownload_Click(object sender, EventArgs e)
         {
-            QueuePlaybackDownloads(GetDownloadableCameras());
+            ShowPlaybackDownloadModeMenu(GetDownloadableCameras(), sender as UIElement);
+        }
+
+        private void ShowPlaybackDownloadModeMenu(IList<models.Camera> cameras, UIElement placementTarget = null)
+        {
+            var targets = cameras?
+                .Where(camera => camera != null && !string.IsNullOrWhiteSpace(camera.camID))
+                .GroupBy(camera => camera.camID, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
+                .ToList() ?? new List<models.Camera>();
+            if (targets.Count == 0)
+            {
+                ShowPlaybackToast("Tải video", "Chưa có camera xem lại để tải video.", PlaybackToastKind.Warning);
+                return;
+            }
+
+            var menu = new ContextMenu
+            {
+                PlacementTarget = placementTarget ?? aggregateTimelineCanvas,
+                Placement = PlacementMode.Top,
+                Style = TryFindResource("PlaybackDownloadContextMenuStyle") as Style
+            };
+            var mergeItem = new System.Windows.Controls.MenuItem
+            {
+                Header = CreateDownloadMenuHeader("Gộp thành một video"),
+                ToolTip = "Tải các đoạn rồi ghép thành một MP4",
+                Style = TryFindResource("PlaybackDownloadMenuItemStyle") as Style
+            };
+            mergeItem.Click += (s, e) => QueuePlaybackDownloads(targets, PlaybackDownloadMode.MergeIntoSingleVideo);
+            var segmentsItem = new System.Windows.Controls.MenuItem
+            {
+                Header = CreateDownloadMenuHeader("Lưu từng đoạn video", 0.82),
+                ToolTip = "Lưu riêng từng đoạn dữ liệu do API trả về",
+                Style = TryFindResource("PlaybackDownloadMenuItemStyle") as Style
+            };
+            segmentsItem.Click += (s, e) => QueuePlaybackDownloads(targets, PlaybackDownloadMode.SaveApiSegments);
+            menu.Items.Add(mergeItem);
+            menu.Items.Add(segmentsItem);
+            menu.IsOpen = true;
         }
 
         private void AggregateTimelineCanvas_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
@@ -1389,7 +1494,7 @@ namespace V3SClient.UI.Views
 
                 Style = TryFindResource("PlaybackDownloadMenuItemStyle") as Style
             };
-            downloadAllItem.Click += (s, e) => QueuePlaybackDownloads(cameras);
+            downloadAllItem.Click += (s, e) => ShowPlaybackDownloadModeMenu(cameras, aggregateTimelineCanvas);
             menu.Items.Add(downloadAllItem);
             menu.Items.Add(new Separator
             {
@@ -1405,7 +1510,7 @@ namespace V3SClient.UI.Views
                     Header = CreateDownloadMenuHeader(cameraText, 0.82),
                     Style = TryFindResource("PlaybackDownloadMenuItemStyle") as Style
                 };
-                item.Click += (s, e) => QueuePlaybackDownloads(new List<models.Camera> { camera });
+                item.Click += (s, e) => ShowPlaybackDownloadModeMenu(new List<models.Camera> { camera }, aggregateTimelineCanvas);
                 menu.Items.Add(item);
             }
 
@@ -1460,7 +1565,7 @@ namespace V3SClient.UI.Views
                 .ToList() ?? new List<models.Camera>();
         }
 
-        private void QueuePlaybackDownloads(IList<models.Camera> cameras)
+        private void QueuePlaybackDownloads(IList<models.Camera> cameras, PlaybackDownloadMode downloadMode = PlaybackDownloadMode.MergeIntoSingleVideo)
         {
             try
             {
@@ -1493,26 +1598,92 @@ namespace V3SClient.UI.Views
                 string token = ApiManager.Instance.GetEndpointToken("_playback") ?? string.Empty;
                 string savePath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
                 Directory.CreateDirectory(savePath);
-
                 var queuedDownloads = new List<SmartDownloadManager.DownloadTask>();
                 foreach (var camera in validCameras)
                 {
-                    // Export uses the exact same immutable range represented by
-                    // the aggregate timeline, not the current player position.
                     string fileName = BuildExportFileName(camera.camID, exportStart, exportEnd);
-                    string exportUrl = BuildExportUrl(playbackServer, camera.camID, exportStart, exportEnd, fileName, token);
                     string destinationPath = System.IO.Path.Combine(savePath, fileName);
-                    queuedDownloads.Add(SmartDownloadManager.Instance.QueueDirectDownload(
-                        exportUrl, destinationPath, camera.camID, exportStart, exportEnd, token, "X-Playback-Token"));
+                    var exportChunks = SplitPlaybackExportRange(exportStart, exportEnd)
+                        .Select(range => new SmartDownloadManager.DirectDownloadChunk
+                        {
+                            StartTime = range.Item1,
+                            EndTime = range.Item2,
+                            Url = BuildExportUrl(playbackServer, camera.camID, range.Item1, range.Item2,
+                                BuildExportFileName(camera.camID, range.Item1, range.Item2), token)
+                        })
+                        .ToList();
+                    if (exportChunks.Count == 1)
+                    {
+                        // A normal short export is streamed directly by the
+                        // playback service without an intermediate playlist.
+                        queuedDownloads.Add(SmartDownloadManager.Instance.QueueDirectDownload(
+                            exportChunks[0].Url, destinationPath, camera.camID, exportStart, exportEnd, token, "X-Playback-Token"));
+                        continue;
+                    }
+
+                    queuedDownloads.Add(SmartDownloadManager.Instance.QueueChunkedDirectDownload(
+                        exportChunks, destinationPath, camera.camID, exportStart, exportEnd, token, "X-Playback-Token",
+                        downloadMode == PlaybackDownloadMode.MergeIntoSingleVideo));
                 }
 
-                ShowPlaybackDownloadProgress(queuedDownloads);
+                if (queuedDownloads.Count > 0)
+                    ShowPlaybackDownloadProgress(queuedDownloads);
             }
             catch (Exception ex)
             {
                 LoggerManager.LogException(ex, "Playback download queue failed");
                 ShowPlaybackToast("Tải video", "Không thể tạo tác vụ tải. Vui lòng thử lại.", PlaybackToastKind.Error);
             }
+        }
+
+        private static IEnumerable<Tuple<System.DateTime, System.DateTime>> SplitPlaybackExportRange(System.DateTime start, System.DateTime end)
+        {
+            // Keep a margin below the one-hour server limit. A six-hour export
+            // is eight independently retryable, bounded HTTP requests.
+            var cursor = start;
+            var maximumChunk = System.TimeSpan.FromMinutes(45);
+            while (cursor < end)
+            {
+                var next = cursor.Add(maximumChunk);
+                if (next > end) next = end;
+                yield return Tuple.Create(cursor, next);
+                cursor = next;
+            }
+        }
+
+        private async System.Threading.Tasks.Task<string> GetPlaybackPlaylistWithRetryAsync(string hlsUrl, string playbackToken)
+        {
+            const int attempts = 4;
+            for (var attempt = 0; attempt < attempts; attempt++)
+            {
+                try
+                {
+                    using (var client = new System.Net.Http.HttpClient())
+                    {
+                        client.Timeout = TimeSpan.FromSeconds(10);
+                        if (!string.IsNullOrWhiteSpace(playbackToken))
+                            client.DefaultRequestHeaders.Add("X-Playback-Token", playbackToken);
+
+                        var response = await client.GetAsync(hlsUrl);
+                        if (response.IsSuccessStatusCode)
+                        {
+                            var playlist = await response.Content.ReadAsStringAsync();
+                            if (!string.IsNullOrWhiteSpace(playlist) &&
+                                playlist.IndexOf("#EXTINF", StringComparison.OrdinalIgnoreCase) >= 0)
+                                return playlist;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LoggerManager.LogDebug("Chờ playlist playback lần " + (attempt + 1) + ": " + ex.Message);
+                }
+
+                if (attempt < attempts - 1)
+                    await System.Threading.Tasks.Task.Delay(400 * (attempt + 1));
+            }
+
+            return null;
         }
 
         private bool TryGetActivePlaybackRange(out System.DateTime start, out System.DateTime end)
@@ -1735,6 +1906,7 @@ namespace V3SClient.UI.Views
                         continue;
                     }
                     cam.HlsUrl = hlsUrl;
+                    cam.ShowPreparingPlayback("Đang chuẩn bị dữ liệu phát lại...");
 
                     Grid.SetRow(cam, i); Grid.SetColumn(cam, j);
                     gridCameraList.Children.Add(cam);
@@ -1751,6 +1923,7 @@ namespace V3SClient.UI.Views
                     cam.PlaybackTileClicked += PlaybackTile_PlaybackTileClicked;
                     cam.EventClosed += PlaybackTile_EventClosed;
 
+                    var playlistSynchronized = false;
                     // Fetch m3u8 content
                     try
                     {
@@ -1760,7 +1933,12 @@ namespace V3SClient.UI.Views
                             {
                                 client.DefaultRequestHeaders.Add("X-Playback-Token", token);
                             }
-                            string m3u8Content = await client.GetStringAsync(hlsUrl);
+                            cam.ShowPreparingPlayback("Đang đồng bộ dữ liệu phát lại...");
+                            string m3u8Content;
+                            if (!_camWithPlaylistContent.TryGetValue(camModel.camID, out m3u8Content))
+                                m3u8Content = await GetPlaybackPlaylistWithRetryAsync(hlsUrl, token);
+                            if (string.IsNullOrWhiteSpace(m3u8Content))
+                                throw new InvalidOperationException("Playlist playback chưa sẵn sàng.");
                             if (_searchStartTime.HasValue && _searchEndTime.HasValue)
                             {
                                 cam.ParseM3U8AndRenderTimeline(m3u8Content, _searchStartTime.Value, _searchEndTime.Value);
@@ -1773,6 +1951,8 @@ namespace V3SClient.UI.Views
                                 if (IsPlaybackTileStillSelected(cam))
                                     RegisterAggregateTimelineRow(camModel, cam.GetTimelineSegments());
                             }
+
+                            playlistSynchronized = cam.GetTimelineSegments().Any(segment => segment.HasVideo);
                         }
                     }
                     catch (Exception ex)
@@ -1781,8 +1961,13 @@ namespace V3SClient.UI.Views
                     }
 
                     // Tá»± Ä‘á»™ng káº¿t ná»‘i luá»“ng khi load lÃªn grid
-                    if (IsPlaybackTileStillSelected(cam))
+                    if (IsPlaybackTileStillSelected(cam) && playlistSynchronized)
                         cam.ConnectedCamera();
+                    else if (IsPlaybackTileStillSelected(cam))
+                    {
+                        cam.ShowNoPlaybackData();
+                        RegisterAggregateTimelineRow(camModel, new List<ViewCameraPlayback.PlaybackSegment>());
+                    }
                 }
             }
 
@@ -1855,7 +2040,7 @@ namespace V3SClient.UI.Views
 
                 var background = new Rectangle
                 {
-                    Fill = new SolidColorBrush(AggregateBackgroundColor),
+                    Fill = new SolidColorBrush(TimelineColor("VmsBackgroundColor_v3")),
                     Width = width,
                     Height = height
                 };
@@ -1864,7 +2049,7 @@ namespace V3SClient.UI.Views
 
                 var panel = new Rectangle
                 {
-                    Fill = new SolidColorBrush(AggregatePanelColor),
+                    Fill = new SolidColorBrush(TimelineColor("VmsSurfaceColor_v3")),
                     Width = Math.Max(0, width - 2),
                     Height = Math.Max(0, height - 2),
                     Opacity = 0.98
@@ -1874,11 +2059,11 @@ namespace V3SClient.UI.Views
                 aggregateTimelineCanvas.Children.Add(panel);
 
                 string totalText = string.Format("Cam: {0} / {1}", _camWithHlsUrls.Count, SelecedCameraList.Count);
-                AddTimelineText(totalText, 12, 4, 12, AggregateTextColor, FontWeights.SemiBold);
+                AddTimelineText(totalText, 12, 4, 12, TimelineColor("VmsTextPrimaryColor_v3"), FontWeights.SemiBold);
 
                 if (!_searchStartTime.HasValue || !_searchEndTime.HasValue || _searchEndTime <= _searchStartTime)
                 {
-                    AddTimelineText("ChÆ°a coÌ dÆ°Ìƒ liÃªÌ£u video", AggregateLabelWidth + 8, 24, 11, AggregateMutedTextColor, FontWeights.Normal);
+                    AddTimelineText("Chưa có dữ liệu video", AggregateLabelWidth + 8, 24, 11, TimelineColor("VmsTextTertiaryColor_v3"), FontWeights.Normal);
                     return;
                 }
 
@@ -1908,12 +2093,12 @@ namespace V3SClient.UI.Views
                         label = label.Substring(0, 10);
                     }
 
-                    AddTimelineText(label, 16, y + Math.Max(0, (rowHeight - fontSize - 2) / 2), fontSize, AggregateMutedTextColor, FontWeights.Normal);
+                    AddTimelineText(label, 16, y + Math.Max(0, (rowHeight - fontSize - 2) / 2), fontSize, TimelineColor("VmsTextSecondaryColor_v3"), FontWeights.Normal);
 
                     var lossTrack = new Rectangle
 
                     {
-                        Fill = new SolidColorBrush(AggregateLossColor),
+                        Fill = new SolidColorBrush(TimelineColor("VmsBorderStrongColor_v3")),
                         Width = laneWidth,
                         Height = trackHeight,
                         Opacity = 0.95,
@@ -1930,7 +2115,7 @@ namespace V3SClient.UI.Views
                         double segmentWidth = ((range.Item2 - range.Item1) / totalSeconds) * laneWidth;
                         var videoRect = new Rectangle
                         {
-                            Fill = new SolidColorBrush(AggregateVideoColor),
+                            Fill = new SolidColorBrush(TimelineColor("VmsSuccessColor_v3")),
                             Width = Math.Max(2, segmentWidth),
                             Height = trackHeight,
                             Opacity = 0.95
@@ -1943,6 +2128,7 @@ namespace V3SClient.UI.Views
 
                 DrawAggregatePlayhead(laneLeft, laneWidth, totalSeconds, height);
                 DrawAggregateLegend(height);
+                DrawAggregateHoverMarker(laneLeft, laneWidth, totalSeconds, height);
             }));
         }
 
@@ -2031,7 +2217,7 @@ namespace V3SClient.UI.Views
 
                 var tickLine = new Rectangle
                 {
-                    Fill = new SolidColorBrush(AggregateGridLineColor),
+                    Fill = new SolidColorBrush(TimelineColor("VmsBorderColor_v3")),
                     Width = 1,
                     Height = Math.Max(10, height - AggregateAxisHeight - AggregateLegendHeight)
                 };
@@ -2039,7 +2225,7 @@ namespace V3SClient.UI.Views
                 Canvas.SetTop(tickLine, AggregateAxisHeight);
                 aggregateTimelineCanvas.Children.Add(tickLine);
 
-                AddTimelineText(tickTime.ToString("HH:mm"), Math.Max(laneLeft, x - 20), 3, 11, AggregateTextColor, FontWeights.Normal);
+                AddTimelineText(tickTime.ToString("HH:mm"), Math.Max(laneLeft, x - 20), 3, 11, TimelineColor("VmsTextPrimaryColor_v3"), FontWeights.Normal);
             }
         }
 
@@ -2051,27 +2237,29 @@ namespace V3SClient.UI.Views
 
             _aggregatePlayheadLabel = new Border
             {
-                Background = new SolidColorBrush(AggregatePlayheadColor),
-                MinWidth = 74,
+                Background = new SolidColorBrush(TimelineColor("VmsPrimaryBrush_v3")),
+                Width = AggregateTimeLabelWidth,
                 Height = 22,
                 Padding = new Thickness(5, 2, 5, 2),
                 CornerRadius = new CornerRadius(3),
                 Child = new TextBlock
                 {
                     Text = currentTime.ToString("HH:mm:ss"),
+                    Width = 64,
                     Foreground = Brushes.White,
                     FontSize = 12,
-                    FontWeight = FontWeights.SemiBold
+                    FontWeight = FontWeights.SemiBold,
+                    TextAlignment = TextAlignment.Center
                 }
             };
-            Canvas.SetLeft(_aggregatePlayheadLabel, Math.Max(AggregateLabelWidth, Math.Min(x - 28, aggregateTimelineCanvas.ActualWidth - 78)));
+            Canvas.SetLeft(_aggregatePlayheadLabel, CenterTimelineLabel(x, AggregateTimeLabelWidth));
             Canvas.SetTop(_aggregatePlayheadLabel, 1);
 
             aggregateTimelineCanvas.Children.Add(_aggregatePlayheadLabel);
 
             _aggregatePlayheadLine = new Rectangle
             {
-                Fill = new SolidColorBrush(AggregatePlayheadColor),
+                Fill = new SolidColorBrush(TimelineColor("VmsPrimaryBrush_v3")),
                 Width = 2,
                 Height = Math.Max(10, height - AggregateLegendHeight - AggregateAxisHeight + 4)
             };
@@ -2080,11 +2268,56 @@ namespace V3SClient.UI.Views
             aggregateTimelineCanvas.Children.Add(_aggregatePlayheadLine);
         }
 
+        private void DrawAggregateHoverMarker(double laneLeft, double laneWidth, double totalSeconds, double height)
+        {
+            if (!_aggregateHoverTime.HasValue || !_searchStartTime.HasValue)
+                return;
+
+            double offset = Math.Max(0, Math.Min((_aggregateHoverTime.Value - _searchStartTime.Value).TotalSeconds, totalSeconds));
+            double x = laneLeft + (offset / totalSeconds) * laneWidth;
+            Color hoverColor = TimelineColor("VmsInfoBrush_v3");
+
+            _aggregateHoverLine = new Rectangle
+            {
+                Fill = new SolidColorBrush(hoverColor),
+                Width = 1.5,
+                Height = Math.Max(10, height - AggregateLegendHeight - AggregateAxisHeight + 4),
+                Opacity = 0.9,
+                IsHitTestVisible = false
+            };
+            Canvas.SetLeft(_aggregateHoverLine, x);
+            Canvas.SetTop(_aggregateHoverLine, AggregateAxisHeight - 1);
+            Panel.SetZIndex(_aggregateHoverLine, 130);
+            aggregateTimelineCanvas.Children.Add(_aggregateHoverLine);
+
+            _aggregateHoverLabel = new Border
+            {
+                Background = new SolidColorBrush(hoverColor),
+                Width = AggregateTimeLabelWidth,
+                Padding = new Thickness(5, 2, 5, 2),
+                CornerRadius = new CornerRadius(3),
+                Child = new TextBlock
+                {
+                    Text = _aggregateHoverTime.Value.ToString("HH:mm:ss"),
+                    Width = 64,
+                    Foreground = new SolidColorBrush(TimelineColor("VmsTextInverseColor_v3")),
+                    FontSize = 11,
+                    FontWeight = FontWeights.SemiBold,
+                    TextAlignment = TextAlignment.Center
+                },
+                IsHitTestVisible = false
+            };
+            Canvas.SetLeft(_aggregateHoverLabel, CenterTimelineLabel(x, AggregateTimeLabelWidth));
+            Canvas.SetTop(_aggregateHoverLabel, 1);
+            Panel.SetZIndex(_aggregateHoverLabel, 140);
+            aggregateTimelineCanvas.Children.Add(_aggregateHoverLabel);
+        }
+
         private void DrawAggregateLegend(double height)
         {
             double y = Math.Max(AggregateAxisHeight + 12, height - AggregateLegendHeight + 1);
-            AddLegendItem(66, y, AggregateVideoColor, "Video Data");
-            AddLegendItem(144, y, AggregateLossColor, "No Data");
+            AddLegendItem(66, y, TimelineColor("VmsSuccessColor_v3"), "Video Data");
+            AddLegendItem(144, y, TimelineColor("VmsBorderStrongColor_v3"), "No Data");
         }
 
         private void UpdateAggregateTimelinePlayhead()
@@ -2106,7 +2339,7 @@ namespace V3SClient.UI.Views
             double x = laneLeft + (offset / totalSeconds) * laneWidth;
 
             Canvas.SetLeft(_aggregatePlayheadLine, x);
-            Canvas.SetLeft(_aggregatePlayheadLabel, Math.Max(AggregateLabelWidth, Math.Min(x - 28, width - 78)));
+            Canvas.SetLeft(_aggregatePlayheadLabel, CenterTimelineLabel(x, AggregateTimeLabelWidth));
             var text = _aggregatePlayheadLabel.Child as TextBlock;
             if (text != null)
                 text.Text = currentTime.ToString("HH:mm:ss");
@@ -2123,7 +2356,7 @@ namespace V3SClient.UI.Views
             Canvas.SetLeft(swatch, x);
             Canvas.SetTop(swatch, y + 3);
             aggregateTimelineCanvas.Children.Add(swatch);
-            AddTimelineText(text, x + 16, y, 10, AggregateMutedTextColor, FontWeights.Normal);
+            AddTimelineText(text, x + 16, y, 10, TimelineColor("VmsTextTertiaryColor_v3"), FontWeights.Normal);
         }
 
         private void AddTimelineText(string text, double x, double y, double fontSize, Color color, FontWeight weight)
@@ -2155,9 +2388,45 @@ namespace V3SClient.UI.Views
 
         private void AggregateTimelineCanvas_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
         {
+            UpdateAggregateTimelineHover(e.GetPosition(aggregateTimelineCanvas));
             if (_isDraggingAggregateTimeline)
             {
                 HandleAggregateTimelineSeek(e.GetPosition(aggregateTimelineCanvas), false);
+            }
+        }
+
+        private void AggregateTimelineCanvas_MouseLeave(object sender, MouseEventArgs e)
+        {
+            _aggregateHoverTime = null;
+            _aggregateHoverLabel = null;
+            _aggregateHoverLine = null;
+            RenderAggregateTimeline();
+        }
+
+        private void UpdateAggregateTimelineHover(Point point)
+        {
+            if (!_searchStartTime.HasValue || !_searchEndTime.HasValue || _searchEndTime <= _searchStartTime)
+                return;
+
+            double width = aggregateTimelineCanvas.ActualWidth;
+            double laneLeft = AggregateLabelWidth;
+            double laneWidth = Math.Max(100, width - laneLeft - 10);
+            if (point.X < laneLeft || point.X > laneLeft + laneWidth)
+            {
+                if (_aggregateHoverTime.HasValue)
+                {
+                    _aggregateHoverTime = null;
+                    RenderAggregateTimeline();
+                }
+                return;
+            }
+
+            double ratio = Math.Max(0, Math.Min(1, (point.X - laneLeft) / laneWidth));
+            var hoverTime = _searchStartTime.Value.AddSeconds((_searchEndTime.Value - _searchStartTime.Value).TotalSeconds * ratio);
+            if (!_aggregateHoverTime.HasValue || Math.Abs((hoverTime - _aggregateHoverTime.Value).TotalMilliseconds) >= 250)
+            {
+                _aggregateHoverTime = hoverTime;
+                RenderAggregateTimeline();
             }
         }
 
@@ -2235,7 +2504,7 @@ namespace V3SClient.UI.Views
             if (tile?.Camera == null)
                 return;
 
-            QueuePlaybackDownloads(new List<models.Camera> { tile.Camera });
+            ShowPlaybackDownloadModeMenu(new List<models.Camera> { tile.Camera }, NativePlaybackToolbarLayer);
         }
 
         private async void PlaybackTile_SnapshotCurrentRequested(object sender, ViewCameraPlayback tile)
@@ -2484,7 +2753,7 @@ namespace V3SClient.UI.Views
                     ShowPlaybackToast("Chụp ảnh", count > 0 ? "Đã lưu " + count + " ảnh camera." : "Chưa thể chụp ảnh từ các camera đang phát.", count > 0 ? PlaybackToastKind.Info : PlaybackToastKind.Warning);
                     break;
                 case "DownloadAll":
-                    QueuePlaybackDownloads(tiles.Where(tile => tile.Camera != null).Select(tile => tile.Camera).ToList());
+                    ShowPlaybackDownloadModeMenu(tiles.Where(tile => tile.Camera != null).Select(tile => tile.Camera).ToList(), NativePlaybackToolbarLayer);
                     break;
             }
         }

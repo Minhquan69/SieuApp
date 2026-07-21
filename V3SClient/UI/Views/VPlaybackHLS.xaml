@@ -138,6 +138,7 @@
                                 SizeChanged="AggregateTimelineCanvas_SizeChanged"
                                 MouseLeftButtonDown="AggregateTimelineCanvas_MouseLeftButtonDown"
                                 MouseMove="AggregateTimelineCanvas_MouseMove"
+                                MouseLeave="AggregateTimelineCanvas_MouseLeave"
                                 MouseLeftButtonUp="AggregateTimelineCanvas_MouseLeftButtonUp"
                                 MouseRightButtonUp="AggregateTimelineCanvas_MouseRightButtonUp"/>
                     </Grid>
