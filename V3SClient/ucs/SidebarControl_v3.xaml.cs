@@ -10,6 +10,7 @@ namespace V3SClient.ucs
     {
         public static readonly DependencyProperty IsCollapsedProperty = DependencyProperty.Register(nameof(IsCollapsed), typeof(bool), typeof(SidebarControl_v3), new PropertyMetadata(false, OnCollapsedChanged));
         public bool IsCollapsed { get { return (bool)GetValue(IsCollapsedProperty); } set { SetValue(IsCollapsedProperty, value); } }
+        public event EventHandler LayoutChangeStarting;
 
         public SidebarControl_v3() { InitializeComponent(); }
 
@@ -23,12 +24,14 @@ namespace V3SClient.ucs
         private void ApplyCollapsedState(bool collapsed, bool animate)
         {
             var target = collapsed ? 64d : 176d;
-            if (animate)
-            {
-                var animation = new DoubleAnimation(target, TimeSpan.FromMilliseconds(200)) { EasingFunction = new QuadraticEase() };
-                BeginAnimation(WidthProperty, animation);
-            }
-            else Width = target;
+            // The live page contains native GStreamer surfaces.  Animating the
+            // shell width emits dozens of HWND resize messages and makes video
+            // move ahead of its WPF grid.  Notify the hosted Live View first,
+            // then apply one deterministic width change.
+            if (animate && LayoutChangeStarting != null)
+                LayoutChangeStarting(this, EventArgs.Empty);
+            BeginAnimation(WidthProperty, null);
+            Width = target;
             LogoImage.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
             LogoSubtext.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
             CollapsedLogo.Visibility = collapsed ? Visibility.Visible : Visibility.Collapsed;

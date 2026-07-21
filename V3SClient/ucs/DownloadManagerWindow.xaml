@@ -1,31 +1,45 @@
-<Window x:Class="V3SClient.ucs.DownloadManagerWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:local="clr-namespace:V3SClient.ucs" xmlns:converters="clr-namespace:V3SClient.UI.Converters" mc:Ignorable="d" Title="Download Manager" Height="450" Width="600" WindowStyle="None" AllowsTransparency="True" Background="Transparent" WindowStartupLocation="CenterOwner">
-    <Window.Resources><ResourceDictionary><ResourceDictionary.MergedDictionaries><ResourceDictionary Source="/styles/download_manager_window_styles.xaml" /></ResourceDictionary.MergedDictionaries>
-        <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+<Window x:Class="V3SClient.ucs.DownloadManagerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:converters="clr-namespace:V3SClient.UI.Converters"
+        Title="Tải xuống video" Height="440" Width="560" MinHeight="280" MinWidth="460"
+        WindowStartupLocation="CenterOwner" Background="#071827" Foreground="#E6F0FF">
+    <Window.Resources>
         <converters:CountToVisibilityConverter x:Key="CountToVisibilityConverter" />
-        
-    </ResourceDictionary></Window.Resources>
-
-    <Border Background="#0D0F12" CornerRadius="8" BorderThickness="1" BorderBrush="#252830">
+        <Style TargetType="Button">
+            <Setter Property="Foreground" Value="#DCEBFF" />
+            <Setter Property="Background" Value="#0C2841" />
+            <Setter Property="BorderBrush" Value="#1D4F78" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="9,5" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+    </Window.Resources>
+    <Border Background="#071827" BorderBrush="#16466D" BorderThickness="1" CornerRadius="8" Padding="14">
         <Grid>
             <Grid.RowDefinitions>
-                <RowDefinition Height="40" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
-
-            <!-- Header -->
-            <Border Background="#111318" CornerRadius="8,8,0,0" MouseLeftButtonDown="Header_MouseLeftButtonDown">
-                <Grid Margin="15,0">
-                    <TextBlock Text="QUẢN LÝ TẢI VIDEO" Foreground="#4A9EFF" FontWeight="Bold" VerticalAlignment="Center" />
-                    <Button Content="✖" HorizontalAlignment="Right" Click="Close_Click" Style="{StaticResource DownloadManagerWindowHeaderButtonStyle}" />
-                </Grid>
+            <Grid Grid.Row="0" Margin="0,0,0,12" MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE118;" Foreground="#2D6BFF" FontSize="17" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <StackPanel>
+                        <TextBlock Text="Tải xuống video" FontSize="16" FontWeight="SemiBold" />
+                        <TextBlock Text="Tiến trình tải được tiếp tục khi đóng cửa sổ này" Foreground="#8FA9C1" FontSize="11" />
+                    </StackPanel>
+                </StackPanel>
+                <Button Content="&#xE8BB;" FontFamily="Segoe MDL2 Assets" HorizontalAlignment="Right" VerticalAlignment="Top" Click="Close_Click" Padding="6,4" />
+            </Grid>
+            <Border Grid.Row="1" Background="#0A2034" BorderBrush="#123C60" BorderThickness="1" CornerRadius="6" Padding="10,7" Margin="0,0,0,10">
+                <TextBlock Text="Video tải về được lưu trong thư mục Downloads mặc định của Windows." Foreground="#AFC5DB" FontSize="12" />
             </Border>
-
-            <!-- Content -->
-            <Grid Grid.Row="1" Margin="10">
+            <Grid Grid.Row="2">
                 <ListBox x:Name="lstTasks" Background="Transparent" BorderThickness="0" HorizontalContentAlignment="Stretch" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <Border Background="#161920" CornerRadius="4" Padding="10" Margin="0,0,0,10" BorderThickness="1" BorderBrush="#252830">
+                            <Border Background="#0A2136" BorderBrush="#16466D" BorderThickness="1" CornerRadius="6" Padding="11" Margin="0,0,0,8">
                                 <Grid>
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />
@@ -36,57 +50,36 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-
-                                    <!-- Info -->
-                                    <StackPanel Grid.Row="0" Grid.Column="0">
-                                        <TextBlock Text="{Binding CameraNames}" Foreground="#E8ECF1" FontWeight="SemiBold" FontSize="14" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Text="{Binding Status}" Foreground="#8B95A5" FontSize="12" Margin="0,2,0,0" />
+                                    <StackPanel Grid.Row="0">
+                                        <TextBlock Text="{Binding CameraNames}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding Status}" Foreground="#8FB5D5" FontSize="11" Margin="0,2,0,0" />
                                     </StackPanel>
-
-                                    <StackPanel Grid.Row="0" Grid.Column="1" HorizontalAlignment="Right">
-                                        <TextBlock Text="{Binding Speed}" Foreground="#8B95A5" FontSize="11" HorizontalAlignment="Right" />
-                                        <Button Content="Mở thư mục" Click="OpenFolder_Click" Padding="5,2" Margin="0,5,0,0" Background="#252830" Foreground="#E8ECF1" BorderThickness="0" FontSize="10" Cursor="Hand" />
+                                    <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                                        <Button Content="Hủy" Click="Cancel_Click" IsEnabled="{Binding CanCancel}" Margin="0,0,6,0" />
+                                        <Button Content="Mở thư mục" Click="OpenFolder_Click" />
                                     </StackPanel>
-
-                                    <!-- Progress -->
-                                    <ProgressBar Grid.Row="1" Grid.ColumnSpan="2" Height="6" Margin="0,10,0,5" Value="{Binding Progress}" Maximum="100" Foreground="#4A9EFF" Background="#0D0F12" BorderThickness="0" />
-
+                                    <ProgressBar Grid.Row="1" Grid.ColumnSpan="2" Height="6" Margin="0,10,0,6" Value="{Binding Progress}" Maximum="100" Foreground="#2D6BFF" Background="#061521" BorderThickness="0" />
                                     <Grid Grid.Row="2" Grid.ColumnSpan="2">
-                                        <TextBlock Text="{Binding Progress, StringFormat={}{0:F1}%}" Foreground="#8B95A5" FontSize="10" HorizontalAlignment="Left" />
-                                        <TextBlock Foreground="#8B95A5" FontSize="10" HorizontalAlignment="Right">
-                                            <Run Text="{Binding StartTime, StringFormat=HH:mm:ss}" />
-                                            <Run Text=" - " />
-                                            <Run Text="{Binding EndTime, StringFormat=HH:mm:ss}" />
-                                        </TextBlock>
+                                        <TextBlock Text="{Binding Progress, StringFormat={}{0:F0}%}" Foreground="#90ABC3" FontSize="11" />
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                            <TextBlock Text="{Binding Speed}" Foreground="#90ABC3" FontSize="11" Margin="0,0,12,0" />
+                                            <TextBlock Foreground="#90ABC3" FontSize="11">
+                                                <Run Text="{Binding StartTime, StringFormat=HH:mm}" />
+                                                <Run Text=" - " />
+                                                <Run Text="{Binding EndTime, StringFormat=HH:mm}" />
+                                            </TextBlock>
+                                        </StackPanel>
                                     </Grid>
                                 </Grid>
                             </Border>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
-
-                <!-- Empty State -->
-                <TextBlock Text="Không có yêu cầu tải xuống nào đang diễn ra" Foreground="#8B95A5" FontSize="16" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding Items.Count, ElementName=lstTasks, Converter={StaticResource CountToVisibilityConverter}, ConverterParameter=Inverse}" />
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding Items.Count, ElementName=lstTasks, Converter={StaticResource CountToVisibilityConverter}, ConverterParameter=Inverse}">
+                    <TextBlock Text="&#xE896;" FontFamily="Segoe MDL2 Assets" Foreground="#4C7193" FontSize="28" HorizontalAlignment="Center" />
+                    <TextBlock Text="Chưa có video đang tải" Foreground="#AFC5DB" FontSize="13" Margin="0,8,0,0" />
+                </StackPanel>
             </Grid>
         </Grid>
     </Border>
 </Window>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

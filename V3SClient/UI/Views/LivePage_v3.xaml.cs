@@ -38,8 +38,13 @@ namespace V3SClient.UI.Views
         private bool _tileWindowStateSaved;
         private bool _gridFullscreen;
         private WindowState _gridWindowState;
+        private double _gridWindowLeft;
+        private double _gridWindowTop;
+        private double _gridWindowWidth;
+        private double _gridWindowHeight;
         private bool _gridWindowStateSaved;
         private int _fullscreenTransitionVersion;
+        private int _geometryTransitionVersion;
         private readonly TranslateTransform _headerActionTransform = new TranslateTransform();
         private LiveTile_v3 _dragTile;
         private Point _dragStart;
@@ -103,6 +108,57 @@ namespace V3SClient.UI.Views
         private void CameraGrid_SizeChanged(object sender, SizeChangedEventArgs e)
         {
             QueueHeaderActionCentering();
+        }
+
+        /// <summary>
+        /// Atomically applies a shell or camera-list geometry change.  A
+        /// WindowsFormsHost owns a native D3D surface, so it can otherwise
+        /// repaint at every intermediate WPF width while the grid is still
+        /// being arranged.  Keep the complete grid hidden until the final
+        /// arrange pass, then expose all native surfaces together.
+        /// </summary>
+        public void BeginGeometryTransition()
+        {
+            RunGridGeometryTransition(null);
+        }
+
+        private void RunGridGeometryTransition(Action applyLayout)
+        {
+            if (_disposed)
+                return;
+
+            // Per-camera fullscreen owns its own transfer sequence.  Do not
+            // let a nested sidebar/layout event reveal an intermediate grid.
+            if (_fullscreenTile != null)
+            {
+                if (applyLayout != null) applyLayout();
+                return;
+            }
+
+            var transitionVersion = ++_geometryTransitionVersion;
+            CameraGrid.Visibility = Visibility.Hidden;
+            foreach (var tile in _tiles.Values)
+                tile.SetVideoSurfaceVisible(false);
+
+            if (applyLayout != null) applyLayout();
+
+            RunAfterNativeLayout(new Action(() =>
+            {
+                if (_disposed || transitionVersion != _geometryTransitionVersion || _fullscreenTile != null)
+                    return;
+
+                CameraGrid.InvalidateMeasure();
+                CameraGrid.InvalidateArrange();
+                CameraGrid.UpdateLayout();
+                CameraGrid.Visibility = Visibility.Visible;
+                foreach (var tile in _tiles.Values)
+                {
+                    tile.SetVideoSurfaceVisible(tile.Slot == null ||
+                        tile.Slot.State != LiveConnectionState_v3.Error);
+                    tile.RefreshPopupPlacement();
+                }
+                QueueHeaderActionCentering();
+            }));
         }
 
         private void QueueHeaderActionCentering()
@@ -191,7 +247,13 @@ namespace V3SClient.UI.Views
                     tile.PreviewMouseMove += Tile_PreviewMouseMove;
                     tile.Drop += Tile_Drop;
                 }
-                tile.Bind(slot);
+                // A layout-only rebuild must not rebind every existing tile:
+                // Bind refreshes native WindowsFormsHost surfaces and, with
+                // several cameras, makes all decoders resize at once. Keep
+                // the established pipelines untouched unless this tile was
+                // newly created or its slot instance genuinely changed.
+                if (tile.RequiresBind(slot))
+                    tile.Bind(slot);
                 var placement = GetPlacement(_viewModel.Layout, visualIndex++, dimensions.Item2);
                 Grid.SetRow(tile, placement.Item1);
                 Grid.SetColumn(tile, placement.Item2);
@@ -669,14 +731,13 @@ namespace V3SClient.UI.Views
                         cameraTile.SetFullscreenVisibility(selected);
                         cameraTile.SetFullscreenMode(selected);
                         cameraTile.HideTransientOverlays();
-                        // Keep the selected native surface alive. Hiding and
-                        // showing a D3D11 RTSP sink can make it wait for the
-                        // next keyframe, which looks like a long reconnect.
-                        // The other surfaces are hidden before their bounds
-                        // change, so they cannot flash over the selected tile.
-                        cameraTile.SetVideoSurfaceVisible(selected &&
-                            (cameraTile.Slot == null ||
-                             cameraTile.Slot.State != LiveConnectionState_v3.Error));
+                        // WindowsFormsHost ignores WPF opacity. Hide every
+                        // native surface before changing the selected tile's
+                        // span/window size; otherwise a small-window frame is
+                        // painted at (0,0) for one tick before fullscreen.
+                        // The selected player remains connected and is shown
+                        // again after the fullscreen layout has settled.
+                        cameraTile.SetVideoSurfaceVisible(false);
                     }
                     child.Visibility = ReferenceEquals(child, tile) ? Visibility.Visible : Visibility.Collapsed;
                 }
@@ -685,20 +746,28 @@ namespace V3SClient.UI.Views
                 Grid.SetColumnSpan(tile, Math.Max(1, CameraGrid.ColumnDefinitions.Count));
                 tile.Opacity = 0;
                 EnterTileFullscreen();
-                Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(() =>
+                // Keep sub1 rendered while a second native player prepares
+                // main in the background. The tile swaps presentation only
+                // after main has reached Playing.
+                _ = tile.PrepareFullscreenMainStreamAsync(
+                    LiveViewModel_v3.SelectFullscreenStream(tile.Slot.Camera));
+                // WindowState, shell chrome, and the grid spans all change
+                // in this transition. Render priority occurs before the
+                // shell's final arrange on small windows, producing the
+                // visible left-aligned grid frame. Wait for stable layout
+                // before exposing any WPF/native tile content.
+                RunAfterNativeLayout(new Action(() =>
                 {
                     if (_fullscreenTile == tile && transitionVersion == _fullscreenTransitionVersion)
                     {
+                        CameraGrid.InvalidateMeasure();
+                        CameraGrid.InvalidateArrange();
                         CameraGrid.UpdateLayout();
                         CameraGrid.Visibility = Visibility.Visible;
-                        Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(() =>
-                        {
-                            if (_fullscreenTile != tile || transitionVersion != _fullscreenTransitionVersion) return;
-                            tile.SetVideoSurfaceVisible(tile.Slot == null ||
-                                tile.Slot.State != LiveConnectionState_v3.Error);
-                            tile.Opacity = 1;
-                            tile.RefreshPopupPlacement();
-                        }));
+                        tile.SetVideoSurfaceVisible(tile.Slot == null ||
+                            tile.Slot.State != LiveConnectionState_v3.Error);
+                        tile.Opacity = 1;
+                        tile.RefreshPopupPlacement();
                     }
                 }));
             }
@@ -747,12 +816,10 @@ namespace V3SClient.UI.Views
             LivePageHeader.Visibility = Visibility.Collapsed;
             var shell = window.Content as ShellPage_v3;
             if (shell != null) shell.SetChromeVisible(false);
-            window.WindowStyle = WindowStyle.None;
-            window.ResizeMode = ResizeMode.NoResize;
-            window.Topmost = true;
-            // One maximized transition avoids the Normal -> manual resize ->
-            // fullscreen sequence that causes the native GStreamer surface
-            // to resize several times and visibly stutter.
+            // Keep the normal Windows title bar and maximize to the working
+            // area. Changing WindowStyle/ResizeMode/Topmost before and after
+            // maximizing forces extra HWND resizes, which made both fullscreen
+            // buttons stutter even with an empty grid.
             window.WindowState = WindowState.Maximized;
         }
 
@@ -760,8 +827,17 @@ namespace V3SClient.UI.Views
         {
             var transitionVersion = ++_fullscreenTransitionVersion;
             var window = Window.GetWindow(this);
+            var fullscreenTile = _fullscreenTile;
+            var fullscreenCamera = fullscreenTile == null || fullscreenTile.Slot == null
+                ? null
+                : fullscreenTile.Slot.Camera;
             _fullscreenTile = null;
             CameraGrid.Visibility = Visibility.Hidden;
+            // Resume sub1 while main is still the visible fullscreen source.
+            // This gives its decoder time to receive a clean frame before
+            // the grid's native surfaces are revealed.
+            if (fullscreenTile != null && fullscreenCamera != null)
+                fullscreenTile.WarmGridStreamForRestore(LiveViewModel_v3.SelectGridStream(fullscreenCamera));
             // Keep every native video surface hidden while the window returns
             // from maximized mode. This mirrors the enter transition and
             // prevents all cameras from resizing in a visible intermediate
@@ -777,13 +853,13 @@ namespace V3SClient.UI.Views
                 var shell = window.Content as ShellPage_v3;
                 if (shell != null) shell.SetChromeVisible(true);
                 window.WindowState = _tileWindowState;
-                window.WindowStyle = _tileWindowStyle;
-                window.ResizeMode = _tileResizeMode;
-                window.Left = _tileWindowLeft;
-                window.Top = _tileWindowTop;
-                window.Width = _tileWindowWidth;
-                window.Height = _tileWindowHeight;
-                window.Topmost = _tileTopmost;
+                if (_tileWindowState == WindowState.Normal)
+                {
+                    window.Left = _tileWindowLeft;
+                    window.Top = _tileWindowTop;
+                    window.Width = _tileWindowWidth;
+                    window.Height = _tileWindowHeight;
+                }
             }
             _tileWindowStateSaved = false;
             foreach (var tile in _tiles.Values)
@@ -798,9 +874,9 @@ namespace V3SClient.UI.Views
             }
             CameraSidebar.Visibility = _tileSidebarVisibility;
             UpdateSidebarOpenButtons();
-            SidebarColumn.MinWidth = 240;
-            SidebarColumn.MaxWidth = 420;
-            SidebarColumn.Width = _tileSidebarWidth.Value > 0 ? _tileSidebarWidth : new GridLength(0.24, GridUnitType.Star);
+            SidebarColumn.MinWidth = 210;
+            SidebarColumn.MaxWidth = 320;
+            SidebarColumn.Width = _tileSidebarWidth.Value > 0 ? _tileSidebarWidth : new GridLength(0.20, GridUnitType.Star);
             LivePageHeader.Visibility = Visibility.Visible;
             BuildGrid();
             foreach (var tile in _tiles.Values)
@@ -812,24 +888,27 @@ namespace V3SClient.UI.Views
                 // flash at (0,0) while row/column bounds are changing.
                 tile.SetVideoSurfaceVisible(false);
             }
+            // Do not switch main back to sub1 yet.  Switching the source while
+            // the window is still restoring gives the native sink an old
+            // fullscreen-sized HWND for one frame, then makes it jump into
+            // the small grid.  First settle the *final* WPF bounds; only then
+            // change presentation and reveal every tile as one frame.
             RunAfterNativeLayout(new Action(() =>
             {
                 if (_fullscreenTile != null || transitionVersion != _fullscreenTransitionVersion) return;
                 CameraGrid.InvalidateMeasure();
                 CameraGrid.InvalidateArrange();
                 CameraGrid.UpdateLayout();
+                if (fullscreenTile != null && fullscreenCamera != null)
+                    fullscreenTile.RestoreGridStream(LiveViewModel_v3.SelectGridStream(fullscreenCamera));
                 CameraGrid.Visibility = Visibility.Visible;
-                RunAfterNativeLayout(new Action(() =>
+                foreach (var tile in _tiles.Values)
                 {
-                    if (_fullscreenTile != null || transitionVersion != _fullscreenTransitionVersion) return;
-                    foreach (var tile in _tiles.Values)
-                    {
-                        tile.SetVideoSurfaceVisible(tile.Slot == null ||
-                            tile.Slot.State != LiveConnectionState_v3.Error);
-                        tile.Opacity = 1;
-                        tile.RefreshPopupPlacement();
-                    }
-                }));
+                    tile.SetVideoSurfaceVisible(tile.Slot == null ||
+                        tile.Slot.State != LiveConnectionState_v3.Error);
+                    tile.Opacity = 1;
+                    tile.RefreshPopupPlacement();
+                }
             }));
         }
 
@@ -860,27 +939,58 @@ namespace V3SClient.UI.Views
             if (window == null) return;
             if (entering == _gridFullscreen) return;
 
-            if (entering)
+            RunGridGeometryTransition(new Action(() =>
             {
-                _gridWindowState = window.WindowState;
-                _gridWindowStateSaved = true;
-                window.WindowState = WindowState.Maximized;
-            }
-            else
-            {
-                window.WindowState = _gridWindowStateSaved ? _gridWindowState : WindowState.Normal;
-                _gridWindowStateSaved = false;
-            }
-
-            _gridFullscreen = entering;
-            var shell = window.Content as ShellPage_v3;
-            if (shell != null) shell.SetChromeVisible(!entering);
-            CameraSidebar.Visibility = entering ? Visibility.Collapsed : Visibility.Visible;
-            UpdateSidebarOpenButtons();
-            SidebarColumn.MinWidth = entering ? 0 : 240;
-            SidebarColumn.MaxWidth = entering ? double.PositiveInfinity : 420;
-            SidebarColumn.Width = entering ? new GridLength(0) : new GridLength(0.24, GridUnitType.Star);
-            UpdateFullscreenControls();
+                if (entering)
+                {
+                    _gridWindowState = window.WindowState;
+                    // WindowState alone is not enough.  When a maximized WPF
+                    // window is restored, its implicit RestoreBounds may be
+                    // applied one dispatcher tick late, visibly placing the
+                    // grid in a temporary corner position.  Save the exact
+                    // normal bounds and restore them in the same transaction.
+                    var bounds = window.WindowState == WindowState.Normal
+                        ? new Rect(window.Left, window.Top, window.Width, window.Height)
+                        : window.RestoreBounds;
+                    _gridWindowLeft = bounds.Left;
+                    _gridWindowTop = bounds.Top;
+                    _gridWindowWidth = bounds.Width;
+                    _gridWindowHeight = bounds.Height;
+                    _gridWindowStateSaved = true;
+                }
+                _gridFullscreen = entering;
+                var shell = window.Content as ShellPage_v3;
+                if (shell != null) shell.SetChromeVisible(!entering);
+                CameraSidebar.Visibility = entering ? Visibility.Collapsed : Visibility.Visible;
+                UpdateSidebarOpenButtons();
+                SidebarColumn.MinWidth = entering ? 0 : 210;
+                SidebarColumn.MaxWidth = entering ? double.PositiveInfinity : 320;
+                SidebarColumn.Width = entering ? new GridLength(0) : new GridLength(0.20, GridUnitType.Star);
+                // Apply all WPF-only chrome changes first, then perform exactly
+                // one native window resize.
+                if (entering)
+                {
+                    window.WindowState = WindowState.Maximized;
+                }
+                else
+                {
+                    var stateToRestore = _gridWindowStateSaved ? _gridWindowState : WindowState.Normal;
+                    window.WindowState = stateToRestore;
+                    if (stateToRestore == WindowState.Normal && _gridWindowWidth > 0 && _gridWindowHeight > 0)
+                    {
+                        // Set the final bounds immediately after leaving
+                        // Maximized, while the camera grid is still hidden.
+                        // This prevents the native video HWNDs from ever
+                        // receiving the transient RestoreBounds rectangle.
+                        window.Left = _gridWindowLeft;
+                        window.Top = _gridWindowTop;
+                        window.Width = _gridWindowWidth;
+                        window.Height = _gridWindowHeight;
+                    }
+                }
+                if (!entering) _gridWindowStateSaved = false;
+                UpdateFullscreenControls();
+            }));
         }
 
         private void UpdateFullscreenControls()
@@ -898,11 +1008,14 @@ namespace V3SClient.UI.Views
         private void ToggleSidebar_Click(object sender, RoutedEventArgs e)
         {
             var hide = CameraSidebar.Visibility == Visibility.Visible;
-            CameraSidebar.Visibility = hide ? Visibility.Collapsed : Visibility.Visible;
-            SidebarColumn.MinWidth = hide ? 0 : 240;
-            SidebarColumn.MaxWidth = hide ? double.PositiveInfinity : 420;
-            SidebarColumn.Width = hide ? new GridLength(0) : new GridLength(0.24, GridUnitType.Star);
-            UpdateSidebarOpenButtons();
+            RunGridGeometryTransition(new Action(() =>
+            {
+                CameraSidebar.Visibility = hide ? Visibility.Collapsed : Visibility.Visible;
+                SidebarColumn.MinWidth = hide ? 0 : 210;
+                SidebarColumn.MaxWidth = hide ? double.PositiveInfinity : 320;
+                SidebarColumn.Width = hide ? new GridLength(0) : new GridLength(0.20, GridUnitType.Star);
+                UpdateSidebarOpenButtons();
+            }));
         }
 
         private void UpdateSidebarOpenButtons()

@@ -49,7 +49,9 @@ namespace V3SClient.models
         public Visibility ShowVideoSlider { get; set; } = Visibility.Collapsed;
         public bool RoiInfoShow { get; set; } = MetaAIResultStorage.Instance.RoiInfoShow;
         private BlockingCollection<List<MetaAIResult>> _aiResult;
-        private const long _seekStep = 15;
+        // Short seek is intentionally small for responsive review.  Longer seeks
+        // are explicitly requested by the playback toolbar.
+        private const long _seekStep = 10;
 
         public event EventHandler<List<MetaAIResult>> SendMetaAIResult;
         public event EventHandler<PlayerInfo> PlayerSending;        
@@ -77,6 +79,10 @@ namespace V3SClient.models
         protected Element audioVolume { get; set; }
         protected float currentRate { get; set; } = 1.0f;
         protected float stepRate { get; set; } = 0.3f;
+        // Opt-in visual cue for playback capture/download selection. It is drawn
+        // by d3d11overlay on the same native texture, avoiding WPF/HWND airspace.
+        // Default is false so Live View and existing V3 consumers are unchanged.
+        public bool DimForCaptureSelection { get; set; }
         private string rtspAddres { get; set; } = "";
         public Pipeline player { get; set; } = null;
         protected IntPtr windowHandle { get; set; }
@@ -563,7 +569,7 @@ namespace V3SClient.models
 
             try
             {
-                src["force-aspect-ratio"] = false;
+                src["force-aspect-ratio"] = ForceAspectRatio;
             }
             catch (PropertyNotFoundException)
             {
@@ -592,6 +598,14 @@ namespace V3SClient.models
             src.Dispose();
 
         }
+
+        // Live View keeps its existing fill behavior. Playback overrides this so
+        // the original stream aspect ratio is preserved with letterboxing.
+        protected virtual bool ForceAspectRatio
+        {
+            get { return false; }
+        }
+
         protected void EOFnError(Gst.Message message)
         {
             switch (message.Type)
@@ -842,10 +856,12 @@ namespace V3SClient.models
 
             // Use non-blocking TryTake to avoid pausing the GStreamer rendering thread
             bool ret = _aiResult.TryTake(out List<MetaAIResult> arr, 0);
+            bool drawSelectionDim = DimForCaptureSelection;
 
-            if (!ret) return;
+            if (!ret && !drawSelectionDim) return;
 
-            if (arr == null || arr.Count == 0) return;
+            if (arr == null) arr = new List<MetaAIResult>();
+            if (arr.Count == 0 && !drawSelectionDim) return;
             try
             {
                 arr = arr.ToList();
@@ -879,6 +895,19 @@ namespace V3SClient.models
                         bool isAbnormalyWarn = false;
                         string warningCaption = null;
                         d2dRenderTarget.BeginDraw();
+
+                        // A native video sink is an HWND; a semi-transparent WPF
+                        // overlay either disappears behind it or paints an opaque
+                        // black rectangle. Drawing the cue here keeps every
+                        // unselected tile 40% darker while the hovered tile stays
+                        // at its original brightness.
+                        if (drawSelectionDim)
+                        {
+                            using (var dimBrush = new SolidColorBrush(d2dRenderTarget, new RawColor4(0f, 0f, 0f, 0.40f)))
+                            {
+                                d2dRenderTarget.FillRectangle(new SharpDX.RectangleF(0, 0, description.Width, description.Height), dimBrush);
+                            }
+                        }
 
                         // Create the brush locally to avoid re-using a brush across different RenderTargets
                         using (var localSolidBrush = new SolidColorBrush(d2dRenderTarget, _blueColorBrush))
@@ -1086,6 +1115,10 @@ namespace V3SClient.models
         {
             Seek(-_seekStep);
         }
+        public void SeekBySeconds(long seconds)
+        {
+            Seek(seconds);
+        }
         public void SeekTo(long position)
         {
             if (player != null)
@@ -1094,21 +1127,4 @@ namespace V3SClient.models
             }
         }
     }
-
-
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

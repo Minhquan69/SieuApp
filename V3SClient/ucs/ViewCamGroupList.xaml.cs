@@ -177,16 +177,16 @@ namespace V3SClient.ucs
             return result;
         }
 
-        public void FilterTree(string keyword, bool isAIMode = false)
+        public void FilterTree(string keyword, bool isAIMode = false, bool isRecordingMode = false)
         {
             if (CameraGroupList == null) return;
             foreach (var group in CameraGroupList)
             {
-                FilterTalkGroup(group, keyword, isAIMode);
+                FilterTalkGroup(group, keyword, isAIMode, isRecordingMode);
             }
         }
 
-        private bool FilterTalkGroup(VMTalkGroup group, string keyword, bool isAIMode)
+        private bool FilterTalkGroup(VMTalkGroup group, string keyword, bool isAIMode, bool isRecordingMode)
         {
             bool anyChildVisible = false;
 
@@ -198,7 +198,8 @@ namespace V3SClient.ucs
                              (cam.long_Name != null && cam.long_Name.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0);
                              
                 bool matchAI = !isAIMode || cam.HasAIStream;
-                bool match = matchKeyword && matchAI;
+                bool matchRecording = !isRecordingMode || cam.is_recording;
+                bool match = matchKeyword && matchAI && matchRecording;
                 
                 cam.NodeVisibility = match ? Visibility.Visible : Visibility.Collapsed;
                 if (match) anyChildVisible = true;
@@ -207,7 +208,7 @@ namespace V3SClient.ucs
             // Filter subgroups
             foreach (var sub in group.SubGroups)
             {
-                bool match = FilterTalkGroup(sub, keyword, isAIMode);
+                bool match = FilterTalkGroup(sub, keyword, isAIMode, isRecordingMode);
                 if (match) anyChildVisible = true;
             }
 

@@ -51,6 +51,13 @@ namespace V3SClient.ucs
                 }
             }
         }
+
+        private void Cancel_Click(object sender, RoutedEventArgs e)
+        {
+            var button = sender as FrameworkElement;
+            var task = button?.DataContext as SmartDownloadManager.DownloadTask;
+            SmartDownloadManager.Instance.Cancel(task);
+        }
     }
 }
 

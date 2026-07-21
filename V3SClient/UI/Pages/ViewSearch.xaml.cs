@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -26,12 +27,18 @@ namespace V3SClient.UI.Pages
     /// </summary>
     public partial class ViewSearch : Page
     {
+        private bool _editingFromDate;
+        private DateTime _displayedCalendarMonth;
+        private Window _ownerWindow;
+        private int? _selectedQuickRangeHours;
         private VMVideoStorage VideoStorage { get; set; } = new VMVideoStorage();
         public event EventHandler<List<DateTime?>> EventSeachClick;
         public event EventHandler<object> EventBtn2Click;
-        public ViewSearch( string txtBnt1_Text= "Search / Playback", string txtBnt2_Text = "Export", bool btn1Visible = true,bool btn2Visible=false)
+        public ViewSearch( string txtBnt1_Text= "Tìm kiếm", string txtBnt2_Text = "Export", bool btn1Visible = true,bool btn2Visible=false)
         {
             InitializeComponent();
+            Loaded += ViewSearch_Loaded;
+            Unloaded += ViewSearch_Unloaded;
 
             DataContext = VideoStorage;
             
@@ -50,6 +57,208 @@ namespace V3SClient.UI.Pages
             DateTime now = DateTime.Now;
             datetimeFrom.Value = now.AddHours(-6);
             datetimeTo.Value = now;
+            RefreshDateFields();
+        }
+
+        private void ViewSearch_Loaded(object sender, RoutedEventArgs e)
+        {
+            var window = Window.GetWindow(this);
+            if (ReferenceEquals(_ownerWindow, window)) return;
+
+            if (_ownerWindow != null)
+            {
+                _ownerWindow.PreviewMouseDown -= OwnerWindow_PreviewMouseDown;
+            }
+
+            _ownerWindow = window;
+            if (_ownerWindow != null)
+            {
+                _ownerWindow.PreviewMouseDown += OwnerWindow_PreviewMouseDown;
+            }
+        }
+
+        private void ViewSearch_Unloaded(object sender, RoutedEventArgs e)
+        {
+            datePopup.IsOpen = false;
+            if (_ownerWindow != null)
+            {
+                _ownerWindow.PreviewMouseDown -= OwnerWindow_PreviewMouseDown;
+                _ownerWindow = null;
+            }
+        }
+
+        private void OwnerWindow_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            ClosePopupForExternalClick();
+        }
+
+        private void DateField_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            _editingFromDate = ReferenceEquals(sender, fromDateField);
+            DateTime value = (_editingFromDate ? datetimeFrom.Value : datetimeTo.Value) ?? DateTime.Now;
+            datePopup.PlacementTarget = (UIElement)sender;
+            _displayedCalendarMonth = new DateTime(value.Year, value.Month, 1);
+            popupDateInput.Text = value.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+            popupTimeInput.Text = value.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+            RenderCalendar();
+            datePopup.IsOpen = true;
+            e.Handled = true;
+        }
+
+        private void CloseDatePopup_Click(object sender, RoutedEventArgs e)
+        {
+            datePopup.IsOpen = false;
+        }
+
+        private void Root_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            ClosePopupForExternalClick();
+        }
+
+        private void ClosePopupForExternalClick()
+        {
+            if (!datePopup.IsOpen)
+            {
+                return;
+            }
+
+            // Popup is rendered in its own visual tree. IsMouseOver remains
+            // reliable for its child, while this preview event catches every
+            // click elsewhere in the Playback toolbar/page.
+            var popupChild = datePopup.Child as UIElement;
+            if ((popupChild != null && popupChild.IsMouseOver) ||
+                fromDateField.IsMouseOver ||
+                toDateField.IsMouseOver)
+            {
+                return;
+            }
+
+            datePopup.IsOpen = false;
+        }
+
+        private void QuickRange_Click(object sender, RoutedEventArgs e)
+        {
+            var button = sender as System.Windows.Controls.Button;
+            int hours;
+            if (button == null || !int.TryParse(button.Tag as string, out hours)) return;
+
+            DateTime end = DateTime.Now;
+            datetimeFrom.Value = end.AddHours(-hours);
+            datetimeTo.Value = end;
+            _selectedQuickRangeHours = hours;
+            RefreshDateFields();
+            UpdateQuickRangeSelection();
+            datePopup.IsOpen = false;
+        }
+
+        private void UpdateQuickRangeSelection()
+        {
+            var activeBackground = FindResource("VmsPrimarySoftBrush_v3") as Brush;
+            var activeBorder = FindResource("VmsPrimaryBrush_v3") as Brush;
+            var activeForeground = FindResource("VmsPrimaryBrush_v3") as Brush;
+            var normalForeground = FindResource("VmsTextSecondaryBrush_v3") as Brush;
+            foreach (var button in new[] { quickRange1h, quickRange6h, quickRange12h, quickRange24h })
+            {
+                if (button == null) continue;
+                int value;
+                bool selected = int.TryParse(button.Tag as string, out value) && _selectedQuickRangeHours == value;
+                button.Background = selected ? activeBackground : Brushes.Transparent;
+                button.BorderBrush = selected ? activeBorder : Brushes.Transparent;
+                button.Foreground = selected ? activeForeground : normalForeground;
+            }
+        }
+
+        private void PreviousMonth_Click(object sender, RoutedEventArgs e)
+        {
+            _displayedCalendarMonth = _displayedCalendarMonth.AddMonths(-1);
+            RenderCalendar();
+        }
+
+        private void NextMonth_Click(object sender, RoutedEventArgs e)
+        {
+            _displayedCalendarMonth = _displayedCalendarMonth.AddMonths(1);
+            RenderCalendar();
+        }
+
+        private void CalendarDay_Click(object sender, RoutedEventArgs e)
+        {
+            var button = sender as System.Windows.Controls.Button;
+            if (button == null || !(button.Tag is DateTime)) return;
+            DateTime current = (_editingFromDate ? datetimeFrom.Value : datetimeTo.Value) ?? DateTime.Now;
+            SetActiveDate(((DateTime)button.Tag).Date.Add(current.TimeOfDay));
+            RenderCalendar();
+        }
+
+        private void RenderCalendar()
+        {
+            if (calendarDaysPanel == null) return;
+            calendarMonthText.Text = _displayedCalendarMonth.ToString("MMMM yyyy", CultureInfo.InvariantCulture);
+            calendarDaysPanel.Children.Clear();
+
+            DateTime first = new DateTime(_displayedCalendarMonth.Year, _displayedCalendarMonth.Month, 1);
+            DateTime visibleStart = first.AddDays(-(int)first.DayOfWeek);
+            DateTime selected = ((_editingFromDate ? datetimeFrom.Value : datetimeTo.Value) ?? DateTime.Now).Date;
+
+            for (var i = 0; i < 42; i++)
+            {
+                DateTime day = visibleStart.AddDays(i);
+                var button = new System.Windows.Controls.Button
+                {
+                    Content = day.Day.ToString(CultureInfo.InvariantCulture),
+                    Tag = day,
+                    Style = FindResource("PlaybackCalendarDayButton_v3") as Style,
+                    Foreground = day.Month == _displayedCalendarMonth.Month
+                        ? FindResource("VmsTextPrimaryBrush_v3") as Brush
+                        : FindResource("VmsTextTertiaryBrush_v3") as Brush,
+                    Opacity = day.Month == _displayedCalendarMonth.Month ? 1.0 : 0.45
+                };
+                if (day.Date == selected)
+                {
+                    button.Background = FindResource("VmsPrimarySoftBrush_v3") as Brush;
+                    button.BorderBrush = FindResource("VmsPrimaryBrush_v3") as Brush;
+                }
+                button.Click += CalendarDay_Click;
+                calendarDaysPanel.Children.Add(button);
+            }
+        }
+
+        private void PopupDateInput_LostFocus(object sender, RoutedEventArgs e)
+        {
+            DateTime date;
+            if (DateTime.TryParseExact(popupDateInput.Text, "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out date))
+            {
+                DateTime current = (_editingFromDate ? datetimeFrom.Value : datetimeTo.Value) ?? DateTime.Now;
+                SetActiveDate(date.Date.Add(current.TimeOfDay));
+                _displayedCalendarMonth = new DateTime(date.Year, date.Month, 1);
+                RenderCalendar();
+            }
+        }
+
+        private void PopupTimeInput_LostFocus(object sender, RoutedEventArgs e)
+        {
+            TimeSpan time;
+            if (TimeSpan.TryParseExact(popupTimeInput.Text, "hh\\:mm\\:ss", CultureInfo.InvariantCulture, out time))
+            {
+                DateTime current = (_editingFromDate ? datetimeFrom.Value : datetimeTo.Value) ?? DateTime.Now;
+                SetActiveDate(current.Date.Add(time));
+            }
+        }
+
+        private void SetActiveDate(DateTime value)
+        {
+            _selectedQuickRangeHours = null;
+            if (_editingFromDate) datetimeFrom.Value = value;
+            else datetimeTo.Value = value;
+            popupDateInput.Text = value.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+            popupTimeInput.Text = value.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+            RefreshDateFields();
+            UpdateQuickRangeSelection();
+        }
+
+        private void RefreshDateFields()
+        {
+            fromDateText.Text = (datetimeFrom.Value ?? DateTime.Now).ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture);
+            toDateText.Text = (datetimeTo.Value ?? DateTime.Now).ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture);
         }
 
         

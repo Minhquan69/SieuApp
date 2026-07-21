@@ -198,22 +198,22 @@ namespace V3SClient.ucs
             else
                 return FindParent<T>(parentObject);
         }
-        public void FilterTree(string keyword, bool isAIMode = false)
+        public void FilterTree(string keyword, bool isAIMode = false, bool isRecordingMode = false)
         {
             if (AreaTree == null) return;
             foreach (var area in AreaTree)
             {
-                FilterArea(area, keyword, isAIMode);
+                FilterArea(area, keyword, isAIMode, isRecordingMode);
             }
         }
 
-        private bool FilterArea(AreaNode area, string keyword, bool isAIMode)
+        private bool FilterArea(AreaNode area, string keyword, bool isAIMode, bool isRecordingMode)
         {
             bool anyChildVisible = false;
 
             foreach (var unit in area.Units)
             {
-                bool match = FilterUnit(unit, keyword, isAIMode);
+                bool match = FilterUnit(unit, keyword, isAIMode, isRecordingMode);
                 if (match) anyChildVisible = true;
             }
 
@@ -230,7 +230,7 @@ namespace V3SClient.ucs
             return isVisible;
         }
 
-        private bool FilterUnit(UnitNode unit, string keyword, bool isAIMode)
+        private bool FilterUnit(UnitNode unit, string keyword, bool isAIMode, bool isRecordingMode)
         {
             bool anyChildVisible = false;
 
@@ -241,7 +241,8 @@ namespace V3SClient.ucs
                              (cam.LongName != null && cam.LongName.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0);
                              
                 bool matchAI = !isAIMode || (cam.CamData != null && cam.CamData.HasAIStream);
-                bool match = matchKeyword && matchAI;
+                bool matchRecording = !isRecordingMode || (cam.CamData != null && cam.CamData.is_recording);
+                bool match = matchKeyword && matchAI && matchRecording;
                 
                 cam.NodeVisibility = match ? Visibility.Visible : Visibility.Collapsed;
                 if (match) anyChildVisible = true;
@@ -249,7 +250,7 @@ namespace V3SClient.ucs
 
             foreach (var sub in unit.SubUnits)
             {
-                bool match = FilterUnit(sub, keyword, isAIMode);
+                bool match = FilterUnit(sub, keyword, isAIMode, isRecordingMode);
                 if (match) anyChildVisible = true;
             }
 

@@ -19,7 +19,6 @@ namespace V3SClient.models
 
         private string _cameraInfo { get; set; } // camera id
 
-
         public string CameraInfo
         {
             get => _cameraInfo;

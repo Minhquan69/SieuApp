@@ -113,6 +113,43 @@ namespace V3SClient.UI.Views
             if (!visible) _cameraBadge.Visible = false;
         }
 
+        /// <summary>
+        /// Keeps the native pipeline alive without allowing either its video
+        /// surface or its WPF status layer to appear.  This is used while a
+        /// fullscreen main stream warms up behind the already-playing sub
+        /// stream.
+        /// </summary>
+        public void SetPresentationVisible(bool visible)
+        {
+            SetVideoSurfaceVisible(visible);
+            if (!visible)
+                StatusPanel.Visibility = Visibility.Collapsed;
+        }
+
+        /// <summary>
+        /// Pauses/resumes a live pipeline without disposing its RTSP session
+        /// or native window. The operation is deliberately off the UI thread
+        /// because GStreamer state changes can wait on the source.
+        /// </summary>
+        public void SetPipelinePaused(bool paused)
+        {
+            var pipeline = _pipeline;
+            if (pipeline == null) return;
+            _ = System.Threading.Tasks.Task.Run(() =>
+            {
+                try
+                {
+                    if (!ReferenceEquals(pipeline, _pipeline)) return;
+                    pipeline.SetState(paused ? State.Paused : State.Playing);
+                }
+                catch (Exception ex)
+                {
+                    LoggerManager.LogException(ex, "Live View _v3 could not " +
+                        (paused ? "pause" : "resume") + " the background stream.");
+                }
+            });
+        }
+
         public void SetCameraBadge(string cameraId, bool visible, bool connected, bool error)
         {
             // Camera IDs are rendered by LiveTile_v3's WPF badge. This
@@ -236,7 +273,8 @@ namespace V3SClient.UI.Views
                     _connectionGate.Release();
                 }
                 LoggerManager.LogInfo("Live View _v3 started direct GStreamer RTSP for camera " +
-                    (selectedCamera.camID ?? selectedCamera.name ?? "unknown") + ": " + source.Url);
+                    (selectedCamera.camID ?? selectedCamera.name ?? "unknown") +
+                    " (stream " + (selectedStream == null ? "fallback" : selectedStream.StreamType ?? "unknown") + "): " + source.Url);
             }
             catch (OperationCanceledException) { }
             catch (Exception ex)

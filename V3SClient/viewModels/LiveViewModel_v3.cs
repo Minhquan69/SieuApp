@@ -237,7 +237,9 @@ namespace V3SClient.viewModels
         public void AssignCamera(LiveSlotViewModel_v3 slot, Camera camera)
         {
             slot.Camera = camera;
-            slot.SelectedStream = SelectDefaultStream(camera);
+            // Grid playback deliberately uses the lower-bandwidth sub stream.
+            // A main stream remains available when this slot is expanded.
+            slot.SelectedStream = SelectGridStream(camera);
             slot.ErrorMessage = null;
             slot.RetryCount = 0;
             slot.State = LiveConnectionState_v3.Offline;
@@ -345,9 +347,27 @@ namespace V3SClient.viewModels
         }
         private static bool Contains(string value, string query) { return string.IsNullOrEmpty(query) || (!string.IsNullOrEmpty(value) && value.IndexOf(query, StringComparison.CurrentCultureIgnoreCase) >= 0); }
         private static bool SameCamera(Camera left, Camera right) { return left != null && right != null && string.Equals(left.camID, right.camID, StringComparison.OrdinalIgnoreCase); }
-        private static CameraStreamInfo SelectDefaultStream(Camera camera)
+        public static CameraStreamInfo SelectGridStream(Camera camera)
         {
-            return camera.Streams == null ? null : camera.Streams.FirstOrDefault(stream => string.Equals(stream.StreamType, "main", StringComparison.OrdinalIgnoreCase)) ?? camera.Streams.FirstOrDefault();
+            if (camera == null) return null;
+            var sub1 = camera.Streams == null ? null : camera.Streams.FirstOrDefault(stream => stream != null &&
+                string.Equals((stream.StreamType ?? string.Empty).Trim(), "sub1", StringComparison.OrdinalIgnoreCase));
+            return sub1 ?? SelectMainStream(camera);
+        }
+
+        public static CameraStreamInfo SelectFullscreenStream(Camera camera)
+        {
+            return SelectMainStream(camera);
+        }
+
+        private static CameraStreamInfo SelectMainStream(Camera camera)
+        {
+            var main = camera == null || camera.Streams == null ? null : camera.Streams.FirstOrDefault(stream => stream != null &&
+                string.Equals((stream.StreamType ?? string.Empty).Trim(), "main", StringComparison.OrdinalIgnoreCase));
+            // Preserve the selected type even when the API omitted a main
+            // metadata record. WhepPlayer_v3 then deliberately resolves
+            // RtspUrlMainRaw, rather than silently taking sub2/another stream.
+            return main ?? new CameraStreamInfo { StreamType = "main" };
         }
     }
 }

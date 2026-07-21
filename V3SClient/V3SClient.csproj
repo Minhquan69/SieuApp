@@ -410,6 +410,7 @@
     <Compile Include="viewModels\VMViewSearchCustom.cs" />
     <Compile Include="viewModels\ShellViewModel_v3.cs" />
     <Compile Include="viewModels\LiveViewModel_v3.cs" />
+    <Compile Include="viewModels\PlaybackCameraListViewModel_v3.cs" />
     <Compile Include="ucs\SidebarControl_v3.xaml.cs">
       <DependentUpon>SidebarControl_v3.xaml</DependentUpon>
     </Compile>
@@ -424,6 +425,9 @@
     </Compile>
     <Compile Include="UI\Views\LiveTile_v3.xaml.cs">
       <DependentUpon>LiveTile_v3.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Views\PlaybackCameraList_v3.xaml.cs">
+      <DependentUpon>PlaybackCameraList_v3.xaml</DependentUpon>
     </Compile>
     <Compile Include="UI\Views\PlaybackPage_v3.xaml.cs">
       <DependentUpon>PlaybackPage_v3.xaml</DependentUpon>
@@ -867,6 +871,10 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="UI\Views\LiveTile_v3.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="UI\Views\PlaybackCameraList_v3.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>

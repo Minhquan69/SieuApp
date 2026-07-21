@@ -21,6 +21,11 @@ namespace V3SClient.UI.Views
         private bool _changingStream;
         private bool _actionsPinned;
         private bool _fullscreenMode;
+        private bool _usingMainPresentation;
+        private bool _gridStreamWarmedForRestore;
+        private int _mainPresentationGeneration;
+        private int _mainSwitchScheduledGeneration = -1;
+        private CameraStreamInfo _pendingMainStream;
         private bool _positioningBadge;
         private int _badgeGeneration;
         private Window _ownerWindow;
@@ -46,6 +51,8 @@ namespace V3SClient.UI.Views
             _hideActionsTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(140) };
             _hideActionsTimer.Tick += HideActionsTimer_Tick;
             Player.PlaybackStateChanged += Player_PlaybackStateChanged;
+            MainPlayer.PlaybackStateChanged += MainPlayer_PlaybackStateChanged;
+            MainPlayer.SetPresentationVisible(false);
             Player.VideoMouseEnter += Player_VideoMouseEnter;
             Player.VideoMouseMove += Player_VideoMouseMove;
             Player.VideoMouseLeave += Player_VideoMouseLeave;
@@ -181,6 +188,18 @@ namespace V3SClient.UI.Views
         }
 
         public LiveSlotViewModel_v3 Slot { get; private set; }
+
+        /// <summary>
+        /// A slot is a mutable view-model: selecting a camera fills the same
+        /// previously-empty slot object.  Compare the player camera too, so
+        /// layout optimization never skips the required bind for that case.
+        /// </summary>
+        public bool RequiresBind(LiveSlotViewModel_v3 slot)
+        {
+            return !ReferenceEquals(Slot, slot) ||
+                   !ReferenceEquals(Player.Camera, slot == null ? null : slot.Camera);
+        }
+
         public event EventHandler RemoveRequested;
         public event EventHandler FullscreenRequested;
         public event EventHandler StateChanged;
@@ -192,18 +211,27 @@ namespace V3SClient.UI.Views
             var previousCamera = Slot == null ? null : Slot.Camera;
             var nextCamera = slot == null ? null : slot.Camera;
             if (previousCamera != null && !ReferenceEquals(previousCamera, nextCamera))
+            {
                 Player.Disconnect();
+                MainPlayer.Disconnect();
+            }
+            _usingMainPresentation = false;
+            _pendingMainStream = null;
+            _mainPresentationGeneration++;
+            _mainSwitchScheduledGeneration = -1;
             Slot = slot;
             DataContext = slot;
             RefreshVisuals();
             if (slot == null || slot.Camera == null)
             {
                 Player.Camera = null;
+                MainPlayer.Camera = null;
                 UpdateMetadataSubscription();
                 return;
             }
             Player.SelectedStream = slot.SelectedStream;
             Player.Camera = slot.Camera;
+            MainPlayer.SetPresentationVisible(false);
             UpdateMetadataSubscription();
         }
 
@@ -265,7 +293,156 @@ namespace V3SClient.UI.Views
 
         public void SetVideoSurfaceVisible(bool visible)
         {
-            Player.SetVideoSurfaceVisible(visible);
+            if (_usingMainPresentation)
+                MainPlayer.SetPresentationVisible(visible);
+            else
+                Player.SetVideoSurfaceVisible(visible);
+        }
+
+        /// <summary>
+        /// Starts the main stream in a second native host while the sub1
+        /// player keeps rendering.  The visible source is swapped only when
+        /// GStreamer has produced a real video overlay for main.
+        /// </summary>
+        public async System.Threading.Tasks.Task PrepareFullscreenMainStreamAsync(CameraStreamInfo mainStream)
+        {
+            if (_disposed || Slot == null || Slot.Camera == null || mainStream == null) return;
+            if (SameStream(Slot.SelectedStream, mainStream)) return;
+
+            _pendingMainStream = mainStream;
+            _mainPresentationGeneration++;
+            MainPlayer.Camera = Slot.Camera;
+            MainPlayer.SelectedStream = mainStream;
+            MainPlayer.SetPresentationVisible(false);
+            await MainPlayer.ReconnectAsync();
+        }
+
+        /// <summary>
+        /// Immediately restores the already-running grid/sub1 pipeline.  The
+        /// main pipeline is then torn down in the background, so leaving
+        /// fullscreen never waits for a new RTSP handshake.
+        /// </summary>
+        public void RestoreGridStream(CameraStreamInfo gridStream)
+        {
+            _mainPresentationGeneration++;
+            _mainSwitchScheduledGeneration = -1;
+            _pendingMainStream = null;
+            if (_usingMainPresentation)
+            {
+                MainPlayer.SetPresentationVisible(false);
+                if (!_gridStreamWarmedForRestore)
+                    Player.SetPipelinePaused(false);
+                Player.SetVideoSurfaceVisible(true);
+            }
+            _usingMainPresentation = false;
+            _gridStreamWarmedForRestore = false;
+            if (gridStream != null)
+            {
+                Slot.SelectedStream = gridStream;
+                Player.SelectedStream = gridStream;
+            }
+            MainPlayer.RequestDisconnect();
+            _ = System.Threading.Tasks.Task.Run(() => MainPlayer.DisposePipelineInBackground());
+            UpdateMetadataSubscription();
+            RefreshVisuals();
+        }
+
+        /// <summary>
+        /// Starts the already-open sub1 pipeline before the fullscreen window
+        /// begins shrinking. It can decode a clean keyframe while main is
+        /// still displayed, avoiding the bright/corrupt first frame on the
+        /// returned grid.
+        /// </summary>
+        public void WarmGridStreamForRestore(CameraStreamInfo gridStream)
+        {
+            if (_disposed || !_usingMainPresentation || Slot == null || Slot.Camera == null) return;
+            if (gridStream != null) Player.SelectedStream = gridStream;
+            _gridStreamWarmedForRestore = true;
+            Player.SetPipelinePaused(false);
+        }
+
+        /// <summary>
+        /// Switches between the lightweight grid stream and the main stream
+        /// without replacing the tile or its WindowsFormsHost.  Keeping the
+        /// native host alive is essential for a smooth fullscreen transition.
+        /// </summary>
+        public async System.Threading.Tasks.Task UseStreamAsync(CameraStreamInfo stream)
+        {
+            if (_disposed || Slot == null || Slot.Camera == null) return;
+            if (ReferenceEquals(Slot.SelectedStream, stream)) return;
+
+            Slot.SelectedStream = stream;
+            Player.SelectedStream = stream;
+            UpdateMetadataSubscription();
+            RefreshVisuals();
+
+            // An offline/error slot only needs its preferred source updated.
+            // A running tile reconnects asynchronously; ConnectAsync already
+            // serializes pipeline teardown/startup and never blocks the UI.
+            if (Slot.State == LiveConnectionState_v3.Connected ||
+                Slot.State == LiveConnectionState_v3.Connecting ||
+                Slot.State == LiveConnectionState_v3.Retrying)
+                await ConnectAsync();
+        }
+
+        private void MainPlayer_PlaybackStateChanged(object sender, WhepPlaybackStateChangedEventArgs_v3 e)
+        {
+            if (_disposed || Slot == null || Slot.Camera == null) return;
+            var generation = _mainPresentationGeneration;
+            LoggerManager.LogInfo("Live View _v3 fullscreen main state for " +
+                Slot.DisplayName + ": " + e.State);
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (_disposed || generation != _mainPresentationGeneration ||
+                    Slot == null || Slot.Camera == null || _pendingMainStream == null)
+                    return;
+
+                if (e.State == WhepPlaybackState_v3.Playing)
+                {
+                    if (_mainSwitchScheduledGeneration == generation) return;
+                    _mainSwitchScheduledGeneration = generation;
+                    _ = SwitchToStableMainAsync(generation);
+                }
+                else if (e.State == WhepPlaybackState_v3.Error)
+                {
+                    LoggerManager.LogWarn("Live View _v3 kept sub1 visible because main failed for " +
+                        Slot.DisplayName + ": " + (e.Message ?? "unknown error"));
+                }
+                // A main-stream failure deliberately leaves the live sub1
+                // pipeline on screen. The user keeps video instead of seeing
+                // a fullscreen error caused only by the optional upgrade.
+            }), DispatcherPriority.Render);
+        }
+
+        private async System.Threading.Tasks.Task SwitchToStableMainAsync(int generation)
+        {
+            // The first frame after an RTSP pipeline reaches Playing can be
+            // a predictive frame that lacks its reference data. Keep it
+            // hidden long enough for the main decoder to receive an IDR and
+            // a few complete frames; sub1 remains visible throughout.
+            await System.Threading.Tasks.Task.Delay(TimeSpan.FromMilliseconds(850));
+            if (_disposed || generation != _mainPresentationGeneration || _usingMainPresentation ||
+                Slot == null || Slot.Camera == null || _pendingMainStream == null)
+                return;
+
+            _usingMainPresentation = true;
+            Slot.SelectedStream = _pendingMainStream;
+            Player.SetVideoSurfaceVisible(false);
+            // Preserve the established sub1 RTSP session, but pause it while
+            // main is visible so it stops decoding/rendering and does not
+            // compete for CPU/GPU resources.
+            Player.SetPipelinePaused(true);
+            MainPlayer.SetPresentationVisible(true);
+            UpdateMetadataSubscription();
+            RefreshVisuals();
+        }
+
+        private static bool SameStream(CameraStreamInfo first, CameraStreamInfo second)
+        {
+            return ReferenceEquals(first, second) ||
+                (first != null && second != null &&
+                 string.Equals(first.StreamType, second.StreamType, StringComparison.OrdinalIgnoreCase) &&
+                 first.IsAiMode == second.IsAiMode);
         }
 
         public async System.Threading.Tasks.Task ConnectAsync()
@@ -290,6 +467,12 @@ namespace V3SClient.UI.Views
             _connectTimeoutTimer.Stop();
             _badgeGeneration++;
             Player.Disconnect();
+            MainPlayer.Disconnect();
+            _usingMainPresentation = false;
+            _gridStreamWarmedForRestore = false;
+            _pendingMainStream = null;
+            _mainPresentationGeneration++;
+            _mainSwitchScheduledGeneration = -1;
             Player.SetVideoSurfaceVisible(false);
             if (Slot != null)
             {
@@ -310,6 +493,12 @@ namespace V3SClient.UI.Views
             // the WPF dispatcher thread. The bulk API is concurrent, while this
             // UI cleanup remains thread-safe and non-blocking at the network layer.
             Player.Disconnect();
+            MainPlayer.Disconnect();
+            _usingMainPresentation = false;
+            _gridStreamWarmedForRestore = false;
+            _pendingMainStream = null;
+            _mainPresentationGeneration++;
+            _mainSwitchScheduledGeneration = -1;
             Player.SetVideoSurfaceVisible(false);
             if (Slot != null)
             {
@@ -328,6 +517,7 @@ namespace V3SClient.UI.Views
             _connectTimeoutTimer.Stop();
             _badgeGeneration++;
             Player.RequestDisconnect();
+            MainPlayer.RequestDisconnect();
             if (Slot != null)
             {
                 Slot.State = Slot.Camera == null ? LiveConnectionState_v3.Empty : LiveConnectionState_v3.Disconnecting;
@@ -344,6 +534,7 @@ namespace V3SClient.UI.Views
             _connectTimeoutTimer.Stop();
             _badgeGeneration++;
             Player.RequestDisconnect();
+            MainPlayer.RequestDisconnect();
             await System.Threading.Tasks.Task.Run(() => Player.DisposePipelineInBackground());
             if (_disposed) return;
             Dispatcher.BeginInvoke(new Action(() =>
@@ -661,10 +852,15 @@ namespace V3SClient.UI.Views
             _changingStream = true;
             var empty = Slot == null || Slot.Camera == null;
             var showCameraId = !empty;
-            Player.SetVideoSurfaceVisible(!empty && Slot.State != LiveConnectionState_v3.Error &&
+            var showVideo = !empty && Slot.State != LiveConnectionState_v3.Error &&
                 Slot.State != LiveConnectionState_v3.Retrying &&
                 Slot.State != LiveConnectionState_v3.Connecting &&
-                Slot.State != LiveConnectionState_v3.Disconnecting);
+                Slot.State != LiveConnectionState_v3.Disconnecting;
+            // There are two native HWND hosts. Exactly one may render: the
+            // persistent sub1 host in grid mode, or the warmed-up main host
+            // in selected-camera fullscreen mode.
+            Player.SetVideoSurfaceVisible(showVideo && !_usingMainPresentation);
+            MainPlayer.SetPresentationVisible(showVideo && _usingMainPresentation);
             Player.SetCameraBadge(empty ? string.Empty : Slot.DisplayName, showCameraId,
                 !empty && Slot.State == LiveConnectionState_v3.Connected,
                 !empty && Slot.HasError && Slot.State == LiveConnectionState_v3.Error);
@@ -691,7 +887,8 @@ namespace V3SClient.UI.Views
                 (Slot.State == LiveConnectionState_v3.Error || Slot.State == LiveConnectionState_v3.Retrying)
                 ? Visibility.Visible : Visibility.Collapsed;
             if (!empty && (Slot.State == LiveConnectionState_v3.Error || Slot.State == LiveConnectionState_v3.Retrying))
-                Player.SetVideoSurfaceVisible(false);
+                if (_usingMainPresentation) MainPlayer.SetPresentationVisible(false);
+                else Player.SetVideoSurfaceVisible(false);
             var loading = !empty && Slot != null &&
                 (Slot.State == LiveConnectionState_v3.Connecting || Slot.State == LiveConnectionState_v3.Disconnecting);
             LoadingOverlay.Visibility = loading ? Visibility.Visible : Visibility.Collapsed;
@@ -709,8 +906,13 @@ namespace V3SClient.UI.Views
                 _loadingSpinnerTimer.Stop();
                 StreamLoadingRotation.Angle = 0;
             }
-            CameraName.Text = empty ? string.Empty : Slot.DisplayName;
-            CameraNameInline.Text = empty ? string.Empty : Slot.DisplayName;
+            // Show the source actually selected for this tile so operators
+            // can immediately confirm grid=sub and fullscreen=main.
+            var cameraBadgeText = empty
+                ? string.Empty
+                : Slot.DisplayName + " · " + (string.IsNullOrWhiteSpace(Slot.StreamLabel) ? "main" : Slot.StreamLabel);
+            CameraName.Text = cameraBadgeText;
+            CameraNameInline.Text = cameraBadgeText;
             if (showCameraId && !string.IsNullOrWhiteSpace(CameraName.Text))
             {
                 StatusDot.Visibility = Visibility.Visible;
@@ -773,11 +975,13 @@ namespace V3SClient.UI.Views
                 _ownerWindow = null;
             }
             Player.PlaybackStateChanged -= Player_PlaybackStateChanged;
+            MainPlayer.PlaybackStateChanged -= MainPlayer_PlaybackStateChanged;
             Player.VideoMouseEnter -= Player_VideoMouseEnter;
             Player.VideoMouseMove -= Player_VideoMouseMove;
             Player.VideoMouseLeave -= Player_VideoMouseLeave;
             MetadataOverlay.Dispose();
             Player.Dispose();
+            MainPlayer.Dispose();
         }
     }
 }

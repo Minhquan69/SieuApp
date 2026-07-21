@@ -93,6 +93,9 @@ namespace V3SClient.libs
         
         [JsonProperty("streams")]
         public List<CameraStreamInfo> Streams { get; set; }
+
+        [JsonProperty("is_recording")]
+        public bool is_recording { get; set; }
         
         [JsonIgnore]
         public bool HasAIStream => Streams != null && Streams.Any(s => s.IsAiMode == true);

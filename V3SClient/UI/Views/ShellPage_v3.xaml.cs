@@ -20,6 +20,14 @@ namespace V3SClient.UI.Views
             DataContextChanged += OnDataContextChanged;
             ShellHeader.SwitchClientRequested += OnSwitchClientRequested;
             ShellHeader.LogoutRequested += OnLogoutRequested;
+            ShellSidebar.LayoutChangeStarting += OnShellSidebarLayoutChangeStarting;
+        }
+
+        private void OnShellSidebarLayoutChangeStarting(object sender, System.EventArgs e)
+        {
+            var livePage = ContentFrame.Content as LivePage_v3;
+            if (livePage != null)
+                livePage.BeginGeometryTransition();
         }
 
         private async void OnSwitchClientRequested(object sender, System.EventArgs e)
@@ -47,6 +55,8 @@ namespace V3SClient.UI.Views
         {
             ShellSidebar.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
             ShellHeader.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+            ShellSidebarColumn.Width = visible ? new GridLength(1, GridUnitType.Auto) : new GridLength(0);
+            ShellHeaderRow.Height = visible ? new GridLength(1, GridUnitType.Auto) : new GridLength(0);
         }
 
         private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)

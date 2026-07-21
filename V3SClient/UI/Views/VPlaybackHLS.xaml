@@ -1,274 +1,174 @@
 <Page x:Class="V3SClient.UI.Views.VPlaybackHLS"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:Icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
+      xmlns:local="clr-namespace:V3SClient.UI.Views"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-      xmlns:local="clr-namespace:V3SClient.UI.Views"
-      xmlns:ucs="clr-namespace:V3SClient.ucs"
       mc:Ignorable="d"
       d:DesignHeight="800"
       d:DesignWidth="1200"
       Loaded="Page_Loaded"
-      Title="Playback_HLS_page">
+      Title="Playback_HLS_page"
+      Background="{StaticResource VmsBackgroundBrush_v3}">
     <Page.Resources>
-        <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="/styles/customize_button.xaml" />
-                <ResourceDictionary Source="/styles/customize_image.xaml" />
-                <ResourceDictionary Source="/styles/customize_textblock.xaml" />
-            </ResourceDictionary.MergedDictionaries>
-            
-            <BooleanToVisibilityConverter x:Key="BoolToVis" />
-
-            <Style x:Key="PlaybackDownloadContextMenuStyle"
-                   TargetType="{x:Type ContextMenu}">
-                <Setter Property="Background"
-                        Value="#1B2029" />
-                <Setter Property="BorderBrush"
-                        Value="#3A4656" />
-                <Setter Property="BorderThickness"
-                        Value="1" />
-                <Setter Property="Padding"
-                        Value="4" />
-                <Setter Property="MinWidth"
-                        Value="230" />
-                <Setter Property="SnapsToDevicePixels"
-                        Value="True" />
-                <Setter Property="OverridesDefaultStyle"
-                        Value="True" />
-                <Setter Property="Template">
-                    <Setter.Value>
-                        <ControlTemplate TargetType="{x:Type ContextMenu}">
-                            <Border Background="#1B2029"
-                                    BorderBrush="#3A4656"
-                                    BorderThickness="1"
-                                    SnapsToDevicePixels="True">
-                                <StackPanel Margin="4"
-                                            IsItemsHost="True"
-                                            KeyboardNavigation.DirectionalNavigation="Cycle" />
-                            </Border>
-                        </ControlTemplate>
-                    </Setter.Value>
-                </Setter>
-            </Style>
-
-            <Style x:Key="PlaybackDownloadMenuItemStyle"
-                   TargetType="{x:Type MenuItem}">
-                <Setter Property="Foreground"
-                        Value="#E8ECF1" />
-                <Setter Property="Background"
-                        Value="Transparent" />
-                <Setter Property="Padding"
-                        Value="8,6" />
-                <Setter Property="FontSize"
-                        Value="12" />
-                <Setter Property="MinHeight"
-                        Value="30" />
-                <Setter Property="HorizontalContentAlignment"
-                        Value="Stretch" />
-                <Setter Property="Template">
-                    <Setter.Value>
-                        <ControlTemplate TargetType="{x:Type MenuItem}">
-                            <Border x:Name="MenuItemBorder"
-                                    Background="{TemplateBinding Background}"
-                                    CornerRadius="4"
-                                    Padding="{TemplateBinding Padding}"
-                                    SnapsToDevicePixels="True">
-                                <ContentPresenter ContentSource="Header"
-                                                  RecognizesAccessKey="True"
-                                                  VerticalAlignment="Center" />
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsHighlighted"
-                                         Value="True">
-                                    <Setter TargetName="MenuItemBorder"
-                                            Property="Background"
-                                            Value="#293241" />
-                                </Trigger>
-                                <Trigger Property="IsEnabled"
-                                         Value="False">
-                                    <Setter Property="Opacity"
-                                            Value="0.45" />
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Setter.Value>
-                </Setter>
-            </Style>
-
-            <Style x:Key="PlaybackDownloadSeparatorStyle"
-                   TargetType="{x:Type Separator}">
-                <Setter Property="Margin"
-                        Value="6,4" />
-                <Setter Property="Template">
-                    <Setter.Value>
-                        <ControlTemplate TargetType="{x:Type Separator}">
-                            <Border Height="1"
-                                    Background="#334050" />
-                        </ControlTemplate>
-                    </Setter.Value>
-                </Setter>
-            </Style>
-          
-        </ResourceDictionary>
-       
+        <Style x:Key="PlaybackToolbarButton_v3" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle_v3}">
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="MinHeight" Value="28"/>
+        </Style>
+        <Style x:Key="PlaybackFieldLabel_v3" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource VmsTextTertiaryBrush_v3}"/>
+            <Setter Property="FontSize" Value="9"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style x:Key="PlaybackDownloadContextMenuStyle" TargetType="ContextMenu">
+            <Setter Property="Background" Value="{StaticResource VmsSurfaceBrush_v3}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource VmsBorderBrush_v3}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+        <Style x:Key="PlaybackDownloadMenuItemStyle" TargetType="MenuItem">
+            <Setter Property="Foreground" Value="{StaticResource VmsTextPrimaryBrush_v3}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="9,6"/>
+        </Style>
+        <Style x:Key="PlaybackDownloadSeparatorStyle" TargetType="Separator">
+            <Setter Property="Height" Value="1"/>
+            <Setter Property="Background" Value="{StaticResource VmsBorderBrush_v3}"/>
+        </Style>
     </Page.Resources>
 
     <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="auto" />
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="auto" />
-        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
 
-        <!-- Left Side-->
-        <Border Grid.Column="0">
-            <Frame x:Name="frmLeftMenu" />
-
-        </Border>
-        <!-- Right Size-->
-        <Frame x:Name="frmRightSide"
-               Background="#0D0F12"
-               Grid.Column="2">
-        </Frame>
-        
-        <!-- Center zone-->
-        <Border Grid.Column="1">
+        <!-- The toolbar mirrors the web hierarchy. Search selection/time is
+             still hosted by the existing LeftMenu/ViewSearch control on the
+             right, so no playback API or event contract is changed. -->
+        <Border x:Name="PlaybackControlHeader" Grid.Row="0" Background="{StaticResource VmsHeaderBrush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="0,0,0,1" Padding="10,8">
             <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="190"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="28" Height="28" CornerRadius="6" Background="{StaticResource VmsPrimarySoftBrush_v3}" BorderBrush="{StaticResource VmsPrimaryBorderBrush_v3}" BorderThickness="1" Margin="0,0,8,0">
+                        <Icon:PackIconMaterial Kind="PlayCircleOutline" Width="17" Height="17" Foreground="{StaticResource VmsPrimaryBrush_v3}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="PHÁT LẠI" Style="{StaticResource PlaybackFieldLabel_v3}"/>
+                        <TextBlock x:Name="txtTotalCam" Text="Chưa chọn camera" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontSize="13" FontWeight="SemiBold"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <Frame x:Name="frmSearchToolbar" Grid.Column="1" NavigationUIVisibility="Hidden" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="PlaybackSidebarOpenButton" Width="34" Height="34" Visibility="Collapsed" Click="TogglePlaybackSidebar_Click" ToolTip="Open camera list" Style="{StaticResource PlaybackToolbarButton_v3}">
+                        <Icon:PackIconMaterial Kind="ChevronLeft" Width="20" Height="20"/>
+                    </Button>
+                    <Button x:Name="btnDownload" Click="btnDownload_Click" Visibility="Collapsed" Style="{StaticResource PlaybackToolbarButton_v3}" ToolTip="Tải video đã chọn">
+                        <StackPanel Orientation="Horizontal"><Icon:PackIconMaterial Kind="DownloadOutline" Width="15" Height="15"/><TextBlock Text="Tải xuống" Margin="5,0,0,0"/></StackPanel>
+                    </Button>
+                    <TextBlock x:Name="txtCurrentRate" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" FontSize="10" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition x:Name="PlaybackSidebarColumn" Width="280" MinWidth="0" MaxWidth="340"/>
+                <ColumnDefinition Width="0"/>
+            </Grid.ColumnDefinitions>
+
+            <Grid Grid.Column="0" Margin="8">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="*" />  <!-- Video Grid -->
-                    <RowDefinition x:Name="AggregateTimelineRowDefinition"
-                                   Height="70" />  <!-- Aggregate Timeline -->
+                    <RowDefinition Height="*"/>
+                    <RowDefinition x:Name="AggregateTimelineRowDefinition" Height="108"/>
                 </Grid.RowDefinitions>
-                <!-- VÃ¹ng hiá»ƒn thá»‹ cÃ¡c video-->
-                <Grid x:Name="startPlayback"
-                      Background="#0D0F12"
-                      Grid.Row="0"   
-                      Panel.ZIndex="10"  
-                      >
-                    <TextBlock Text="Please Select Cameras and Search to Playback "
-                               Style="{StaticResource label_TextBlock}"
-                               VerticalAlignment="Center"
-                               HorizontalAlignment="Center"
-                               FontSize="20"
-                               Foreground="#AAAAAA"
-                               />
 
-                </Grid>
-                <Grid x:Name="gridCameraList"
-                      Background="#0D0F12"
-                      Grid.Row="0">
-                </Grid>
-
-
-                <!-- VÃ¹ng hiá»ƒn thá»‹ cÃ¡c nÃºt Ä‘iá»u khiá»ƒn-->
-                <Grid Grid.Row="1" Background="#111318">
-                    <Canvas x:Name="aggregateTimelineCanvas"
-                            Margin="0,1,8,1"
-                            Background="#111318"
-                            ClipToBounds="True"
-                            SizeChanged="AggregateTimelineCanvas_SizeChanged"
-                            MouseLeftButtonDown="AggregateTimelineCanvas_MouseLeftButtonDown"
-                            MouseMove="AggregateTimelineCanvas_MouseMove"
-                            MouseLeftButtonUp="AggregateTimelineCanvas_MouseLeftButtonUp"
-                            MouseRightButtonUp="AggregateTimelineCanvas_MouseRightButtonUp" />
-
-                    <Grid Visibility="Collapsed">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="350" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-
-                    <StackPanel Grid.Column="0"
-                                Orientation="Horizontal"
-                                HorizontalAlignment="Left"
-                                Opacity="0.7"
-                                VerticalAlignment="Center"
-                                Margin="10,0,0,0"
-                                >
-                        <Button x:Name="btnDownload"
-                                Click="btnDownload_Click"
-                                Visibility="Collapsed"
-                                VerticalAlignment="Center"
-                                Margin="0,0,10,0"
-                                Style="{StaticResource Transparent_Button}"
-                                ToolTip="Download Selection">
-                            <StackPanel Orientation="Horizontal">
-                                <Image Source="/images/downloads/download.png"
-                                       Width="20" Height="20"
-                                       Style="{StaticResource Transparent_Image}" />
-                                <TextBlock Text="Download"
-                                           Style="{StaticResource label_TextBlock}"
-                                           VerticalAlignment="Center"
-                                           Margin="5,0,0,0" />
+                <Border Grid.Row="0" Background="Black" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" CornerRadius="6" ClipToBounds="True">
+                    <Grid>
+                        <Grid x:Name="gridCameraList" Background="Black"/>
+                        <Grid x:Name="startPlayback" Background="{StaticResource VmsSurfaceBrush_v3}" Panel.ZIndex="10">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Border Width="42" Height="42" CornerRadius="21" Background="{StaticResource VmsSurface2Brush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" HorizontalAlignment="Center">
+                                    <Icon:PackIconMaterial Kind="PlayCircleOutline" Width="25" Height="25" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <TextBlock Text="Chọn camera và tìm kiếm để xem phát lại" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" FontSize="13" Margin="0,10,0,0" HorizontalAlignment="Center"/>
                             </StackPanel>
-                        </Button>
+                        </Grid>
+                    </Grid>
+                </Border>
 
-                        <TextBlock Style="{StaticResource label_TextBlock}"
-                                   Text="Cam: 0"
-                                   VerticalAlignment="Center"
-                                   x:Name="txtTotalCam" 
-                                   />
-
+                <!-- Overlay only: this does not reserve a grid row or resize cameras. -->
+                <!-- Legacy WPF toolbar is retained only as disabled markup while
+                     the native overlay is used for GStreamer HWND airspace. -->
+                <!--
+                <Border x:Name="GlobalPlaybackToolbar" Grid.Row="0" Panel.ZIndex="50" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,12" Background="{StaticResource VmsSurfaceBrush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" CornerRadius="5" Padding="4"
+                        MouseEnter="GlobalPlaybackToolbar_MouseEnter" MouseLeave="GlobalPlaybackToolbar_MouseLeave">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <Button x:Name="btnPrevious" Click="PlaybackControl" Style="{StaticResource PlaybackToolbarButton_v3}" ToolTip="Giảm tốc độ"><Icon:PackIconMaterial Kind="Rewind10" Width="15" Height="15"/></Button>
+                        <Button x:Name="btnSeekBack" Click="PlaybackControl" Style="{StaticResource PlaybackToolbarButton_v3}" ToolTip="Lùi"><Icon:PackIconMaterial Kind="SkipPrevious" Width="15" Height="15"/></Button>
+                        <Button x:Name="btnPlay" Click="PlaybackControl" Style="{StaticResource PlaybackToolbarButton_v3}" ToolTip="Phát/Dừng"><Image x:Name="playImage" Source="/images/videocontrols/play.png" Width="15" Height="15"/></Button>
+                        <Button x:Name="btnSeekForward" Click="PlaybackControl" Style="{StaticResource PlaybackToolbarButton_v3}" ToolTip="Tiến"><Icon:PackIconMaterial Kind="SkipNext" Width="15" Height="15"/></Button>
+                        <Button x:Name="btnForward" Click="PlaybackControl" Style="{StaticResource PlaybackToolbarButton_v3}" ToolTip="Tăng tốc độ"><Icon:PackIconMaterial Kind="FastForward10" Width="15" Height="15"/></Button>
+                        <Separator Width="1" Margin="5,2" Background="{StaticResource VmsBorderBrush_v3}"/>
+                        <Button Click="GlobalPlaybackAction_Click" Tag="AiAll" Style="{StaticResource PlaybackToolbarButton_v3}" ToolTip="Bật/tắt AI tất cả camera"><TextBlock Text="AI" FontSize="10" FontWeight="Bold" Foreground="{StaticResource VmsPrimaryBrush_v3}"/></Button>
+                        <Button Click="GlobalPlaybackAction_Click" Tag="SnapshotAll" Style="{StaticResource PlaybackToolbarButton_v3}" ToolTip="Chụp ảnh tất cả camera"><Icon:PackIconMaterial Kind="CameraOutline" Width="15" Height="15"/></Button>
+                        <Button Click="GlobalPlaybackAction_Click" Tag="DownloadAll" Style="{StaticResource PlaybackToolbarButton_v3}" ToolTip="Tải video tất cả camera"><Icon:PackIconMaterial Kind="DownloadOutline" Width="15" Height="15"/></Button>
                     </StackPanel>
-                    <!-- center control buttons-->
-                    <UniformGrid Grid.Column="1"
-                                 Opacity="0.7"
-                                 Columns="5"
-                                 Rows="1"
-                                 VerticalAlignment="Center">
-                        <Button x:Name="btnPrevious"
-                                Click="PlaybackControl"
-                                Style="{StaticResource Transparent_Button}">
-                            <Image Source="/images/videocontrols/previous15.png"
-                                   Style="{StaticResource Transparent_Image}" ToolTip="- Giáº£m tá»‘c Ä‘á»™ phÃ¡t"/>
-                        </Button>
-                        <Button x:Name="btnSeekBack"
-                                Click="PlaybackControl"
-                                Style="{StaticResource Transparent_Button}" ToolTip=" Dá»‹ch chuyá»ƒn -">
-                            <Image Source="/images/videocontrols/previous.png"
-                                   Style="{StaticResource Transparent_Image}" />
-                        </Button>
-                        <Button x:Name="btnPlay"
-                                Click="PlaybackControl"
-                                Style="{StaticResource Transparent_Button}" ToolTip="PhÃ¡t/Dá»«ng video">
-                            <Image x:Name="playImage"
-                                   Source="/images/videocontrols/play.png"
-                                   Style="{StaticResource Transparent_Image}" />
-                        </Button>
-                        <Button x:Name="btnSeekForward"
-                                Click="PlaybackControl"
-                                Style="{StaticResource Transparent_Button}" ToolTip=" Dá»‹ch chuyá»ƒn +">
-                            <Image Style="{StaticResource Transparent_Image}"
-                                   Source="/images/videocontrols/forward.png" />
-                        </Button>
-                        <Button x:Name="btnForward"
-                                Click="PlaybackControl"
-                                Style="{StaticResource Transparent_Button}" ToolTip="+ TÄƒng tá»‘c Ä‘á»™ phÃ¡t">
-                            <Image Style="{StaticResource Transparent_Image}"
-                                   Source="/images/videocontrols/forward15.png" />
-                        </Button>
+                </Border>
+                -->
 
-                    </UniformGrid>
+                <!-- The native toolbar host is added here after Page.Loaded.  It is a
+                     sibling of the GStreamer hosts, so it overlays video without
+                     changing the size of the grid. -->
+                <Grid x:Name="NativePlaybackToolbarLayer" Grid.Row="0" Panel.ZIndex="60" IsHitTestVisible="True"/>
 
-                    <StackPanel Grid.Column="2"
-                                Margin="0,0,10,0"
-                                VerticalAlignment="Bottom"
-                                HorizontalAlignment="Right"
-                                Opacity="0.7"
-                                >
-                        <StackPanel Orientation="Horizontal">
-                        </StackPanel>
+                <Border Grid.Row="1" Margin="0,6,0,0" Background="{StaticResource VmsSurfaceBrush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" CornerRadius="6" Padding="8">
+                    <Grid>
+                        <Canvas x:Name="aggregateTimelineCanvas"
+                                Background="{StaticResource VmsSurfaceBrush_v3}"
+                                ClipToBounds="True"
+                                SizeChanged="AggregateTimelineCanvas_SizeChanged"
+                                MouseLeftButtonDown="AggregateTimelineCanvas_MouseLeftButtonDown"
+                                MouseMove="AggregateTimelineCanvas_MouseMove"
+                                MouseLeftButtonUp="AggregateTimelineCanvas_MouseLeftButtonUp"
+                                MouseRightButtonUp="AggregateTimelineCanvas_MouseRightButtonUp"/>
+                    </Grid>
+                </Border>
+            </Grid>
 
-                        <TextBlock Style="{StaticResource label_TextBlock}"
-                                   VerticalAlignment="Center"
-                                   x:Name="txtCurrentRate" 
-                                   />
-                    </StackPanel>
+            <Border x:Name="PlaybackSidebar" Grid.Column="1" Background="{StaticResource VmsSidebarBrush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1,0,0,0">
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    <Border Background="{StaticResource VmsHeaderBrush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="0,0,0,1" Padding="11,10">
+                        <Grid>
+                            <StackPanel Orientation="Horizontal"><Icon:PackIconMaterial Kind="VideoOutline" Width="16" Height="16" Foreground="{StaticResource VmsPrimaryBrush_v3}" Margin="0,0,7,0"/><TextBlock Text="Danh sách camera" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontWeight="SemiBold" FontSize="13"/></StackPanel>
+                            <Button HorizontalAlignment="Right" Width="27" Height="27" Padding="0" Click="TogglePlaybackSidebar_Click" ToolTip="Đóng danh sách camera" Style="{StaticResource PlaybackToolbarButton_v3}"><Icon:PackIconMaterial Kind="ChevronRight" Width="18" Height="18"/></Button>
+                        </Grid>
+                    </Border>
+                    <local:PlaybackCameraList_v3 x:Name="PlaybackCameraList" Grid.Row="1"/>
                 </Grid>
-            
-                </Grid>
+            </Border>
+
+            <!-- Retained for the current playback/AI-log workflow. It stays
+                 loaded by code-behind but is not part of the web playback UI. -->
+            <Frame x:Name="frmRightSide" Grid.Column="2" Visibility="Collapsed" NavigationUIVisibility="Hidden"/>
+        </Grid>
+
+        <Border x:Name="PlaybackToast" Grid.Row="0" Grid.RowSpan="2" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,18,18,0" Width="350" Visibility="Collapsed" Panel.ZIndex="100" Background="{StaticResource VmsSurfaceBrush_v3}" BorderBrush="{StaticResource VmsBorderStrongBrush_v3}" BorderThickness="1" CornerRadius="9" Padding="0">
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="5"/><ColumnDefinition Width="44"/><ColumnDefinition Width="*"/><ColumnDefinition Width="32"/></Grid.ColumnDefinitions>
+                <Border x:Name="PlaybackToastAccent" Grid.Column="0" Background="{StaticResource VmsInfoBrush_v3}" CornerRadius="9,0,0,9"/>
+                <Border Grid.Column="1" Width="30" Height="30" CornerRadius="15" Background="{StaticResource VmsPrimarySoftBrush_v3}" HorizontalAlignment="Center" VerticalAlignment="Center"><Icon:PackIconMaterial x:Name="PlaybackToastIcon" Kind="InformationOutline" Width="19" Height="19" Foreground="{StaticResource VmsInfoBrush_v3}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                <StackPanel Grid.Column="2" Margin="0,13,4,13" VerticalAlignment="Center"><TextBlock x:Name="PlaybackToastTitle" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontWeight="SemiBold" FontSize="13"/><TextBlock x:Name="PlaybackToastMessage" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"/></StackPanel>
+                <Button Grid.Column="3" Click="ClosePlaybackToast_Click" Width="28" Height="28" Padding="0" Margin="0,7,6,0" VerticalAlignment="Top" Background="Transparent" BorderThickness="0" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" ToolTip="Đóng thông báo"><Icon:PackIconMaterial Kind="Close" Width="16" Height="16"/></Button>
             </Grid>
         </Border>
     </Grid>

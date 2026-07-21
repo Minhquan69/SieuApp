@@ -19,6 +19,8 @@ namespace V3SClient.models
         public string description { get; set; }
         public string type {  get; set; }
         public bool is_Live { get; set; }
+        // Returned directly by the camera-list API; retain its JSON name.
+        public bool is_recording { get; set; }
         public string rtps { get; set; }
         
         // Multi-stream properties
@@ -151,18 +153,3 @@ namespace V3SClient.models
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

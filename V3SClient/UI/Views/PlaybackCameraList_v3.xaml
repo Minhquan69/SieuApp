@@ -1,0 +1,90 @@
+<UserControl x:Class="V3SClient.UI.Views.PlaybackCameraList_v3"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:Icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
+             Background="{StaticResource VmsSidebarBrush_v3}">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <UniformGrid Columns="3" Height="46" Margin="10,8,10,6">
+            <Border Background="{StaticResource VmsSurface2Brush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" CornerRadius="5" Margin="2,1"><StackPanel><TextBlock Text="CAMERA" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="9" HorizontalAlignment="Center"/><TextBlock Text="{Binding CameraCount, Mode=OneWay}" Foreground="{StaticResource VmsPrimaryBrush_v3}" FontSize="15" HorizontalAlignment="Center" FontWeight="SemiBold"/></StackPanel></Border>
+            <Border Background="{StaticResource VmsSurface2Brush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" CornerRadius="5" Margin="2,1"><StackPanel><TextBlock Text="TRỰC TUYẾN" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="8" HorizontalAlignment="Center"/><TextBlock Text="{Binding RecordingCameraCount, Mode=OneWay}" Foreground="{StaticResource VmsSuccessBrush_v3}" FontSize="15" HorizontalAlignment="Center" FontWeight="SemiBold"/></StackPanel></Border>
+            <Border Background="{StaticResource VmsSurface2Brush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" CornerRadius="5" Margin="2,1"><StackPanel><TextBlock Text="NHÓM" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="9" HorizontalAlignment="Center"/><TextBlock Text="{Binding GroupCount, Mode=OneWay}" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontSize="15" HorizontalAlignment="Center" FontWeight="SemiBold"/></StackPanel></Border>
+        </UniformGrid>
+        <Border Grid.Row="1" Margin="10,0,10,5" Height="31" Background="{StaticResource VmsSurface2Brush_v3}" BorderBrush="{StaticResource VmsFocusBrush_v3}" BorderThickness="1" CornerRadius="6">
+            <Grid><Icon:PackIconMaterial Kind="Magnify" Width="15" Height="15" Margin="10,0,0,0" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" VerticalAlignment="Center"/><TextBox x:Name="CameraSearchText" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Margin="30,0,6,0" Background="Transparent" BorderThickness="0" Padding="0" VerticalContentAlignment="Center" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" CaretBrush="White" ToolTip="Tìm camera"><TextBox.Style><Style TargetType="TextBox"><Setter Property="FontSize" Value="11"/></Style></TextBox.Style></TextBox><TextBlock Text="Tìm camera" Margin="30,0,6,0" VerticalAlignment="Center" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" IsHitTestVisible="False"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Text, ElementName=CameraSearchText}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock></Grid>
+        </Border>
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="12,0,10,4">
+            <Button Content="Tất cả" Click="AllFilter_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="6,2" Margin="0,0,5,0" FontSize="10"/>
+            <Button Click="AiFilter_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="6,2" Margin="0,0,5,0" FontSize="10"><StackPanel Orientation="Horizontal"><Icon:PackIconMaterial Kind="RobotOutline" Width="10" Height="10" Margin="0,0,3,0"/><TextBlock Text="AI"/></StackPanel></Button>
+            <Button Click="RecordingFilter_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="6,2" FontSize="10"><StackPanel Orientation="Horizontal"><Icon:PackIconMaterial Kind="VideoOutline" Width="10" Height="10" Margin="0,0,3,0"/><TextBlock Text="REC"/></StackPanel></Button>
+        </StackPanel>
+        <Grid Grid.Row="3" Margin="12,2,10,3"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="ĐÃ CHỌN" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" FontSize="10" FontWeight="SemiBold"/><TextBlock Grid.Column="1" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="10"><Run Text="{Binding SelectedCount, Mode=OneWay}"/><Run Text="/9"/></TextBlock></Grid>
+        <ItemsControl Grid.Row="4" ItemsSource="{Binding SelectedCameraItems}" Margin="10,0,10,5">
+            <ItemsControl.ItemTemplate><DataTemplate>
+                <Border Tag="{Binding Camera}" MouseLeftButtonDown="Camera_MouseDown" Background="{StaticResource VmsPrimarySoftBrush_v3}" BorderBrush="{StaticResource VmsPrimaryBorderBrush_v3}" BorderThickness="1" CornerRadius="5" Padding="7,5" Margin="0,1">
+                    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <Ellipse Width="8" Height="8" Fill="{StaticResource VmsSuccessBrush_v3}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <TextBlock Grid.Column="1" Text="{Binding DisplayName}" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontSize="11" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                        <Icon:PackIconMaterial Grid.Column="2" Kind="Close" Width="13" Height="13" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" VerticalAlignment="Center" ToolTip="Bỏ chọn"/>
+                    </Grid>
+                </Border>
+            </DataTemplate></ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <Grid Grid.Row="5" Margin="12,0,10,3"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="CAMERA" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" FontSize="10"/><TextBlock Grid.Column="1" Text="{Binding CameraCount, Mode=OneWay}" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="10"/></Grid>
+        <ScrollViewer Grid.Row="6" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <!-- Same compact, dark scrollbar as Live View.  The default WPF
+                 template was still drawing a wide white track in Playback. -->
+            <ScrollViewer.Resources>
+                <Style TargetType="ScrollBar">
+                    <Setter Property="Width" Value="6"/>
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ScrollBar">
+                                <Grid Width="6" Background="Transparent">
+                                    <Track x:Name="PART_Track" IsDirectionReversed="true">
+                                        <Track.Thumb>
+                                            <Thumb Width="4" Background="{StaticResource VmsBorderStrongBrush_v3}"/>
+                                        </Track.Thumb>
+                                        <Track.DecreaseRepeatButton>
+                                            <RepeatButton Command="{x:Static ScrollBar.PageUpCommand}" Opacity="0"/>
+                                        </Track.DecreaseRepeatButton>
+                                        <Track.IncreaseRepeatButton>
+                                            <RepeatButton Command="{x:Static ScrollBar.PageDownCommand}" Opacity="0"/>
+                                        </Track.IncreaseRepeatButton>
+                                    </Track>
+                                </Grid>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </ScrollViewer.Resources>
+            <ItemsControl ItemsSource="{Binding CameraGroups}" Margin="6,0,6,6">
+                <ItemsControl.ItemTemplate><DataTemplate>
+                    <Expander IsExpanded="{Binding IsExpanded}" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" Margin="6,1,2,2" FontSize="11" FontWeight="SemiBold" HorizontalContentAlignment="Stretch">
+                        <Expander.Header>
+                            <Grid HorizontalAlignment="Stretch">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding Name}" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontSize="11" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Grid.Column="1" Text="{Binding Count, Mode=OneWay}" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="10" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Expander.Header>
+                        <ItemsControl ItemsSource="{Binding CameraItems}" Margin="10,0,0,0"><ItemsControl.ItemTemplate><DataTemplate>
+                            <Border Tag="{Binding Camera}" MouseLeftButtonDown="Camera_MouseDown" Padding="7,3" Margin="0,1"><Border.Style><Style TargetType="Border"><Setter Property="Background" Value="Transparent"/><Setter Property="BorderBrush" Value="Transparent"/><Setter Property="BorderThickness" Value="1"/><Style.Triggers><DataTrigger Binding="{Binding IsSelected}" Value="True"><Setter Property="Background" Value="{StaticResource VmsPrimarySoftBrush_v3}"/><Setter Property="BorderBrush" Value="{StaticResource VmsPrimaryBrush_v3}"/></DataTrigger></Style.Triggers></Style></Border.Style>
+                                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <Icon:PackIconMaterial Kind="CameraOutline" Width="12" Height="12" Margin="0,0,5,0" VerticalAlignment="Center" Foreground="{StaticResource VmsTextTertiaryBrush_v3}"/>
+                                    <Icon:PackIconMaterial Grid.Column="1" Kind="Check" Foreground="{StaticResource VmsSuccessBrush_v3}" Width="14" Height="14" Margin="0,0,3,0"><Icon:PackIconMaterial.Style><Style TargetType="Icon:PackIconMaterial"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsSelected}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Icon:PackIconMaterial.Style></Icon:PackIconMaterial>
+                                    <TextBlock Grid.Column="2" Text="{Binding DisplayName}" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" TextTrimming="CharacterEllipsis" FontSize="11"/>
+                                    <Border Grid.Column="3" Background="{StaticResource VmsPrimarySoftBrush_v3}" BorderBrush="{StaticResource VmsPrimaryBorderBrush_v3}" BorderThickness="1" CornerRadius="3" Padding="3,1"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsAiCamera}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><TextBlock Text="AI" Foreground="{StaticResource VmsPrimaryBrush_v3}" FontSize="9" FontWeight="SemiBold"/></Border>
+                                </Grid>
+                            </Border>
+                        </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+                    </Expander>
+                </DataTemplate></ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

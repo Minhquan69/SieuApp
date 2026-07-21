@@ -15,10 +15,10 @@
 
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="15" />
-            <ColumnDefinition Width="auto" />
+            <ColumnDefinition Width="0" />
+            <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
-        <Border x:Name="Hide_Left_Menu" Visibility="Visible" Grid.Column="0" Style="{StaticResource Border_Reseted}" Background="#0D0F12" BorderThickness="0,0,0,0" BorderBrush="Transparent">
+        <Border x:Name="Hide_Left_Menu" Visibility="Collapsed" Grid.Column="0" Style="{StaticResource Border_Reseted}" Background="{StaticResource VmsSidebarBrush_v3}" BorderThickness="0,0,0,0" BorderBrush="Transparent">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="36" />
@@ -33,23 +33,21 @@
             </Grid>
         </Border>
 
-        <Border x:Name="leftMenu" Grid.Column="1" Width="230" Style="{StaticResource Border_Reseted}" BorderThickness="0" BorderBrush="DarkGray">
-            <Border.Background>
-                <SolidColorBrush Color="#0D0F12" Opacity="0.9" />
-            </Border.Background>
+        <Border x:Name="leftMenu" Grid.Column="1" Style="{StaticResource Border_Reseted}" BorderThickness="0" BorderBrush="{StaticResource VmsBorderBrush_v3}" Background="{StaticResource VmsSidebarBrush_v3}">
 
             <Grid>
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="{Binding Path=HeightZoneCameraList}" />
                     <RowDefinition Height="*" />
+                    <RowDefinition Height="0" />
                 </Grid.RowDefinitions>
 
                 <!-- Định nghĩa vùng Cam List-->
-                <Border Grid.Row="0" Style="{StaticResource Border_Reseted}" Margin="0,5,20,0">
+                <Border Grid.Row="0" Style="{StaticResource Border_Reseted}" Margin="8,7,8,0">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="30" />
                             <RowDefinition Height="35" /> <!-- Search Box -->
+                            <RowDefinition Height="31" /> <!-- Quick filters -->
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
 
@@ -67,11 +65,8 @@
                                     <TextBlock Text="{Binding CameraGroupList.Count, StringFormat='Orgs ({0})'}" Visibility="{Binding IsOrganizationView, Converter={StaticResource BoolToVisibilityConverter}}" Style="{StaticResource General_TextBlock}" FontSize="12" Opacity="0.9" Margin="5,0,0,0" FontWeight="SemiBold" />
                                 </StackPanel>
 
-                                <!-- Toggle button -->
+                                <!-- Legacy view switch remains available but hidden. -->
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,0,2">
-                                    <ToggleButton x:Name="btnToggleAIMode" Click="btnToggleAIMode_Click" ToolTip="Bật/tắt chế độ AI" Cursor="Hand" Margin="0,0,5,0" Style="{StaticResource LeftMenuToggleButton01Style}">
-                                        
-                                    </ToggleButton>
                                     <Button x:Name="btnSwapView" Visibility="Hidden" BorderThickness="0" Click="btnToggleView_Click" Width="16" Height="16" Background="Transparent" ToolTip="Chuyển đổi chế độ hiển thị">
                                         <Image Source="/images/swap.png" Stretch="Uniform" />
                                     </Button>
@@ -79,7 +74,7 @@
                             </Grid>
                         </Border>
 
-                        <Border Grid.Row="1" Margin="1,0,1,5" Background="#0F1117" BorderBrush="#303540" BorderThickness="1" CornerRadius="4" Height="28">
+                        <Border Grid.Row="1" Margin="1,0,1,5" Background="{StaticResource VmsSurfaceBrush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" CornerRadius="5" Height="30">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -97,10 +92,19 @@
                             </Grid>
                         </Border>
 
-                        <Border Grid.Row="2" Style="{StaticResource Border_Reseted}">
-                            <Border.Background>
-                                <SolidColorBrush Opacity="0.2" Color="#252830" />
-                            </Border.Background>
+                        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="1,0,1,3">
+                            <Button x:Name="btnShowAll" Content="Tất cả" Click="btnShowAll_Click" Height="26" Padding="9,0" Margin="0,0,5,0"
+                                    Foreground="{StaticResource VmsTextPrimaryBrush_v3}" Background="{StaticResource VmsPrimaryBrush_v3}"
+                                    BorderBrush="{StaticResource VmsPrimaryBorderBrush_v3}" BorderThickness="1" Cursor="Hand"/>
+                            <ToggleButton x:Name="btnToggleAIMode" Content="AI" Click="btnToggleAIMode_Click" Height="26" Padding="9,0" Margin="0,0,5,0"
+                                          Foreground="{StaticResource VmsTextPrimaryBrush_v3}" Background="{StaticResource VmsSurfaceBrush_v3}"
+                                          BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" Cursor="Hand" ToolTip="Chỉ hiển thị camera AI"/>
+                            <ToggleButton x:Name="btnToggleRecordingMode" Content="REC" Click="btnToggleRecordingMode_Click" Height="26" Padding="9,0"
+                                          Foreground="{StaticResource VmsTextPrimaryBrush_v3}" Background="{StaticResource VmsSurfaceBrush_v3}"
+                                          BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" Cursor="Hand" ToolTip="Chỉ hiển thị camera có ghi hình"/>
+                        </StackPanel>
+
+                        <Border Grid.Row="3" Style="{StaticResource Border_Reseted}" Background="{StaticResource VmsSidebarBrush_v3}">
 
                             <Grid>
                                 <ucs:ViewCamGroupList x:Name="View_Cam_Group_List" Visibility="{Binding IsOrganizationView, ElementName=Root, Converter={StaticResource InverseBoolToVisibilityConverter}}" Opacity="0.9" BorderThickness="0" />
@@ -114,7 +118,7 @@
                     </Grid>
 
                 </Border>
-                <Grid Grid.Row="1">
+                <Grid Grid.Row="1" Visibility="Collapsed">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />

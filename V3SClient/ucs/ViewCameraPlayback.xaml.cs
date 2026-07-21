@@ -7,6 +7,8 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Security.Policy;
@@ -27,6 +29,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Media.Media3D;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 using V3SClient.libs;
 using V3SClient.models;
 using UserControl = System.Windows.Controls.UserControl;
@@ -58,6 +61,21 @@ namespace V3SClient.ucs
 
         private float _currentPlaybackRate = 1.0f;
         private bool _isPlaying = true;
+        private readonly DispatcherTimer _hideHoverActionsTimer;
+        private bool _aiOverlayEnabled;
+        private bool _disposed;
+        // This is a native-hosted card, deliberately kept inside this tile.  A
+        // normal WPF overlay would be painted underneath GStreamer's HWND.
+        private ElementHost _downloadProgressElementHost;
+        private SmartDownloadManager.DownloadTask _downloadTask;
+        private TextBlock _downloadTitleText;
+        private TextBlock _downloadDetailText;
+        private TextBlock _downloadPercentText;
+        private TextBlock _downloadSpeedText;
+        private System.Windows.Controls.ProgressBar _downloadProgressBar;
+        private System.Windows.Controls.Button _downloadCancelButton;
+        private readonly DispatcherTimer _downloadProgressTimer;
+        private readonly DispatcherTimer _downloadProgressHideTimer;
 
         private Brush _viewCamBackground;
         public Brush ViewCamBackground
@@ -139,6 +157,13 @@ namespace V3SClient.ucs
         public event EventHandler<object> EventClosed;
         public event EventHandler<GMap.NET.PointLatLng> SendGPS;
         public event EventHandler<List<MetaAIResult>> SendMetaAIResult;
+        public event EventHandler<ViewCameraPlayback> SnapshotCurrentRequested;
+        public event EventHandler<ViewCameraPlayback> SnapshotAllRequested;
+        public event EventHandler<ViewCameraPlayback> DownloadCurrentRequested;
+        public event EventHandler<ViewCameraPlayback> AiOverlayRequested;
+        public event System.EventHandler PlaybackHoverEntered;
+        public event System.EventHandler PlaybackHoverLeft;
+        public event EventHandler<ViewCameraPlayback> PlaybackTileClicked;
         public event PropertyChangedEventHandler PropertyChanged;
 
         public void OnPropertyChanged(string name)
@@ -165,13 +190,252 @@ namespace V3SClient.ucs
             DataContext = this;          
             Camera = camera;
             
-            string camName = Camera.name;
-            camName = camName.Replace("Cam", "");
-            camName = camName.Trim();
-            txtCameraName.Text = camName;           
+            // Playback uses the same stable logical camera identifier as Live View.
+            // The display name may change, while camID is the value selected by users.
+            txtCameraName.Text = string.IsNullOrWhiteSpace(Camera.camID) ? Camera.name : Camera.camID;
             _videoPanelHandle = VideoPanel.Handle;
 
+            // GStreamer renders into a native WinForms panel.  Listen to that panel as
+            // well as the WPF tile so hover works over the actual picture, not only its edge.
+            VideoPanel.MouseEnter += VideoPanel_MouseEnter;
+            VideoPanel.MouseLeave += VideoPanel_MouseLeave;
+            VideoPanel.MouseClick += VideoPanel_MouseClick;
+            _hideHoverActionsTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(220) };
+            _hideHoverActionsTimer.Tick += HideHoverActionsTimer_Tick;
+            _downloadProgressTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(160) };
+            _downloadProgressTimer.Tick += (s, e) => UpdateDownloadProgressVisual();
+            _downloadProgressHideTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1300) };
+            _downloadProgressHideTimer.Tick += (s, e) => HideDownloadProgress();
+
             Loaded += ViewCameraPlayback_Loaded;
+        }
+
+        public void ShowDownloadProgress(SmartDownloadManager.DownloadTask task)
+        {
+            if (_disposed || task == null || !IsLoaded)
+                return;
+
+            _downloadTask = task;
+            EnsureDownloadProgressHost();
+            _downloadProgressHideTimer.Stop();
+            UpdateDownloadProgressVisual();
+            NoPlaybackDataNativeHost.Visibility = Visibility.Visible;
+            _downloadProgressTimer.Start();
+        }
+
+        // The playback page uses this during a fullscreen/window geometry
+        // transaction.  Hiding the native D3D11 surface prevents it from
+        // painting at every intermediate WPF size while the grid is arranged.
+        public void SetVideoSurfaceVisible(bool visible)
+        {
+            if (_disposed || VideoPanel == null || VideoPanel.IsDisposed)
+                return;
+            try { VideoPanel.Visible = visible; }
+            catch (ObjectDisposedException) { }
+        }
+
+        private void EnsureDownloadProgressHost()
+        {
+            if (_downloadProgressElementHost != null)
+                return;
+
+            _downloadProgressElementHost = new ElementHost
+            {
+                Dock = DockStyle.Fill,
+                // Keep the native overlay visually light; the video remains
+                // readable behind the compact progress card.
+                BackColor = System.Drawing.Color.Transparent,
+                Child = BuildDownloadProgressCard()
+            };
+            NoPlaybackDataNativeHost.Child = _downloadProgressElementHost;
+            // WindowsFormsHost is an HWND island above the GStreamer video
+            // surface.  The alpha channel of a WPF child is otherwise
+            // composited against the ElementHost back buffer, which makes the
+            // card look solid black.  Apply opacity to the HWND island too so
+            // the rendered video remains visible through the download card.
+            NoPlaybackDataNativeHost.Background = Brushes.Transparent;
+            NoPlaybackDataNativeHost.Opacity = 0.72;
+            NoPlaybackDataNativeHost.Width = 390;
+            NoPlaybackDataNativeHost.Height = 164;
+        }
+
+        private FrameworkElement BuildDownloadProgressCard()
+        {
+            var root = new Border
+            {
+                // Keep the card itself deliberately light.  Together with
+                // the host opacity above this is a true visual overlay rather
+                // than an opaque dialog over the camera image.
+                Background = new SolidColorBrush(Color.FromArgb(138, 5, 20, 34)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(24, 63, 95)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(16),
+                // Opacity is owned by the native host.  Keeping this at 1
+                // avoids pre-compositing the alpha against a black WinForms
+                // buffer before it reaches the video surface.
+                Opacity = 1.0
+            };
+            var rows = new Grid();
+            for (var i = 0; i < 5; i++) rows.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var header = new Grid();
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var spinner = new Border { Width = 18, Height = 18, BorderBrush = new SolidColorBrush(Color.FromRgb(45, 107, 255)), BorderThickness = new Thickness(3, 3, 0, 0), CornerRadius = new CornerRadius(12), RenderTransformOrigin = new Point(0.5, 0.5), Margin = new Thickness(0, 0, 10, 0) };
+            spinner.RenderTransform = new RotateTransform(0);
+            var rotate = new DoubleAnimation(0, 360, new Duration(TimeSpan.FromMilliseconds(760))) { RepeatBehavior = RepeatBehavior.Forever };
+            spinner.RenderTransform.BeginAnimation(RotateTransform.AngleProperty, rotate);
+            header.Children.Add(spinner);
+            _downloadTitleText = new TextBlock { Text = "Đang tải video…", Foreground = Brushes.White, FontWeight = FontWeights.SemiBold, FontSize = 14, VerticalAlignment = VerticalAlignment.Center };
+            Grid.SetColumn(_downloadTitleText, 1); header.Children.Add(_downloadTitleText);
+            _downloadCancelButton = new System.Windows.Controls.Button { Content = "Hủy", Background = new SolidColorBrush(Color.FromRgb(239, 68, 68)), Foreground = Brushes.White, BorderThickness = new Thickness(0), Padding = new Thickness(12, 5, 12, 5), FontWeight = FontWeights.SemiBold, Cursor = System.Windows.Input.Cursors.Hand };
+            _downloadCancelButton.Click += (s, e) => { if (_downloadTask != null) SmartDownloadManager.Instance.Cancel(_downloadTask); };
+            Grid.SetColumn(_downloadCancelButton, 2); header.Children.Add(_downloadCancelButton);
+            rows.Children.Add(header);
+            _downloadDetailText = new TextBlock { Margin = new Thickness(0, 12, 0, 0), FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(190, 211, 231)), TextTrimming = TextTrimming.CharacterEllipsis };
+            Grid.SetRow(_downloadDetailText, 1); rows.Children.Add(_downloadDetailText);
+            var progressHeader = new Grid { Margin = new Thickness(0, 10, 0, 4) };
+            progressHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); progressHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            progressHeader.Children.Add(new TextBlock { Text = "Tiến trình", FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(159, 184, 208)) });
+            _downloadPercentText = new TextBlock { FontSize = 12, Foreground = Brushes.White };
+            Grid.SetColumn(_downloadPercentText, 1); progressHeader.Children.Add(_downloadPercentText);
+            Grid.SetRow(progressHeader, 2); rows.Children.Add(progressHeader);
+            _downloadProgressBar = new System.Windows.Controls.ProgressBar { Height = 7, Minimum = 0, Maximum = 100, Background = new SolidColorBrush(Color.FromRgb(11, 44, 69)), Foreground = new SolidColorBrush(Color.FromRgb(45, 107, 255)), BorderThickness = new Thickness(0) };
+            Grid.SetRow(_downloadProgressBar, 3); rows.Children.Add(_downloadProgressBar);
+            _downloadSpeedText = new TextBlock { Margin = new Thickness(0, 9, 0, 0), FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(190, 211, 231)) };
+            Grid.SetRow(_downloadSpeedText, 4); rows.Children.Add(_downloadSpeedText);
+            root.Child = rows;
+            return root;
+        }
+
+        private void UpdateDownloadProgressVisual()
+        {
+            var task = _downloadTask;
+            if (_disposed || task == null) return;
+            var terminal = string.Equals(task.Status, "Completed", StringComparison.OrdinalIgnoreCase) || string.Equals(task.Status, "Cancelled", StringComparison.OrdinalIgnoreCase) || string.Equals(task.Status, "Failed", StringComparison.OrdinalIgnoreCase);
+            if (_downloadTitleText != null) _downloadTitleText.Text = task.Status == "Completed" ? "Đã tải xong" : task.Status == "Cancelled" ? "Đã hủy tải" : task.Status == "Failed" ? "Tải video thất bại" : "Đang tải video…";
+            if (_downloadDetailText != null) _downloadDetailText.Text = (Camera?.camID ?? task.CameraNames) + " · " + task.StartTime.ToString("HH:mm:ss") + " – " + task.EndTime.ToString("HH:mm:ss");
+            if (_downloadPercentText != null)
+            {
+                _downloadPercentText.Text = task.TotalBytes > 0
+                    ? string.Format("{0} / {1} · {2:0}%", FormatDownloadBytes(task.DownloadedBytes), FormatDownloadBytes(task.TotalBytes), task.Progress)
+                    : task.DownloadedBytes > 0
+                        ? FormatDownloadBytes(task.DownloadedBytes) + " / không xác định"
+                        : "Đang chờ dữ liệu";
+            }
+            if (_downloadProgressBar != null) _downloadProgressBar.Value = Math.Max(0, Math.Min(100, task.Progress));
+            if (_downloadSpeedText != null) _downloadSpeedText.Text = string.IsNullOrWhiteSpace(task.Speed) ? "Đang kết nối máy chủ…" : task.Speed;
+            if (_downloadCancelButton != null) _downloadCancelButton.Visibility = task.CanCancel ? Visibility.Visible : Visibility.Collapsed;
+            if (!terminal) return;
+            _downloadProgressTimer.Stop();
+            _downloadProgressHideTimer.Stop();
+            _downloadProgressHideTimer.Start();
+        }
+
+        private static string FormatDownloadBytes(long value)
+        {
+            if (value < 1024) return value + " B";
+            if (value < 1024L * 1024L) return (value / 1024d).ToString("0.0") + " KB";
+            if (value < 1024L * 1024L * 1024L) return (value / (1024d * 1024d)).ToString("0.0") + " MB";
+            return (value / (1024d * 1024d * 1024d)).ToString("0.00") + " GB";
+        }
+
+        private void HideDownloadProgress()
+        {
+            _downloadProgressHideTimer.Stop();
+            _downloadProgressTimer.Stop();
+            if (NoPlaybackDataNativeHost != null) NoPlaybackDataNativeHost.Visibility = Visibility.Collapsed;
+        }
+
+        private void VideoPanel_MouseEnter(object sender, System.EventArgs e)
+        {
+            PlaybackHoverEntered?.Invoke(this, System.EventArgs.Empty);
+        }
+
+        private void VideoPanel_MouseLeave(object sender, System.EventArgs e)
+        {
+            PlaybackHoverLeft?.Invoke(this, System.EventArgs.Empty);
+            ScheduleHideHoverActions();
+        }
+
+        private void VideoPanel_MouseClick(object sender, System.Windows.Forms.MouseEventArgs e)
+        {
+            if (e.Button == System.Windows.Forms.MouseButtons.Left)
+                PlaybackTileClicked?.Invoke(this, this);
+        }
+
+        private void Tile_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            PlaybackTileClicked?.Invoke(this, this);
+        }
+
+        private void Tile_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            PlaybackHoverEntered?.Invoke(this, System.EventArgs.Empty);
+            ShowHoverActions();
+        }
+
+        private void Tile_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            PlaybackHoverLeft?.Invoke(this, System.EventArgs.Empty);
+            ScheduleHideHoverActions();
+        }
+
+        private void HoverActions_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            ShowHoverActions();
+        }
+
+        private void HoverActions_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            ScheduleHideHoverActions();
+        }
+
+        private void ShowHoverActions()
+        {
+            if (_disposed || !IsLoaded || Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
+                return;
+
+            _hideHoverActionsTimer.Stop();
+            SetHoverActionsVisible(true);
+        }
+
+        private void ScheduleHideHoverActions()
+        {
+            if (_disposed || !IsLoaded || Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
+                return;
+
+            _hideHoverActionsTimer.Stop();
+            _hideHoverActionsTimer.Start();
+        }
+
+        private void HideHoverActionsTimer_Tick(object sender, System.EventArgs e)
+        {
+            _hideHoverActionsTimer.Stop();
+            if (_disposed || !IsLoaded || Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
+                return;
+
+            SetHoverActionsVisible(false);
+        }
+
+        private void SetHoverActionsVisible(bool visible)
+        {
+            try
+            {
+                // Do not set WindowsFormsHost visibility while its child ElementHost is
+                // still being created. This method is called only after Loaded and is
+                // deliberately guarded because native video events can arrive during unload.
+                // Playback actions are hosted once by VPlaybackHLS above the
+                // aggregate timeline. Keeping this native per-tile host hidden
+                // prevents HWND airspace flicker and missed mouse clicks.
+                if (HoverActionsHost != null)
+                    HoverActionsHost.Visibility = Visibility.Collapsed;
+            }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Không thể cập nhật toolbar playback hover");
+            }
         }
 
         public void InitPipeline()
@@ -238,7 +502,13 @@ namespace V3SClient.ucs
                     ShowConnectButton = Visibility.Hidden;
                     break;
                 case PlayerStatus.Stop:
-                    ShowConnectButton = Visibility.Visible;               
+                    // An empty/unreadable HLS playlist reaches Stop before a
+                    // usable duration is reported. Show the in-tile playback
+                    // empty state instead of leaving the native surface gray.
+                    if (VideoDuration <= 0)
+                        Dispatcher.BeginInvoke(new Action(ShowNoPlaybackData));
+                    else
+                        ShowConnectButton = Visibility.Visible;
                     break;
                 case PlayerStatus.Eof:
                     System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() => ConnectedCamera()));
@@ -255,11 +525,15 @@ namespace V3SClient.ucs
         {
             try
             {
+                NoPlaybackDataOverlay.Visibility = Visibility.Collapsed;
+                // A WindowsFormsHost is an HWND and paints above normal WPF controls.
+                // Restore it only when a real playback pipeline is about to start.
+                videoWindow.Visibility = Visibility.Visible;
+                VideoPanel.Visible = true;
                 ShowConnectButton = Visibility.Hidden;
                 InitPipeline();
                 Player.player.SetState(State.Playing);
                 _isPlaying = true;
-                txtPlayPauseIcon.Text = "\uE769"; // Pause icon
                 UpdateSpeedDisplay();
             }
             catch (Exception ex)
@@ -270,6 +544,7 @@ namespace V3SClient.ucs
 
         private void ViewCameraPlayback_Loaded(object sender, RoutedEventArgs e)
         {
+            Dispatcher.BeginInvoke(new Action(() => SetHoverActionsVisible(false)), DispatcherPriority.ContextIdle);
             if (_initialized)
             {
                 byte deta = 5;
@@ -308,7 +583,6 @@ namespace V3SClient.ucs
         {
             try
             {
-                img_speaker.Source = !isSpeakerOn ? Load_Image("/images/speaker_off.png") : Load_Image("/images/speaker_On.png");
                 Player?.Speaker(isSpeakerOn);
                 isSpeakerOn = !isSpeakerOn;
             }
@@ -321,6 +595,358 @@ namespace V3SClient.ucs
         public void btn_Exit_Click(object sender, RoutedEventArgs e)
         {
             EventClosed?.Invoke(this, new object());
+        }
+
+        private void btn_AiOverlay_Click(object sender, RoutedEventArgs e)
+        {
+            _aiOverlayEnabled = !_aiOverlayEnabled;
+            if (Player != null)
+                Player.RoiInfoShow = _aiOverlayEnabled;
+            AiOverlayRequested?.Invoke(this, this);
+        }
+
+        /// <summary>Invoked by the single page-level playback toolbar.</summary>
+        public void ToggleAiOverlay()
+        {
+            btn_AiOverlay_Click(this, null);
+        }
+
+        private void btn_SnapshotCurrent_Click(object sender, RoutedEventArgs e)
+        {
+            SnapshotCurrentRequested?.Invoke(this, this);
+        }
+
+        private void btn_SnapshotAll_Click(object sender, RoutedEventArgs e)
+        {
+            SnapshotAllRequested?.Invoke(this, this);
+        }
+
+        private void btn_DownloadCurrent_Click(object sender, RoutedEventArgs e)
+        {
+            DownloadCurrentRequested?.Invoke(this, this);
+        }
+
+        public bool TrySaveSnapshot(out string savedPath)
+        {
+            savedPath = null;
+            if (_disposed || VideoPanel == null || VideoPanel.Width <= 0 || VideoPanel.Height <= 0)
+                return false;
+
+            try
+            {
+                // Match browser download behavior: save directly to the user's
+                // normal Downloads folder.
+                var downloads = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+                var folder = downloads;
+                Directory.CreateDirectory(folder);
+                var safeId = string.Concat((Camera?.camID ?? "camera").Select(ch => System.IO.Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch));
+                savedPath = System.IO.Path.Combine(folder, safeId + "_" + System.DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".png");
+
+                // PlaybackHLS supplies a decoded appsink frame at the camera's
+                // source resolution.  Prefer it so snapshots are Full HD when the
+                // source is Full HD and never include the grid, badge or controls.
+                var playback = Player as models.PlaybackHLS;
+                if (playback != null)
+                {
+                    if (playback.TrySaveDecodedSnapshot(savedPath))
+                        return true;
+                }
+
+                // No decoded frame cache is available for this pipeline. Capture only
+                // the tile's native camera surface after page chrome has been hidden.
+                var bitmap = CaptureRenderedVideoFrame();
+                if (bitmap == null)
+                    return false;
+                using (bitmap)
+                {
+                    bitmap.Save(savedPath, System.Drawing.Imaging.ImageFormat.Png);
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Không thể chụp ảnh playback " + (Camera?.camID ?? string.Empty));
+                savedPath = null;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Exports one frame from the HLS source in its native dimensions.  This is
+        /// intentionally a short-lived external decoder process: it is isolated from
+        /// the long-running GStreamer render pipeline, so a snapshot failure cannot
+        /// stop playback or close the application.
+        /// </summary>
+        public async Task<string> TrySaveSourceSnapshotAsync()
+        {
+            if (_disposed || string.IsNullOrWhiteSpace(HlsUrl))
+                return null;
+
+            var ffmpeg = ResolveFfmpegExecutable();
+            if (string.IsNullOrWhiteSpace(ffmpeg))
+                return null;
+
+            var outputPath = CreateSnapshotOutputPath();
+            if (string.IsNullOrWhiteSpace(outputPath))
+                return null;
+
+            try
+            {
+                var seekSeconds = Math.Max(0, VideoPosition);
+                var startInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = ffmpeg,
+                    Arguments = "-hide_banner -loglevel error -y -ss " + seekSeconds.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture) +
+                        " -i " + QuoteProcessArgument(HlsUrl) + " -map 0:v:0 -frames:v 1 -an -c:v png " + QuoteProcessArgument(outputPath),
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardError = true,
+                    RedirectStandardOutput = true
+                };
+
+                using (var process = System.Diagnostics.Process.Start(startInfo))
+                {
+                    if (process == null)
+                        return null;
+
+                    var errorRead = process.StandardError.ReadToEndAsync();
+                    var outputRead = process.StandardOutput.ReadToEndAsync();
+                    var exited = await System.Threading.Tasks.Task.Run(() => process.WaitForExit(15000));
+                    if (!exited)
+                    {
+                        try { process.Kill(); } catch { }
+                        LoggerManager.LogWarn("Snapshot playback quá thời gian chờ cho " + (Camera?.camID ?? string.Empty));
+                        return null;
+                    }
+
+                    await System.Threading.Tasks.Task.WhenAll(errorRead, outputRead);
+                    if (process.ExitCode != 0 || !File.Exists(outputPath) || new System.IO.FileInfo(outputPath).Length == 0)
+                    {
+                        try { if (File.Exists(outputPath)) File.Delete(outputPath); } catch { }
+                        LoggerManager.LogWarn("Không thể xuất frame gốc playback " + (Camera?.camID ?? string.Empty) + ": " + errorRead.Result);
+                        return null;
+                    }
+                }
+
+                return outputPath;
+            }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Không thể chạy snapshot frame gốc playback " + (Camera?.camID ?? string.Empty));
+                return null;
+            }
+        }
+
+        private string CreateSnapshotOutputPath()
+        {
+            try
+            {
+                var downloads = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+                Directory.CreateDirectory(downloads);
+                var safeId = string.Concat((Camera?.camID ?? "camera").Select(ch => System.IO.Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch));
+                return System.IO.Path.Combine(downloads, safeId + "_" + System.DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".png");
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static string ResolveFfmpegExecutable()
+        {
+            var configured = Environment.GetEnvironmentVariable("FFMPEG_PATH");
+            var candidates = new[]
+            {
+                configured,
+                System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ffmpeg.exe"),
+                @"C:\ffmpeg-8.1-essentials_build\bin\ffmpeg.exe"
+            };
+            return candidates.FirstOrDefault(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path));
+        }
+
+        private static string QuoteProcessArgument(string value)
+        {
+            return "\"" + (value ?? string.Empty).Replace("\"", "\\\"") + "\"";
+        }
+
+        /// <summary>
+        /// The title badge is hosted in a separate native HWND so it otherwise gets
+        /// included by CopyFromScreen.  The page temporarily hides this chrome while
+        /// exporting a frame and restores it immediately afterwards.
+        /// </summary>
+        public void SetSnapshotChromeVisible(bool visible)
+        {
+            if (_disposed || LeftOnTopWindow == null)
+                return;
+
+            try
+            {
+                LeftOnTopWindow.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+            }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "KhÃ´ng thá»ƒ cáº­p nháº­t nhÃ£n camera khi chá»¥p playback");
+            }
+        }
+
+        private System.Drawing.Bitmap CaptureRenderedVideoFrame()
+        {
+            System.Drawing.Bitmap bitmap = null;
+            try
+            {
+                // Retain the simple path for software sinks; it costs almost
+                // nothing and does not require the application to be foreground.
+                bitmap = new System.Drawing.Bitmap(VideoPanel.Width, VideoPanel.Height);
+                VideoPanel.DrawToBitmap(bitmap, new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height));
+                if (!IsNearlyBlack(bitmap))
+                    return CropLetterboxedViewport(bitmap);
+
+                bitmap.Dispose();
+                bitmap = new System.Drawing.Bitmap(VideoPanel.Width, VideoPanel.Height);
+
+                // The GStreamer D3D11 child surface is present in the desktop
+                // compositor. CopyFromScreen captures that actual rendered frame,
+                // unlike DrawToBitmap which returns an empty parent panel.
+                var source = VideoPanel.PointToScreen(System.Drawing.Point.Empty);
+                using (var graphics = System.Drawing.Graphics.FromImage(bitmap))
+                {
+                    graphics.CopyFromScreen(source, System.Drawing.Point.Empty, bitmap.Size,
+                        System.Drawing.CopyPixelOperation.SourceCopy);
+                }
+
+                if (!IsNearlyBlack(bitmap))
+                    return CropLetterboxedViewport(bitmap);
+
+                bitmap.Dispose();
+                return null;
+            }
+            catch (Exception ex)
+            {
+                bitmap?.Dispose();
+                LoggerManager.LogException(ex, "KhÃ´ng thá»ƒ capture frame playback " + (Camera?.camID ?? string.Empty));
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Playback deliberately keeps the source aspect ratio.  The D3D sink therefore
+        /// paints black letterbox bands inside the native panel.  A screenshot is an
+        /// export of the camera frame, not a screenshot of its WPF grid slot, so remove
+        /// only fully-black outer bands before persisting it.
+        /// </summary>
+        private static System.Drawing.Bitmap CropLetterboxedViewport(System.Drawing.Bitmap bitmap)
+        {
+            if (bitmap == null || bitmap.Width < 32 || bitmap.Height < 32)
+                return bitmap;
+
+            var top = FindBlackBand(bitmap, true, true);
+            var bottom = FindBlackBand(bitmap, true, false);
+            var left = FindBlackBand(bitmap, false, true);
+            var right = FindBlackBand(bitmap, false, false);
+
+            var width = bitmap.Width - left - right;
+            var height = bitmap.Height - top - bottom;
+
+            // Never crop a genuine dark scene.  Letterbox removal is valid only when
+            // enough of the source remains after scanning the four outer edges.
+            if (width < bitmap.Width / 3 || height < bitmap.Height / 3 ||
+                (top == 0 && bottom == 0 && left == 0 && right == 0))
+                return bitmap;
+
+            try
+            {
+                var cropped = new System.Drawing.Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+                using (var graphics = System.Drawing.Graphics.FromImage(cropped))
+                {
+                    graphics.DrawImage(bitmap,
+                        new System.Drawing.Rectangle(0, 0, width, height),
+                        new System.Drawing.Rectangle(left, top, width, height),
+                        System.Drawing.GraphicsUnit.Pixel);
+                }
+
+                bitmap.Dispose();
+                return cropped;
+            }
+            catch
+            {
+                // Saving the unmodified rendered frame is preferable to losing a
+                // snapshot when a graphics driver rejects a bitmap conversion.
+                return bitmap;
+            }
+        }
+
+        private static int FindBlackBand(System.Drawing.Bitmap bitmap, bool scanRows, bool fromStart)
+        {
+            var outerCount = scanRows ? bitmap.Height : bitmap.Width;
+            var innerCount = scanRows ? bitmap.Width : bitmap.Height;
+            var maxBand = Math.Min(outerCount / 3, 600);
+            var band = 0;
+
+            for (var outer = 0; outer < maxBand; outer++)
+            {
+                var coordinate = fromStart ? outer : outerCount - 1 - outer;
+                var blackPixels = 0;
+                // Sample the edge densely enough to reject a real night scene while
+                // avoiding thousands of GetPixel calls on a 4K snapshot.
+                var step = Math.Max(1, innerCount / 96);
+                var samples = 0;
+
+                for (var inner = 0; inner < innerCount; inner += step)
+                {
+                    var pixel = scanRows ? bitmap.GetPixel(inner, coordinate) : bitmap.GetPixel(coordinate, inner);
+                    samples++;
+                    if (pixel.R <= 10 && pixel.G <= 10 && pixel.B <= 10)
+                        blackPixels++;
+                }
+
+                // A letterbox row/column is virtually solid black.  Do not treat
+                // ordinary dark image content as padding.
+                if (samples == 0 || blackPixels * 100 < samples * 97)
+                    break;
+
+                band++;
+            }
+
+            // Ignore tiny dark borders from the native video sink.
+            return band >= 4 ? band : 0;
+        }
+
+        private static bool IsNearlyBlack(System.Drawing.Bitmap bitmap)
+        {
+            if (bitmap == null || bitmap.Width == 0 || bitmap.Height == 0)
+                return true;
+
+            var stepX = Math.Max(1, bitmap.Width / 32);
+            var stepY = Math.Max(1, bitmap.Height / 18);
+            var samples = 0;
+            var visible = 0;
+            for (var y = 0; y < bitmap.Height; y += stepY)
+            {
+                for (var x = 0; x < bitmap.Width; x += stepX)
+                {
+                    var pixel = bitmap.GetPixel(x, y);
+                    samples++;
+                    if (pixel.R > 8 || pixel.G > 8 || pixel.B > 8)
+                        visible++;
+                }
+            }
+
+            // A real night camera can be dark, but a DrawToBitmap failure is an
+            // almost perfectly black frame. Require at least 2% visible samples.
+            return samples == 0 || visible * 50 < samples;
+        }
+
+        public void ShowNoPlaybackData()
+        {
+            ShowConnectButton = Visibility.Hidden;
+            // Hide the complete native host, not only its child panel. A hidden
+            // WinForms panel can still leave its D3D/GStreamer HWND painted gray
+            // above WPF. Collapsing the host makes the WPF error state and camera
+            // identifier the only visual layers for an empty playlist.
+            VideoPanel.Visible = false;
+            videoWindow.Visibility = Visibility.Collapsed;
+            NoPlaybackDataOverlay.Visibility = Visibility.Visible;
+            SetHoverActionsVisible(false);
         }
 
         public void btn_Zoom_Click(object sender, RoutedEventArgs e)
@@ -395,7 +1021,6 @@ namespace V3SClient.ucs
             if (_isPlaying)
             {
                 Player.Pause();
-                txtPlayPauseIcon.Text = "\uE768"; // Play icon
             }
             else
             {
@@ -405,7 +1030,6 @@ namespace V3SClient.ucs
                     ApplyPlaybackRate();
                 }
                 Player.Playing();
-                txtPlayPauseIcon.Text = "\uE769"; // Pause icon
             }
             _isPlaying = !_isPlaying;
         }
@@ -421,10 +1045,7 @@ namespace V3SClient.ucs
 
         private void UpdateSpeedDisplay()
         {
-            if (txtSpeed != null)
-            {
-                txtSpeed.Text = $"{_currentPlaybackRate:F1}x";
-            }
+            // The speed text is rendered by the page-level toolbar.
         }
 
         // --- M3U8 Parsing & Timeline ---
@@ -585,6 +1206,35 @@ namespace V3SClient.ucs
                     Player.SeekAbsolute((long)(gstTargetTime * Gst.Constants.SECOND));
                 }
             }
+        }
+
+        public System.DateTime GetCurrentPlaybackRealTime()
+        {
+            if (_searchStartTime == System.DateTime.MinValue)
+                return System.DateTime.MinValue;
+
+            return _searchStartTime.AddSeconds(MapVideoPositionToRealTimeOffset(VideoPosition));
+        }
+
+        public void SetSnapshotPickVisual(bool active, bool highlighted)
+        {
+            if (_disposed || videoWindow == null || VideoPanel == null)
+                return;
+
+            // Do not hide/recreate the native video HWND while picking: that made
+            // tiles flash each time the pointer crossed an edge. Native HWNDs cannot
+            // alpha-compose safely in WPF, therefore keep the video intact and use
+            // a light WPF dim/border cue instead of an opaque black host.
+            videoWindow.Visibility = Visibility.Visible;
+            VideoPanel.Visible = true;
+            // Keep the native video surface intact. The GStreamer overlay paints
+            // the 20% dim cue directly on the texture so there is no black WPF/HWND
+            // airspace layer; the hovered tile is restored to normal brightness.
+            videoWindow.Opacity = 1.0;
+            DragOverlay.Opacity = 1.0;
+            if (Player != null)
+                Player.DimForCaptureSelection = active && !highlighted;
+            NoPlaybackDataHost.Visibility = Visibility.Collapsed;
         }
 
         public double TimelineHeight => 35.0;
@@ -785,6 +1435,19 @@ namespace V3SClient.ucs
 
         public void Dispose()
         {
+            _disposed = true;
+            VideoPanel.MouseEnter -= VideoPanel_MouseEnter;
+            VideoPanel.MouseLeave -= VideoPanel_MouseLeave;
+            _hideHoverActionsTimer.Stop();
+            _hideHoverActionsTimer.Tick -= HideHoverActionsTimer_Tick;
+            _downloadProgressTimer.Stop();
+            _downloadProgressHideTimer.Stop();
+            if (_downloadProgressElementHost != null)
+            {
+                NoPlaybackDataNativeHost.Child = null;
+                _downloadProgressElementHost.Dispose();
+                _downloadProgressElementHost = null;
+            }
             if (Player != null)
             {
                 Player.Dispose();

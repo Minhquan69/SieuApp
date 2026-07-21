@@ -21,12 +21,17 @@ namespace V3SClient.libs
             private double _progress;
             private string _status = "Pending";
             private string _speed;
+            private long _downloadedBytes;
+            private long _totalBytes;
 
             public string Id { get; set; } = Guid.NewGuid().ToString();
             public string CameraNames { get; set; }
             public DateTime StartTime { get; set; }
             public DateTime EndTime { get; set; }
             public string SavePath { get; set; }
+            internal CancellationTokenSource CancellationSource { get; } = new CancellationTokenSource();
+
+            public bool CanCancel => Status == "Queued" || Status == "Downloading..." || Status == "Searching...";
 
             public double Progress
             {
@@ -45,6 +50,7 @@ namespace V3SClient.libs
                 {
                     _status = value;
                     OnPropertyChanged("Status");
+                    OnPropertyChanged("CanCancel");
                 }
             }
 
@@ -61,7 +67,30 @@ namespace V3SClient.libs
             public event PropertyChangedEventHandler PropertyChanged;
             protected void OnPropertyChanged(string name)
             {
-                this.PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+                var handler = this.PropertyChanged;
+                if (handler == null)
+                    return;
+
+                var dispatcher = Application.Current?.Dispatcher;
+                if (dispatcher != null && !dispatcher.CheckAccess())
+                {
+                    dispatcher.BeginInvoke(new Action(() => handler(this, new PropertyChangedEventArgs(name))));
+                    return;
+                }
+
+                handler(this, new PropertyChangedEventArgs(name));
+            }
+
+            public long DownloadedBytes
+            {
+                get => _downloadedBytes;
+                set { _downloadedBytes = value; OnPropertyChanged("DownloadedBytes"); }
+            }
+
+            public long TotalBytes
+            {
+                get => _totalBytes;
+                set { _totalBytes = value; OnPropertyChanged("TotalBytes"); }
             }
         }
 
@@ -71,6 +100,16 @@ namespace V3SClient.libs
 
         public static SmartDownloadManager Instance => _instance.Value;
         public ObservableCollection<DownloadTask> Tasks { get; } = new ObservableCollection<DownloadTask>();
+
+        public void Cancel(DownloadTask task)
+        {
+            if (task == null || !task.CanCancel)
+                return;
+
+            task.Status = "Cancelled";
+            task.Speed = "Đã hủy";
+            task.CancellationSource.Cancel();
+        }
 
         private SmartDownloadManager()
         {
@@ -113,6 +152,11 @@ namespace V3SClient.libs
                 await Task.WhenAll(tasks);
                 task.Status = "Completed";
                 task.Progress = 100.0;
+            }
+            catch (OperationCanceledException)
+            {
+                task.Status = "Cancelled";
+                task.Speed = "Đã hủy";
             }
             catch (Exception ex)
             {
@@ -195,7 +239,7 @@ namespace V3SClient.libs
             }
         }
 
-        public void QueueDirectDownload(string url, string destinationPath, string cameraName, DateTime start, DateTime end, string token = null, string headerName = null)
+        public DownloadTask QueueDirectDownload(string url, string destinationPath, string cameraName, DateTime start, DateTime end, string token = null, string headerName = null)
         {
             if (string.IsNullOrWhiteSpace(url)) throw new ArgumentException("Download URL is required.", nameof(url));
             if (string.IsNullOrWhiteSpace(destinationPath)) throw new ArgumentException("Destination path is required.", nameof(destinationPath));
@@ -237,27 +281,38 @@ namespace V3SClient.libs
                             double speedMb = downloadedBytes / 1048576.0 / elapsedSeconds;
                             task.Speed = $"{speedMb:F2} MB/s";
                         }),
-                        CancellationToken.None,
+                        task.CancellationSource.Token,
                         totalBytes =>
                         {
+                            task.TotalBytes = totalBytes;
                             if (totalBytes > 0)
                             {
                                 return new Progress<long>(downloadedBytes =>
                                 {
+                                    task.DownloadedBytes = downloadedBytes;
                                     task.Progress = Math.Min(100.0, downloadedBytes * 100.0 / totalBytes);
                                 });
                             }
 
                             return new Progress<long>(downloadedBytes =>
                             {
+                                task.DownloadedBytes = downloadedBytes;
                                 task.Progress = 0;
                             });
                         },
                         token,
                         headerName).ConfigureAwait(false);
 
+                    if (task.TotalBytes > 0)
+                        task.DownloadedBytes = task.TotalBytes;
                     task.Progress = 100.0;
                     task.Status = "Completed";
+                }
+                catch (OperationCanceledException)
+                {
+                    task.Status = "Cancelled";
+                    task.Speed = "Đã hủy";
+                    TryDeletePartialFile(destinationPath);
                 }
                 catch (Exception ex)
                 {
@@ -266,6 +321,21 @@ namespace V3SClient.libs
                     Debug.WriteLine("Direct download error: " + ex.Message);
                 }
             });
+
+            return task;
+        }
+
+        private static void TryDeletePartialFile(string destinationPath)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(destinationPath) && File.Exists(destinationPath))
+                    File.Delete(destinationPath);
+            }
+            catch
+            {
+                // A file may still be held briefly by the cancelled HTTP stream.
+            }
         }
 
         private async Task DownloadFileStreamedAsync(

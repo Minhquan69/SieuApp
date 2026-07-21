@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Gst;
+using Gst.App;
 using GLib;
 using V3SClient.libs;
 
@@ -13,6 +14,29 @@ namespace V3SClient.models
     public class PlaybackHLS : RtspPlayer
     {
         private string hlsUrl { get; set; }
+        private readonly object _snapshotFrameSync = new object();
+        private byte[] _latestSnapshotBgr;
+        private int _latestSnapshotWidth;
+        private int _latestSnapshotHeight;
+        private int _latestSnapshotStride;
+
+        /// <summary>
+        /// True when the low-rate appsink branch has received an original decoded
+        /// camera frame.  This branch is independent of the size of the WPF tile.
+        /// </summary>
+        public bool HasDecodedSnapshotFrame
+        {
+            get
+            {
+                lock (_snapshotFrameSync)
+                    return _latestSnapshotBgr != null && _latestSnapshotWidth > 0 && _latestSnapshotHeight > 0;
+            }
+        }
+
+        protected override bool ForceAspectRatio
+        {
+            get { return true; }
+        }
 
         public PlaybackHLS(string hlsUrl, IntPtr windowHandle, bool is_h264,
             bool isNvidiaGPU = false, int gpuIdSink = 0) 
@@ -209,6 +233,115 @@ namespace V3SClient.models
         }
 
 
+
+        private void SnapshotSink_NewSample(object sender, NewSampleArgs args)
+        {
+            var sink = sender as AppSink;
+            if (sink == null)
+                return;
+
+            Sample sample = null;
+            try
+            {
+                sample = sink.PullSample();
+                if (sample == null || sample.Buffer == null || sample.Caps == null || sample.Caps.Size == 0)
+                    return;
+
+                var structure = sample.Caps.GetStructure(0);
+                int width;
+                int height;
+                if (structure == null || !structure.GetInt("width", out width) || !structure.GetInt("height", out height) ||
+                    width <= 0 || height <= 0)
+                    return;
+
+                var buffer = sample.Buffer;
+                MapInfo map;
+                if (!buffer.Map(out map, MapFlags.Read) || map.Data == null || map.Data.Length == 0)
+                    return;
+
+                try
+                {
+                    var stride = map.Data.Length / height;
+                    if (stride < width * 3)
+                        return;
+
+                    var frame = new byte[map.Data.Length];
+                    System.Buffer.BlockCopy(map.Data, 0, frame, 0, frame.Length);
+                    lock (_snapshotFrameSync)
+                    {
+                        _latestSnapshotBgr = frame;
+                        _latestSnapshotWidth = width;
+                        _latestSnapshotHeight = height;
+                        _latestSnapshotStride = stride;
+                    }
+                }
+                finally
+                {
+                    buffer.Unmap(map);
+                }
+            }
+            catch (Exception ex)
+            {
+                LoggerManager.LogDebug("Không thể nhận frame snapshot playback: " + ex.Message);
+            }
+            finally
+            {
+                sample?.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// Saves the latest decoded frame at its source resolution.  The appsink
+        /// branch is intentionally throttled to 1 fps, keeping CPU/GPU use low while
+        /// still making a current Full HD snapshot available for user actions.
+        /// </summary>
+        public bool TrySaveDecodedSnapshot(string outputPath)
+        {
+            byte[] frame;
+            int width;
+            int height;
+            int stride;
+            lock (_snapshotFrameSync)
+            {
+                if (_latestSnapshotBgr == null || _latestSnapshotWidth <= 0 || _latestSnapshotHeight <= 0)
+                    return false;
+
+                frame = _latestSnapshotBgr;
+                width = _latestSnapshotWidth;
+                height = _latestSnapshotHeight;
+                stride = _latestSnapshotStride;
+            }
+
+            try
+            {
+                using (var bitmap = new System.Drawing.Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format24bppRgb))
+                {
+                    var data = bitmap.LockBits(new System.Drawing.Rectangle(0, 0, width, height),
+                        System.Drawing.Imaging.ImageLockMode.WriteOnly, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+                    try
+                    {
+                        var sourceRowBytes = width * 3;
+                        for (var row = 0; row < height; row++)
+                        {
+                            System.Runtime.InteropServices.Marshal.Copy(frame, row * stride,
+                                IntPtr.Add(data.Scan0, row * data.Stride), sourceRowBytes);
+                        }
+                    }
+                    finally
+                    {
+                        bitmap.UnlockBits(data);
+                    }
+
+                    bitmap.Save(outputPath, System.Drawing.Imaging.ImageFormat.Png);
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Không thể lưu frame gốc playback");
+                return false;
+            }
+        }
 
         protected override void ReleasePipeline()
         {

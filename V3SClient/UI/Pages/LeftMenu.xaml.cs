@@ -98,6 +98,7 @@ namespace V3SClient.UI.Pages
         public event EventHandler<CamInfoNode> Event_Org_Camera_Selection_Changed;
         public event EventHandler<bool> Event_AIMode_Changed;
         public bool IsAIMode { get; private set; }
+        public bool IsRecordingMode { get; private set; }
         public LeftMenu(ObservableCollection<viewModels.VMTalkGroup> camera_group_list, 
             int heightZoneCameraList=300, 
             bool commandVisible=false,bool switchviewVisible=false,bool showCamGroupList=false,bool showOrgFrist=false)
@@ -231,14 +232,7 @@ namespace V3SClient.UI.Pages
                 txtSearchHint.Visibility = string.IsNullOrEmpty(txtSearchTree.Text) ? Visibility.Visible : Visibility.Collapsed;
             }
 
-            if (IsOrganizationView)
-            {
-                View_Cam_Group_Org.FilterTree(keyword, IsAIMode);
-            }
-            else
-            {
-                View_Cam_Group_List.FilterTree(keyword, IsAIMode);
-            }
+            ApplyCameraFilter(keyword);
         }
 
         private void btnToggleAIMode_Click(object sender, RoutedEventArgs e)
@@ -247,15 +241,49 @@ namespace V3SClient.UI.Pages
             
             Event_AIMode_Changed?.Invoke(this, IsAIMode);
             
-            // Re-apply filter
-            string keyword = txtSearchTree?.Text?.Trim() ?? string.Empty;
+            UpdateFilterVisuals();
+            ApplyCameraFilter();
+        }
+
+        private void btnToggleRecordingMode_Click(object sender, RoutedEventArgs e)
+        {
+            IsRecordingMode = btnToggleRecordingMode.IsChecked == true;
+            UpdateFilterVisuals();
+            ApplyCameraFilter();
+        }
+
+        private void btnShowAll_Click(object sender, RoutedEventArgs e)
+        {
+            btnToggleAIMode.IsChecked = false;
+            btnToggleRecordingMode.IsChecked = false;
+            IsAIMode = false;
+            IsRecordingMode = false;
+            Event_AIMode_Changed?.Invoke(this, false);
+            UpdateFilterVisuals();
+            ApplyCameraFilter();
+        }
+
+        private void UpdateFilterVisuals()
+        {
+            var primary = FindResource("VmsPrimaryBrush_v3") as Brush;
+            var surface = FindResource("VmsSurfaceBrush_v3") as Brush;
+            if (primary == null || surface == null) return;
+
+            btnShowAll.Background = !IsAIMode && !IsRecordingMode ? primary : surface;
+            btnToggleAIMode.Background = IsAIMode ? primary : surface;
+            btnToggleRecordingMode.Background = IsRecordingMode ? primary : surface;
+        }
+
+        private void ApplyCameraFilter(string keyword = null)
+        {
+            keyword = keyword ?? (txtSearchTree?.Text?.Trim() ?? string.Empty);
             if (IsOrganizationView)
             {
-                View_Cam_Group_Org.FilterTree(keyword, IsAIMode);
+                View_Cam_Group_Org.FilterTree(keyword, IsAIMode, IsRecordingMode);
             }
             else
             {
-                View_Cam_Group_List.FilterTree(keyword, IsAIMode);
+                View_Cam_Group_List.FilterTree(keyword, IsAIMode, IsRecordingMode);
             }
         }
     }

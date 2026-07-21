@@ -24,18 +24,3 @@ namespace V3SClient.models
         
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

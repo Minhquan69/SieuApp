@@ -36,6 +36,9 @@ namespace V3SClient.viewModels
                     long_Name = string.IsNullOrEmpty(camInfo.CamInfo_LongName) ? camInfo.CamInfo_Name : camInfo.CamInfo_LongName,
                     type = camInfo.CamInfo_Type,
                     is_Live = true,
+                    // Preserve the API recording capability for Live and
+                    // Playback camera-list filters (REC).
+                    is_recording = camInfo.is_recording,
                     is_Master = camInfo.Device_Role != "client_device",
                     is_H264 = camInfo.CamInfo_Codec?.ToLower() == "h264",
                     Latitude = camInfo.Latitude,

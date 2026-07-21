@@ -25,7 +25,10 @@
             BorderThickness="{Binding Path=CameraWarning}"
             Background="Transparent"
             Margin="0"
-            BorderBrush="OrangeRed" >
+            BorderBrush="OrangeRed"
+            MouseEnter="Tile_MouseEnter"
+            MouseLeave="Tile_MouseLeave"
+            MouseLeftButtonDown="Tile_MouseLeftButtonDown" >
         <Grid Margin="0.3">
             <Grid.RowDefinitions>
                 <RowDefinition Height="*" />
@@ -63,7 +66,22 @@
                     </wfi:ElementHost>
                 </wfi:WindowsFormsHost>
 
-                <Grid Height="25" VerticalAlignment="Top">
+                <!-- Playback has no HLS segments in the selected interval.  This is
+                     a tile state, not a pipeline error, so no player is created. -->
+                <Grid x:Name="NoPlaybackDataOverlay" Panel.ZIndex="8" Background="#FF0B1A2A" Visibility="Collapsed" IsHitTestVisible="False">
+                    <!-- Do not give this state a fixed width: a narrow tile must not
+                         be stretched or crop the message, and it must not influence
+                         the video host's measured size. -->
+                    <Border Width="560" MaxWidth="560" Margin="20" Padding="24,18" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Background="#FF0B1A2A" BorderBrush="#243E5B" BorderThickness="1" CornerRadius="6">
+                        <StackPanel HorizontalAlignment="Center">
+                            <TextBlock Text="&#xE7BA;" FontFamily="Segoe MDL2 Assets" Foreground="#FFF59E0B" FontSize="30" HorizontalAlignment="Center"/>
+                            <TextBlock Text="Không tìm thấy dữ liệu trong khoảng thời gian này" Foreground="White" FontSize="14" FontWeight="SemiBold" Margin="0,12,0,0" TextAlignment="Center" TextWrapping="NoWrap"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <Grid Height="34" VerticalAlignment="Top">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="auto" />
@@ -72,11 +90,11 @@
                     <!-- Left Top Overlay: Camera Name -->
                     <wfi:WindowsFormsHost x:Name="LeftOnTopWindow"
                                           Grid.Column="0"
-                                          Panel.ZIndex="3"
-                                          Style="{StaticResource ViewCameraOverlay}"
-                                          Margin="2,2,0,0" HorizontalAlignment="Left">
+                                           Panel.ZIndex="3"
+                                           Style="{StaticResource ViewCameraOverlay_Transparent}"
+                                          Margin="7,5,0,0" Height="28" HorizontalAlignment="Left">
                         <wfi:ElementHost>
-                            <Border MouseDown="btnLive_MouseDown" Padding="0">
+                            <Border MouseDown="btnLive_MouseDown" Padding="7,4" Background="#FF10293D" BorderBrush="#FF294D6B" BorderThickness="1" CornerRadius="3">
                                 <Button Foreground="White"
                                         Background="Transparent"
                                         BorderThickness="0"
@@ -84,19 +102,40 @@
                                         Click="btnPlayCamera_Click"
                                         x:Name="btnPlayTitle">
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
-                                        <TextBlock Text="&#xE768; " FontFamily="Segoe MDL2 Assets" HorizontalAlignment="Left" FontSize="10" VerticalAlignment="Center" />
-                                        <TextBlock x:Name="txtCameraName" Style="{StaticResource General_TextBlock}" />
+                                        <Ellipse x:Name="CameraStatusDot" Width="7" Height="7" Fill="#22C55E" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                        <TextBlock x:Name="txtCameraName" Foreground="White" FontWeight="SemiBold" FontSize="11" VerticalAlignment="Center" />
                                     </StackPanel>
                                 </Button>
                             </Border>
                         </wfi:ElementHost>
                     </wfi:WindowsFormsHost>
 
+                    <!-- Native host is required because the GStreamer video HWND paints
+                         above ordinary WPF elements. Width/Height are enabled only for
+                         the no-playback state after the host has loaded. -->
+                    <wfi:WindowsFormsHost x:Name="NoPlaybackDataHost" Panel.ZIndex="20"
+                                          Width="0" Height="0" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          Style="{StaticResource ViewCameraOverlay_Transparent}">
+                        <!-- Per-tile native overlay removed: the page owns playback actions. -->
+                        <!--
+                        <wfi:ElementHost>
+                            <Border Width="360" Height="90" Padding="22,14" Background="#FF0B1A2A" BorderBrush="#243E5B" BorderThickness="1" CornerRadius="6">
+                                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <TextBlock Text="&#xEA39;" FontFamily="Segoe MDL2 Assets" Foreground="#FFEF4444" FontSize="28" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="Không tìm thấy dữ liệu trong khoảng thời gian này" Foreground="White" FontSize="14" FontWeight="SemiBold" Margin="0,8,0,0" TextAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                        </wfi:ElementHost>
+                        -->
+                    </wfi:WindowsFormsHost>
+
                     <WindowsFormsHost Panel.ZIndex="4"
                                       Grid.Column="1"
                                       x:Name="RighOnTopWindow"
                                       Style="{StaticResource ViewCameraOverlay}"
-                                      Margin="0,2,2,0" HorizontalAlignment="Right" Width="90" Height="25">
+                                      Margin="0,2,2,0" HorizontalAlignment="Right" Width="0" Height="0"
+                                      IsHitTestVisible="False">
+                        <!--
                         <wfi:ElementHost AutoSize="True" Dock="Fill">
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -115,19 +154,44 @@
                                 </Button>
                             </Grid>
                         </wfi:ElementHost>
+                        -->
                     </WindowsFormsHost>
                 </Grid>
                 
-                <!-- Playback Speed Controls Overlay (Bottom Right of Video) -->
-                <WindowsFormsHost Panel.ZIndex="4"
-                                  VerticalAlignment="Bottom" HorizontalAlignment="Right"
+                <wfi:WindowsFormsHost x:Name="NoPlaybackDataNativeHost" Panel.ZIndex="20"
+                                      Width="0" Height="0" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                      Style="{StaticResource ViewCameraOverlay_Transparent}">
+                    <!--
+                    <wfi:ElementHost>
+                        <Border Width="360" Height="90" Padding="22,14" Background="#FF0B1A2A" BorderBrush="#243E5B" BorderThickness="1" CornerRadius="6">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <TextBlock Text="&#xEA39;" FontFamily="Segoe MDL2 Assets" Foreground="#FFEF4444" FontSize="28" HorizontalAlignment="Center"/>
+                                <TextBlock Text="Không tìm thấy dữ liệu trong khoảng thời gian này" Foreground="White" FontSize="14" FontWeight="SemiBold" Margin="0,8,0,0" TextAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                    </wfi:ElementHost>
+                    -->
+                </wfi:WindowsFormsHost>
+
+                <!-- Hosted above the native GStreamer surface so the buttons are not
+                     obscured by WindowsFormsHost airspace. -->
+                <WindowsFormsHost x:Name="HoverActionsHost" Panel.ZIndex="10"
+                                  VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                                  Visibility="Collapsed"
                                   Style="{StaticResource ViewCameraOverlay}"
-                                  Margin="0,0,2,2" Width="120" Height="25">
+                                  Margin="0,0,0,8" Width="275" Height="30">
+                    <!-- The tile no longer hosts controls: VPlaybackHLS supplies one global toolbar. -->
+                    <!--
                     <wfi:ElementHost AutoSize="True" Dock="Fill">
                         <Grid Background="#88000000">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="25" />
                                 <ColumnDefinition Width="35" />
+                                <ColumnDefinition Width="25" />
+                                <ColumnDefinition Width="25" />
+                                <ColumnDefinition Width="25" />
+                                <ColumnDefinition Width="25" />
+                                <ColumnDefinition Width="25" />
                                 <ColumnDefinition Width="25" />
                                 <ColumnDefinition Width="25" />
                             </Grid.ColumnDefinitions>
@@ -141,8 +205,24 @@
                                 <TextBlock Text="&#xEB9D;" FontFamily="Segoe MDL2 Assets" Foreground="White" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                             </Button>
                             <TextBlock Grid.Column="3" x:Name="txtSpeed" Text="1x" Foreground="White" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="10" Margin="2,0,5,0"/>
+                            <Button Grid.Column="4" Style="{StaticResource UCamera_Button}" Click="btn_AiOverlay_Click" ToolTip="Bật/tắt AI" Padding="0">
+                                <TextBlock Text="AI" Foreground="#4EA1FF" FontWeight="Bold" FontSize="9" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            </Button>
+                            <Button Grid.Column="5" Style="{StaticResource UCamera_Button}" Click="btn_SnapshotCurrent_Click" ToolTip="Chụp ảnh camera này" Padding="0">
+                                <TextBlock Text="&#xE722;" FontFamily="Segoe MDL2 Assets" Foreground="White" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            </Button>
+                            <Button Grid.Column="6" Style="{StaticResource UCamera_Button}" Click="btn_SnapshotAll_Click" ToolTip="Chụp ảnh tất cả camera" Padding="0">
+                                <TextBlock Text="&#xE7F6;" FontFamily="Segoe MDL2 Assets" Foreground="White" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            </Button>
+                            <Button Grid.Column="7" Style="{StaticResource UCamera_Button}" Click="btn_DownloadCurrent_Click" ToolTip="Tải video camera này" Padding="0">
+                                <TextBlock Text="&#xE896;" FontFamily="Segoe MDL2 Assets" Foreground="White" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            </Button>
+                            <Button Grid.Column="8" Style="{StaticResource UCamera_Button}" Click="btn_Zoom_Click" ToolTip="Phóng to/thu nhỏ" Padding="0">
+                                <TextBlock Text="&#xE740;" FontFamily="Segoe MDL2 Assets" Foreground="White" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            </Button>
                         </Grid>
                     </wfi:ElementHost>
+                    -->
                 </WindowsFormsHost>
                 
             </Grid>
