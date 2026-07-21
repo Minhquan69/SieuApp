@@ -143,6 +143,10 @@
     <Compile Include="Services\DatabaseHelper.cs" />
     <Compile Include="Services\ClientSessionService.cs" />
     <Compile Include="window\ClientSwitchWindow.cs" />
+    <Compile Include="window\ClientSwitchWindow_v3.xaml.cs">
+      <DependentUpon>ClientSwitchWindow_v3.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="viewModels\ClientSwitchViewModel_v3.cs" />
     <Compile Include="Services\DocumentProcessingManager.cs" />
     <Compile Include="Services\FileNamingService.cs" />
     <Compile Include="Services\FileWatcherService.cs" />
@@ -874,6 +878,11 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="window\ClientSwitchWindow_v3.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="styles\V3Migration\ClientSwitchWindow_v3.xaml" />
     <Page Include="UI\Views\PlaybackCameraList_v3.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>

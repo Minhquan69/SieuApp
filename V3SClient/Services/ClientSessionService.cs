@@ -34,6 +34,14 @@ namespace V3SClient.Services
             info.Commanders = new System.Collections.ObjectModel.ObservableCollection<CamInfo>(commanders);
             info.ActiveCommanderID = commanders.FirstOrDefault()?.CamInfo_CamId;
             info.BuildTreeViewWithOrganization();
+
+            // V3 pages read their camera source from GlobalSystem.CameraGroups,
+            // while the session cache above is stored in GlobalUserInfo. Keep
+            // both stores synchronized after every profile switch; otherwise
+            // a newly created Live/Playback page would still display the
+            // previous client's cameras.
+            info.CamInfoUpdate = true;
+            GlobalSystem.Instance.ReloadConfig();
         }
 
         public void ClearSession()
