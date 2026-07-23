@@ -1,6 +1,7 @@
 using System;
 using System.Configuration;
 using System.IO;
+using System.ComponentModel;
 using System.Windows;
 using V3SClient.UI.Views;
 using V3SClient.viewModels;
@@ -26,7 +27,33 @@ namespace V3SClient.window
             _viewModel = new ShellViewModel_v3();
             DataContext = _viewModel;
             ShellView.DataContext = _viewModel;
-            Closed += (s, e) => _viewModel.Dispose();
+            Closed += (s, e) =>
+            {
+                _viewModel.Dispose();
+                if (!_logoutRequested)
+                    Application.Current.Shutdown();
+            };
+        }
+
+        protected override void OnClosing(CancelEventArgs e)
+        {
+            if (!_logoutRequested && SmartDownloadManager.Instance.HasActiveDownloads)
+            {
+                var result = MessageBox.Show(
+                    "Đang có video được tải xuống. Nếu thoát, các tác vụ tải đang chạy sẽ bị hủy. Bạn vẫn muốn thoát?",
+                    "Xác nhận thoát ứng dụng",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning);
+                if (result != MessageBoxResult.Yes)
+                {
+                    e.Cancel = true;
+                    return;
+                }
+
+                SmartDownloadManager.Instance.CancelAllActive();
+            }
+
+            base.OnClosing(e);
         }
 
         public void LogoutAndReturnToLogin()

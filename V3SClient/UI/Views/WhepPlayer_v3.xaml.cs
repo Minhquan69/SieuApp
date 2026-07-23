@@ -1,12 +1,22 @@
 using System;
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using Gst;
 using Gst.Video;
+using SharpDX;
+using SharpDX.Direct2D1;
+using SharpDX.Direct3D11;
+using SharpDX.DirectWrite;
+using SharpDX.DXGI;
+using SharpDX.Mathematics.Interop;
 using V3SClient.libs;
 using V3SClient.models;
+using V3SClient.Services;
+using Format = SharpDX.DXGI.Format;
+using SignalArgs = GLib.SignalArgs;
 
 namespace V3SClient.UI.Views
 {
@@ -44,12 +54,31 @@ namespace V3SClient.UI.Views
         private readonly System.Windows.Forms.Label _cameraBadge = new System.Windows.Forms.Label();
         private CancellationTokenSource _cancellation;
         private Pipeline _pipeline;
+        private Element _aiOverlayElement;
+        private Pipeline _aiOverlayPipeline;
         private Camera _camera;
         private CameraStreamInfo _selectedStream;
         private readonly SemaphoreSlim _connectionGate = new SemaphoreSlim(1, 1);
         private IntPtr _videoWindowHandle;
         private bool _useAlternateCodec;
         private bool _alternateCodecAttempted;
+        private int _aiOverlayEnabled;
+        private readonly BlockingCollection<AiMetadataFrame_v3> _aiResult =
+            new BlockingCollection<AiMetadataFrame_v3>(new ConcurrentQueue<AiMetadataFrame_v3>(), 1);
+        // WebSocket metadata can arrive much less often than video frames.
+        // Retain the latest frame briefly so the overlay stays visible between
+        // messages, while the bounded queue still provides the base player's
+        // non-blocking producer/consumer hand-off.
+        private AiMetadataFrame_v3 _lastAiFrame;
+        private readonly object _aiRendererSync = new object();
+        private SharpDX.Direct2D1.Factory _aiDrawFactory;
+        private SharpDX.DirectWrite.Factory _aiTextFactory;
+        private TextFormat _aiTextFormat;
+        private RenderTargetProperties _aiRenderTargetProperties;
+        private static readonly RawColor4 AiSuccessColor = new RawColor4(34f / 255f, 197f / 255f, 94f / 255f, 1f);
+        private static readonly RawColor4 AiErrorColor = new RawColor4(239f / 255f, 68f / 255f, 68f / 255f, 1f);
+        private static readonly RawColor4 AiLabelTextColor = new RawColor4(1f, 1f, 1f, 1f);
+        private static readonly RawColor4 AiLabelBackgroundColor = new RawColor4(6f / 255f, 20f / 255f, 34f / 255f, 0.86f);
 
         public event EventHandler<WhepPlaybackStateChangedEventArgs_v3> PlaybackStateChanged;
         public event EventHandler VideoMouseEnter;
@@ -77,6 +106,44 @@ namespace V3SClient.UI.Views
             _videoPanel.MouseMove += (s, e) => VideoMouseMove?.Invoke(this, EventArgs.Empty);
             _videoPanel.MouseLeave += (s, e) => VideoMouseLeave?.Invoke(this, EventArgs.Empty);
             Unloaded += (s, e) => Dispose();
+        }
+
+        public bool AiOverlayEnabled
+        {
+            get { return Interlocked.CompareExchange(ref _aiOverlayEnabled, 0, 0) != 0; }
+            set { Interlocked.Exchange(ref _aiOverlayEnabled, value ? 1 : 0); }
+        }
+
+        // Same non-blocking hand-off as RtspPlayer.Send2Draw: the streaming
+        // thread only renders the newest metadata frame and is never delayed
+        // by a network/UI producer.
+        public void Send2Draw(AiMetadataFrame_v3 frame)
+        {
+            if (frame == null || !AiOverlayEnabled) return;
+            AiMetadataFrame_v3 ignored;
+            while (_aiResult.TryTake(out ignored)) { }
+            _aiResult.TryAdd(frame);
+        }
+
+        public void ClearAiMetadata()
+        {
+            AiMetadataFrame_v3 ignored;
+            while (_aiResult.TryTake(out ignored)) { }
+            Interlocked.Exchange(ref _lastAiFrame, null);
+        }
+
+        private void InitializeAiOverlayRenderer()
+        {
+            if (_aiDrawFactory != null) return;
+            lock (_aiRendererSync)
+            {
+                if (_aiDrawFactory != null) return;
+                _aiDrawFactory = new SharpDX.Direct2D1.Factory(SharpDX.Direct2D1.FactoryType.MultiThreaded);
+                _aiTextFactory = new SharpDX.DirectWrite.Factory();
+                _aiTextFormat = new TextFormat(_aiTextFactory, "Segoe UI", 17f) { WordWrapping = WordWrapping.NoWrap };
+                _aiRenderTargetProperties = new RenderTargetProperties(
+                    new PixelFormat(Format.R8G8B8A8_UNorm, SharpDX.Direct2D1.AlphaMode.Premultiplied));
+            }
         }
 
         public Camera Camera
@@ -121,9 +188,22 @@ namespace V3SClient.UI.Views
         /// </summary>
         public void SetPresentationVisible(bool visible)
         {
-            SetVideoSurfaceVisible(visible);
-            if (!visible)
+            // MainPlayer remains connected as a warm-up pipeline, but must
+            // not participate in WPF measure/arrange when it is not the
+            // visible presentation. This removes a second native HWND layout
+            // participant for every Live camera tile during resize.
+            if (visible)
+            {
+                VideoHost.Visibility = Visibility.Visible;
+                _videoPanel.Visible = true;
+            }
+            else
+            {
+                VideoHost.Visibility = Visibility.Collapsed;
+                _videoPanel.Visible = false;
+                _cameraBadge.Visible = false;
                 StatusPanel.Visibility = Visibility.Collapsed;
+            }
         }
 
         /// <summary>
@@ -289,6 +369,7 @@ namespace V3SClient.UI.Views
 
         private void CreatePipeline(string rtspUrl, bool isH264, IntPtr videoWindowHandle)
         {
+            var enableAiOverlay = AiOverlayEnabled;
             _videoWindowHandle = videoWindowHandle;
             // Keep the same Direct3D11 decode and render path as the original
             // V3 client.  This avoids software decode and the CPU-side
@@ -302,10 +383,33 @@ namespace V3SClient.UI.Views
                 "rtspsrc name=videoSource protocols=tcp latency=300 timeout=15000000 drop-on-latency=true " +
                 "videoSource. ! queue leaky=downstream max-size-buffers=8 ! application/x-rtp,media=video ! " +
                 videoChain + " ! d3d11convert ! queue leaky=downstream max-size-buffers=4 ! " +
-                "d3d11overlay name=videoOverlay ! d3d11videosink async=false sync=false qos=false";
+                (enableAiOverlay ? "d3d11overlay name=videoOverlay ! " : string.Empty) +
+                "d3d11videosink async=false sync=false qos=false";
             _pipeline = (Pipeline)Parse.Launch(pipelineText);
             var source = _pipeline.GetByName("videoSource");
             source["location"] = rtspUrl;
+            if (enableAiOverlay)
+            {
+                var videoOverlay = _pipeline.GetByName("videoOverlay");
+                if (videoOverlay == null)
+                    throw new InvalidOperationException("GStreamer did not create the AI overlay element.");
+                try
+                {
+                    // Match RtspPlayer.InitPipeline: the Gst element owns the
+                    // draw signal; Draw never disposes args.Args[0].
+                    videoOverlay.Connect("draw", Draw);
+                    lock (_aiRendererSync)
+                    {
+                        _aiOverlayElement = videoOverlay;
+                        _aiOverlayPipeline = _pipeline;
+                    }
+                    videoOverlay = null;
+                }
+                finally
+                {
+                    if (videoOverlay != null) videoOverlay.Dispose();
+                }
+            }
             _pipeline.Bus.EnableSyncMessageEmission();
             _pipeline.Bus.SyncMessage += OnSyncMessage;
             if (_pipeline.SetState(State.Playing) == StateChangeReturn.Failure)
@@ -344,6 +448,107 @@ namespace V3SClient.UI.Views
                 return false;
             return !string.IsNullOrWhiteSpace(uri.Host) &&
                    uri.Host.IndexOf("mediamtx", StringComparison.OrdinalIgnoreCase) < 0;
+        }
+
+        // Kept intentionally in the same form as RtspPlayer.Draw. In
+        // particular, args.Args[0] belongs to GStreamer and must not be
+        // disposed from this callback.
+        protected void Draw(object o, SignalArgs args)
+        {
+            AiMetadataFrame_v3 incomingFrame;
+            if (_aiResult.TryTake(out incomingFrame, 0))
+                Interlocked.Exchange(ref _lastAiFrame, incomingFrame);
+
+            var frame = _lastAiFrame;
+            if (frame == null || frame.Objects == null || frame.Objects.Count == 0 ||
+                frame.ReceivedAtUtc == default(System.DateTime) ||
+                System.DateTime.UtcNow - frame.ReceivedAtUtc > TimeSpan.FromSeconds(5) ||
+                args == null || args.Args == null || args.Args.Length < 2)
+                return;
+
+            var texturePointer = args.Args[1] is IntPtr ? (IntPtr)args.Args[1] : IntPtr.Zero;
+            if (texturePointer == IntPtr.Zero) return;
+
+            RenderTargetView renderTargetView = null;
+            try
+            {
+                InitializeAiOverlayRenderer();
+                renderTargetView = new RenderTargetView(texturePointer);
+                using (var resource = renderTargetView.Resource)
+                using (var surface = resource.QueryInterface<Surface>())
+                using (var target = new RenderTarget(_aiDrawFactory, surface, _aiRenderTargetProperties))
+                using (var successBrush = new SolidColorBrush(target, AiSuccessColor))
+                using (var errorBrush = new SolidColorBrush(target, AiErrorColor))
+                using (var labelBrush = new SolidColorBrush(target, AiLabelTextColor))
+                using (var labelBackground = new SolidColorBrush(target, AiLabelBackgroundColor))
+                {
+                    var description = surface.Description;
+                    var sourceWidth = frame.SourceWidth > 0 ? frame.SourceWidth : description.Width;
+                    var sourceHeight = frame.SourceHeight > 0 ? frame.SourceHeight : description.Height;
+                    if (sourceWidth <= 0 || sourceHeight <= 0) return;
+
+                    var ratioX = description.Width / (float)sourceWidth;
+                    var ratioY = description.Height / (float)sourceHeight;
+                    target.BeginDraw();
+                    try
+                    {
+                        foreach (var item in frame.Objects)
+                        {
+                            float left, top, width, height;
+                            if (!TryMapAiBounds(item, sourceWidth, sourceHeight, ratioX, ratioY,
+                                out left, out top, out width, out height)) continue;
+
+                            var boxBrush = item.IsBlacklist ? errorBrush : successBrush;
+                            target.DrawRectangle(new RectangleF(left, top, width, height), boxBrush, 2f);
+                            var label = string.IsNullOrWhiteSpace(item.Label) ? "object" : item.Label;
+                            if (item.Confidence > 0) label += " " + item.Confidence.ToString("P0");
+                            using (var layout = new TextLayout(_aiTextFactory, label, _aiTextFormat, Math.Max(80, description.Width), 40))
+                            {
+                                var labelWidth = Math.Min(description.Width - left, layout.Metrics.Width + 10);
+                                var labelHeight = layout.Metrics.Height + 6;
+                                var labelTop = Math.Max(0, top - labelHeight);
+                                target.FillRectangle(new RectangleF(left, labelTop, labelWidth, labelHeight), labelBackground);
+                                target.DrawText(label, _aiTextFormat,
+                                    new RectangleF(left + 5, labelTop + 2, Math.Max(1, labelWidth - 5), labelHeight), labelBrush);
+                            }
+                        }
+                    }
+                    finally { target.EndDraw(); }
+                }
+            }
+            catch (Exception ex)
+            {
+                LoggerManager.LogDebug("Live View _v3 AI overlay draw skipped: " + ex.Message);
+            }
+            finally
+            {
+                if (renderTargetView != null)
+                {
+                    // Texture lifetime belongs to GStreamer; mirror the base
+                    // safeguard so SharpDX does not release its native handle.
+                    renderTargetView.NativePointer = IntPtr.Zero;
+                    renderTargetView.Dispose();
+                }
+            }
+        }
+
+        private static bool TryMapAiBounds(AiMetadataBox_v3 item, int sourceWidth, int sourceHeight,
+            float ratioX, float ratioY, out float left, out float top, out float width, out float height)
+        {
+            left = top = width = height = 0;
+            if (item == null) return false;
+            var rawLeft = item.HasPixelBounds ? item.PixelLeft : item.Left;
+            var rawTop = item.HasPixelBounds ? item.PixelTop : item.Top;
+            var rawWidth = item.HasPixelBounds ? item.PixelWidth : item.Width;
+            var rawHeight = item.HasPixelBounds ? item.PixelHeight : item.Height;
+            if (!item.HasPixelBounds && rawLeft >= 0 && rawTop >= 0 && rawWidth > 0 && rawHeight > 0 &&
+                rawLeft <= 1 && rawTop <= 1 && rawWidth <= 1 && rawHeight <= 1)
+            {
+                rawLeft *= sourceWidth; rawTop *= sourceHeight; rawWidth *= sourceWidth; rawHeight *= sourceHeight;
+            }
+            left = (float)(rawLeft * ratioX); top = (float)(rawTop * ratioY);
+            width = (float)(rawWidth * ratioX); height = (float)(rawHeight * ratioY);
+            return width > 1 && height > 1;
         }
 
         private void OnSyncMessage(object sender, SyncMessageArgs args)
@@ -500,9 +705,24 @@ namespace V3SClient.UI.Views
             }
             finally
             {
+                ReleaseAiOverlayElement(pipeline);
                 try { pipeline.Dispose(); }
                 catch (Exception ex) { LoggerManager.LogException(ex, "Live View _v3 GStreamer pipeline dispose failed"); }
             }
+        }
+
+        private void ReleaseAiOverlayElement(Pipeline pipeline)
+        {
+            Element overlay = null;
+            lock (_aiRendererSync)
+            {
+                if (!ReferenceEquals(_aiOverlayPipeline, pipeline)) return;
+                overlay = _aiOverlayElement;
+                _aiOverlayElement = null;
+                _aiOverlayPipeline = null;
+            }
+            try { overlay?.Dispose(); }
+            catch (Exception ex) { LoggerManager.LogDebug("Live View _v3 AI overlay cleanup skipped: " + ex.Message); }
         }
 
         private IntPtr GetVideoWindowHandle()
@@ -518,6 +738,13 @@ namespace V3SClient.UI.Views
             _cancellation?.Dispose();
             _cancellation = null;
             DisposePipeline();
+            ClearAiMetadata();
+            _aiTextFormat?.Dispose();
+            _aiTextFormat = null;
+            _aiTextFactory?.Dispose();
+            _aiTextFactory = null;
+            _aiDrawFactory?.Dispose();
+            _aiDrawFactory = null;
         }
     }
 }

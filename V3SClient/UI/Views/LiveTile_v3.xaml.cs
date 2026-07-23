@@ -8,6 +8,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Input;
 using V3SClient.libs;
 using V3SClient.viewModels;
+using V3SClient.Services;
 
 namespace V3SClient.UI.Views
 {
@@ -27,8 +28,10 @@ namespace V3SClient.UI.Views
         private int _mainSwitchScheduledGeneration = -1;
         private CameraStreamInfo _pendingMainStream;
         private bool _positioningBadge;
+        private bool _popupPlacementSuspended;
         private int _badgeGeneration;
         private Window _ownerWindow;
+        private IDisposable _metadataSubscription;
 
         public LiveTile_v3()
         {
@@ -60,7 +63,6 @@ namespace V3SClient.UI.Views
             Unloaded += LiveTile_Unloaded;
             if (Application.Current != null)
                 Application.Current.Deactivated += Application_Deactivated;
-            LayoutUpdated += LiveTile_LayoutUpdated;
         }
 
         private void LiveTile_Loaded(object sender, RoutedEventArgs e)
@@ -72,7 +74,6 @@ namespace V3SClient.UI.Views
                 _ownerWindow.Deactivated -= OwnerWindow_Deactivated;
                 _ownerWindow.Activated -= OwnerWindow_Activated;
                 _ownerWindow.LocationChanged -= OwnerWindow_LocationChanged;
-                _ownerWindow.SizeChanged -= OwnerWindow_SizeChanged;
             }
             _ownerWindow = window;
             if (_ownerWindow != null)
@@ -80,20 +81,19 @@ namespace V3SClient.UI.Views
                 _ownerWindow.Deactivated += OwnerWindow_Deactivated;
                 _ownerWindow.Activated += OwnerWindow_Activated;
                 _ownerWindow.LocationChanged += OwnerWindow_LocationChanged;
-                _ownerWindow.SizeChanged += OwnerWindow_SizeChanged;
                 OpenCameraBadgeIfActive();
             }
         }
 
         private void OpenCameraBadgeIfActive()
         {
-            if (_disposed || _ownerWindow == null || !_ownerWindow.IsActive ||
+            if (_disposed || _popupPlacementSuspended || _ownerWindow == null || !_ownerWindow.IsActive ||
                 Slot == null || Slot.Camera == null || !TileBorder.IsVisible ||
                 Slot.State == LiveConnectionState_v3.Empty) return;
             var generation = _badgeGeneration;
             Dispatcher.BeginInvoke(new Action(() =>
             {
-                if (_disposed || generation != _badgeGeneration || _ownerWindow == null ||
+                if (_disposed || _popupPlacementSuspended || generation != _badgeGeneration || _ownerWindow == null ||
                     !_ownerWindow.IsActive || Slot == null || Slot.Camera == null || !TileBorder.IsVisible ||
                     Slot.State == LiveConnectionState_v3.Empty)
                     return;
@@ -128,29 +128,13 @@ namespace V3SClient.UI.Views
             _ownerWindow.Deactivated -= OwnerWindow_Deactivated;
             _ownerWindow.Activated -= OwnerWindow_Activated;
             _ownerWindow.LocationChanged -= OwnerWindow_LocationChanged;
-            _ownerWindow.SizeChanged -= OwnerWindow_SizeChanged;
             _ownerWindow = null;
         }
 
         private void OwnerWindow_LocationChanged(object sender, EventArgs e)
         {
-            if (CameraBadgePopup.IsOpen)
-                PositionCameraBadgePopup();
-            if (ActionPopup.IsOpen)
-                PositionActionPopup();
-        }
-
-        private void OwnerWindow_SizeChanged(object sender, SizeChangedEventArgs e)
-        {
-            Dispatcher.BeginInvoke(new Action(() =>
-            {
-                if (CameraBadgePopup.IsOpen) PositionCameraBadgePopup();
-                if (ActionPopup.IsOpen) PositionActionPopup();
-            }), DispatcherPriority.Render);
-        }
-
-        private void LiveTile_LayoutUpdated(object sender, EventArgs e)
-        {
+            if (_popupPlacementSuspended)
+                return;
             if (CameraBadgePopup.IsOpen)
                 PositionCameraBadgePopup();
             if (ActionPopup.IsOpen)
@@ -270,7 +254,7 @@ namespace V3SClient.UI.Views
 
         public void RefreshPopupPlacement()
         {
-            if (_disposed) return;
+            if (_disposed || _popupPlacementSuspended) return;
             var reopenActions = ActionPopup.IsOpen;
             HideCameraBadge(false);
             ActionPopup.IsOpen = false;
@@ -280,6 +264,28 @@ namespace V3SClient.UI.Views
                 if (reopenActions) ShowActions();
                 OpenCameraBadgeIfActive();
             }));
+        }
+
+        /// <summary>
+        /// Popup overlays are native HWNDs. During a parent-grid resize they
+        /// are closed so PointToScreen is not recalculated per tile/pass.
+        /// </summary>
+        public void SuspendPopupPlacementForResize()
+        {
+            if (_disposed || _popupPlacementSuspended) return;
+            _popupPlacementSuspended = true;
+            SafeStopHideActionsTimer();
+            HideCameraBadge(false);
+            ActionPopup.IsOpen = false;
+        }
+
+        /// <summary>Restores overlays after the grid receives stable bounds.</summary>
+        public void ResumePopupPlacementAfterResize()
+        {
+            if (_disposed) return;
+            _popupPlacementSuspended = false;
+            OpenCameraBadgeIfActive();
+            if (_actionsPinned || _fullscreenMode) ShowActions();
         }
 
         /// <summary>Suppresses popup overlays during a layout/fullscreen transition.</summary>
@@ -643,7 +649,7 @@ namespace V3SClient.UI.Views
 
         private void ShowActions()
         {
-            if (_disposed || !IsLoaded || _ownerWindow == null || ActionBar.Visibility != Visibility.Visible) return;
+            if (_disposed || _popupPlacementSuspended || !IsLoaded || _ownerWindow == null || ActionBar.Visibility != Visibility.Visible) return;
             OpenCameraBadgeIfActive();
             SafeStopHideActionsTimer();
             ActionPopup.IsOpen = true;
@@ -708,10 +714,8 @@ namespace V3SClient.UI.Views
 
         private void TileBorder_SizeChanged(object sender, SizeChangedEventArgs e)
         {
-            if (CameraBadgePopup.IsOpen)
-                Dispatcher.BeginInvoke(new Action(PositionCameraBadgePopup), DispatcherPriority.Render);
-            if (ActionPopup.IsOpen)
-                Dispatcher.BeginInvoke(new Action(PositionActionPopup), DispatcherPriority.Loaded);
+            // LivePage_v3 owns the debounced resize coordinator. Updating a
+            // native popup here would run once for every camera tile.
         }
 
         private void HideActions()
@@ -838,13 +842,34 @@ namespace V3SClient.UI.Views
 
         private void UpdateMetadataSubscription()
         {
+            // WebApp subscribes per logical camera, not per stream currently
+            // selected. A camera can expose its raw stream while AI metadata
+            // is produced by its paired AI stream.
             var isAi = Slot != null && Slot.Camera != null &&
-                ((Slot.SelectedStream != null && Slot.SelectedStream.IsAiMode == true) ||
+                (Slot.Camera.HasAIStream ||
+                 (Slot.SelectedStream != null && Slot.SelectedStream.IsAiMode == true) ||
                  string.Equals(Slot.Camera.type, "ai_processed", StringComparison.OrdinalIgnoreCase));
-            MetadataOverlay.Visibility = isAi ? Visibility.Visible : Visibility.Collapsed;
-            // Metadata messages are keyed by the logical camera ID; playback
-            // may use a different relay path when it connects to the broker.
-            MetadataOverlay.Subscribe(isAi ? Slot.Camera.camID : null);
+
+            // This runs before ConnectAsync creates either player pipeline.
+            Player.AiOverlayEnabled = isAi;
+            MainPlayer.AiOverlayEnabled = isAi;
+            Player.ClearAiMetadata();
+            MainPlayer.ClearAiMetadata();
+            _metadataSubscription?.Dispose();
+            _metadataSubscription = null;
+            if (!isAi || string.IsNullOrWhiteSpace(Slot.Camera.camID)) return;
+
+            _metadataSubscription = MetadataSocketService_v3.Instance.Subscribe(
+                Slot.Camera.camID, OnAiMetadataFrame);
+        }
+
+        private void OnAiMetadataFrame(AiMetadataFrame_v3 frame)
+        {
+            if (_disposed || frame == null || Slot == null || Slot.Camera == null ||
+                !string.Equals(frame.CameraId, Slot.Camera.camID, StringComparison.OrdinalIgnoreCase))
+                return;
+            Player.Send2Draw(frame);
+            MainPlayer.Send2Draw(frame);
         }
 
         private void RefreshVisuals()
@@ -965,13 +990,11 @@ namespace V3SClient.UI.Views
             CameraBadgePopup.IsOpen = false;
             Loaded -= LiveTile_Loaded;
             Unloaded -= LiveTile_Unloaded;
-            LayoutUpdated -= LiveTile_LayoutUpdated;
             if (_ownerWindow != null)
             {
                 _ownerWindow.Deactivated -= OwnerWindow_Deactivated;
                 _ownerWindow.Activated -= OwnerWindow_Activated;
                 _ownerWindow.LocationChanged -= OwnerWindow_LocationChanged;
-                _ownerWindow.SizeChanged -= OwnerWindow_SizeChanged;
                 _ownerWindow = null;
             }
             Player.PlaybackStateChanged -= Player_PlaybackStateChanged;
@@ -979,7 +1002,8 @@ namespace V3SClient.UI.Views
             Player.VideoMouseEnter -= Player_VideoMouseEnter;
             Player.VideoMouseMove -= Player_VideoMouseMove;
             Player.VideoMouseLeave -= Player_VideoMouseLeave;
-            MetadataOverlay.Dispose();
+            _metadataSubscription?.Dispose();
+            _metadataSubscription = null;
             Player.Dispose();
             MainPlayer.Dispose();
         }

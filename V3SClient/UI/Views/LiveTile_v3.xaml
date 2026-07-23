@@ -30,7 +30,7 @@
             <Setter Property="Foreground" Value="{StaticResource VmsTextInverseBrush_v3}"/>
         </Style>
     </UserControl.Resources>
-    <Border x:Name="TileBorder" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" Background="{StaticResource VmsSurfaceBrush_v3}" Margin="1" ClipToBounds="True" SizeChanged="TileBorder_SizeChanged" MouseEnter="TileBorder_MouseEnter" MouseLeave="TileBorder_MouseLeave" MouseLeftButtonUp="TileBorder_MouseLeftButtonUp">
+    <Border x:Name="TileBorder" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" Background="{StaticResource VmsSurfaceBrush_v3}" Margin="1" ClipToBounds="True" MouseEnter="TileBorder_MouseEnter" MouseLeave="TileBorder_MouseLeave" MouseLeftButtonUp="TileBorder_MouseLeftButtonUp">
         <Grid>
             <local:WhepPlayer_v3 x:Name="Player" />
             <!-- The grid/sub pipeline remains alive while this second native
@@ -41,8 +41,6 @@
                  transparent surface gives the whole tile a reliable hover
                  hit area while keeping the video visible underneath. -->
             <Border x:Name="HoverSurface" Background="Transparent" Panel.ZIndex="10" MouseEnter="HoverSurface_MouseEnter" MouseLeave="HoverSurface_MouseLeave" />
-            <local:AiMetadataOverlay_v3 x:Name="MetadataOverlay" IsHitTestVisible="False" />
-
             <!-- Keep the camera ID inside the tile's WPF visual tree. The
                  previous Popup was a separate HWND and could remain visible
                  over another application after focus changed. -->

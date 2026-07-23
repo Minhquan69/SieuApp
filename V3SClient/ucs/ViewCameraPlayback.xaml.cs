@@ -180,6 +180,10 @@ namespace V3SClient.ucs
             public double Duration { get; set; }
             public string Url { get; set; }
             public double StartOffset { get; set; }
+            // Offset reported by the playback API (the `ofs` URL parameter).  It
+            // identifies the position in the source recording; GStreamer still
+            // seeks by the contiguous media-playlist position.
+            public double? SourceOffset { get; set; }
             public bool HasVideo { get; set; }
             public System.DateTime RealStartTime { get; set; }
         }
@@ -502,11 +506,12 @@ namespace V3SClient.ucs
                     ShowConnectButton = Visibility.Hidden;
                     break;
                 case PlayerStatus.Stop:
-                    // An empty/unreadable HLS playlist reaches Stop before a
-                    // usable duration is reported. Show the in-tile playback
-                    // empty state instead of leaving the native surface gray.
+                    // During HLS startup a temporary Stop can arrive before the
+                    // first duration/state notification. Give the pipeline a short
+                    // grace period; otherwise a valid camera is incorrectly marked
+                    // as having no playback data.
                     if (VideoDuration <= 0)
-                        Dispatcher.BeginInvoke(new Action(ShowNoPlaybackData));
+                        ShowNoPlaybackDataAfterStartupGrace(Player);
                     else
                         ShowConnectButton = Visibility.Visible;
                     break;
@@ -525,6 +530,7 @@ namespace V3SClient.ucs
         {
             try
             {
+                PreparingPlaybackOverlay.Visibility = Visibility.Collapsed;
                 NoPlaybackDataOverlay.Visibility = Visibility.Collapsed;
                 // A WindowsFormsHost is an HWND and paints above normal WPF controls.
                 // Restore it only when a real playback pipeline is about to start.
@@ -669,6 +675,39 @@ namespace V3SClient.ucs
                 savedPath = null;
                 return false;
             }
+        }
+
+        public void ShowPreparingPlayback(string status)
+        {
+            if (_disposed)
+                return;
+
+            try
+            {
+                if (PreparingPlaybackText != null)
+                    PreparingPlaybackText.Text = string.IsNullOrWhiteSpace(status) ? "Đang chuẩn bị dữ liệu..." : status;
+                NoPlaybackDataOverlay.Visibility = Visibility.Collapsed;
+                VideoPanel.Visible = false;
+                videoWindow.Visibility = Visibility.Collapsed;
+                PreparingPlaybackOverlay.Visibility = Visibility.Visible;
+                SetHoverActionsVisible(false);
+            }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Không thể hiển thị trạng thái chuẩn bị playback");
+            }
+        }
+
+        private async void ShowNoPlaybackDataAfterStartupGrace(models.RtspPlayer playerAtStop)
+        {
+            await System.Threading.Tasks.Task.Delay(1800);
+            if (_disposed || !ReferenceEquals(Player, playerAtStop) || VideoDuration > 0)
+                return;
+
+            if (Dispatcher.CheckAccess())
+                ShowNoPlaybackData();
+            else
+                Dispatcher.BeginInvoke(new Action(ShowNoPlaybackData));
         }
 
         /// <summary>
@@ -945,6 +984,7 @@ namespace V3SClient.ucs
             // identifier the only visual layers for an empty playlist.
             VideoPanel.Visible = false;
             videoWindow.Visibility = Visibility.Collapsed;
+            PreparingPlaybackOverlay.Visibility = Visibility.Collapsed;
             NoPlaybackDataOverlay.Visibility = Visibility.Visible;
             SetHoverActionsVisible(false);
         }
@@ -1066,7 +1106,16 @@ namespace V3SClient.ucs
             string[] lines = m3u8Content.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
             double currentDuration = 0;
             
-            System.Text.RegularExpressions.Regex dateRegex = new System.Text.RegularExpressions.Regex(@"(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})");
+            // The playback API gives the authoritative wall-clock timestamp in
+            // the segment file name, including its optional microsecond suffix.
+            // Do not reduce this to whole seconds: doing so makes independent
+            // camera playlists visibly drift while playing or seeking together.
+            var dateRegex = new System.Text.RegularExpressions.Regex(
+                @"(?<timestamp>\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}(?:-\d{1,6})?)",
+                System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+            var sourceOffsetRegex = new System.Text.RegularExpressions.Regex(
+                @"(?:[?&])ofs=(?<offset>-?\d+(?:\.\d+)?)",
+                System.Text.RegularExpressions.RegexOptions.CultureInvariant | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
             var videoSegments = new List<PlaybackSegment>();
 
@@ -1087,11 +1136,31 @@ namespace V3SClient.ucs
                     var match = dateRegex.Match(line);
                     if (match.Success)
                     {
-                        if (System.DateTime.TryParseExact(match.Value, "yyyy-MM-dd_HH-mm-ss", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out System.DateTime parsedTime))
+                        string timestamp = match.Groups["timestamp"].Value;
+                        var timestampFormats = new[]
                         {
-                            realStartTime = parsedTime;
-                        }
+                            "yyyy-MM-dd_HH-mm-ss-FFFFFF",
+                            "yyyy-MM-dd_HH-mm-ss-FFFFF",
+                            "yyyy-MM-dd_HH-mm-ss-FFFF",
+                            "yyyy-MM-dd_HH-mm-ss-FFF",
+                            "yyyy-MM-dd_HH-mm-ss-FF",
+                            "yyyy-MM-dd_HH-mm-ss-F",
+                            "yyyy-MM-dd_HH-mm-ss"
+                        };
+                        System.DateTime.TryParseExact(timestamp, timestampFormats,
+                            System.Globalization.CultureInfo.InvariantCulture,
+                            System.Globalization.DateTimeStyles.None, out realStartTime);
                     }
+
+                    double parsedSourceOffset;
+                    var sourceOffsetMatch = sourceOffsetRegex.Match(line);
+                    double? sourceOffset = sourceOffsetMatch.Success &&
+                        double.TryParse(sourceOffsetMatch.Groups["offset"].Value,
+                            System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture,
+                            out parsedSourceOffset)
+                        ? (double?)parsedSourceOffset
+                        : null;
 
                     // This is a segment URL
                     videoSegments.Add(new PlaybackSegment
@@ -1099,6 +1168,7 @@ namespace V3SClient.ucs
                         Duration = currentDuration,
                         Url = line,
                         StartOffset = 0, // Will be calculated
+                        SourceOffset = sourceOffset,
                         HasVideo = true,
                         RealStartTime = realStartTime != System.DateTime.MinValue ? realStartTime : _searchStartTime.AddSeconds(_totalDurationSeconds)
                     });
@@ -1110,34 +1180,44 @@ namespace V3SClient.ucs
             // Sort segments by RealStartTime just in case
             videoSegments = videoSegments.OrderBy(s => s.RealStartTime).ToList();
             
-            // Create gaps
-            double currentRealOffset = 0;
+            // Build the timeline directly from the recording timestamps.  The old
+            // implementation ignored gaps shorter than ten seconds, which shifted
+            // all following segments and broke multi-camera real-time sync.
             System.DateTime currentRealTime = _searchStartTime;
-            
             foreach (var vSeg in videoSegments)
             {
+                if (vSeg.RealStartTime < _searchStartTime)
+                {
+                    // A playlist may start mid-segment.  Preserve only the part
+                    // that overlaps the queried interval.
+                    double clippedSeconds = (_searchStartTime - vSeg.RealStartTime).TotalSeconds;
+                    if (clippedSeconds >= vSeg.Duration)
+                        continue;
+                    vSeg.RealStartTime = _searchStartTime;
+                    vSeg.Duration -= Math.Max(0, clippedSeconds);
+                }
+
+                if (vSeg.RealStartTime >= _searchEndTime || vSeg.Duration <= 0)
+                    continue;
+
                 if (vSeg.RealStartTime > currentRealTime)
                 {
                     double gapDuration = (vSeg.RealStartTime - currentRealTime).TotalSeconds;
-                    if (gapDuration > 10) // 10 seconds threshold for a gap
+                    _segments.Add(new PlaybackSegment
                     {
-                        _segments.Add(new PlaybackSegment
-                        {
-                            Duration = gapDuration,
-                            StartOffset = currentRealOffset,
-                            HasVideo = false,
-                            RealStartTime = currentRealTime
-                        });
-                        currentRealOffset += gapDuration;
-                        currentRealTime = currentRealTime.AddSeconds(gapDuration);
-                    }
+                        Duration = gapDuration,
+                        StartOffset = (currentRealTime - _searchStartTime).TotalSeconds,
+                        HasVideo = false,
+                        RealStartTime = currentRealTime
+                    });
                 }
-                
-                vSeg.StartOffset = currentRealOffset;
+
+                vSeg.StartOffset = Math.Max(0, (vSeg.RealStartTime - _searchStartTime).TotalSeconds);
                 _segments.Add(vSeg);
-                
-                currentRealOffset += vSeg.Duration;
-                currentRealTime = vSeg.RealStartTime.AddSeconds(vSeg.Duration);
+
+                var segmentEnd = vSeg.RealStartTime.AddSeconds(vSeg.Duration);
+                if (segmentEnd > currentRealTime)
+                    currentRealTime = segmentEnd;
             }
             
             if (currentRealTime < _searchEndTime)
@@ -1148,7 +1228,7 @@ namespace V3SClient.ucs
                     _segments.Add(new PlaybackSegment
                     {
                         Duration = finalGap,
-                        StartOffset = currentRealOffset,
+                        StartOffset = Math.Max(0, (currentRealTime - _searchStartTime).TotalSeconds),
                         HasVideo = false,
                         RealStartTime = currentRealTime
                     });
@@ -1165,6 +1245,7 @@ namespace V3SClient.ucs
                 Duration = seg.Duration,
                 Url = seg.Url,
                 StartOffset = seg.StartOffset,
+                SourceOffset = seg.SourceOffset,
                 HasVideo = seg.HasVideo,
                 RealStartTime = seg.RealStartTime
             }).ToList();

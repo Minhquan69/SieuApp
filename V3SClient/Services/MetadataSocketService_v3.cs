@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.WebSockets;
+using System.Configuration;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,12 +20,24 @@ namespace V3SClient.Services
         public double Top { get; set; }
         public double Width { get; set; }
         public double Height { get; set; }
+
+        // The metadata API can provide both normalized bbox coordinates and
+        // source-frame pixels.  Keep both so the native D3D overlay can map
+        // the boxes to the decoded texture without relying on WPF layout.
+        public bool HasPixelBounds { get; set; }
+        public double PixelLeft { get; set; }
+        public double PixelTop { get; set; }
+        public double PixelWidth { get; set; }
+        public double PixelHeight { get; set; }
     }
 
     public sealed class AiMetadataFrame_v3
     {
         public string CameraId { get; set; }
         public IList<AiMetadataBox_v3> Objects { get; set; }
+        public int SourceWidth { get; set; }
+        public int SourceHeight { get; set; }
+        public DateTime ReceivedAtUtc { get; set; }
     }
 
     public sealed class MetadataSocketService_v3 : IDisposable
@@ -61,18 +74,90 @@ namespace V3SClient.Services
             {
                 if (_socket != null && (_socket.State == WebSocketState.Open || _socket.State == WebSocketState.Connecting)) return;
                 _socket?.Dispose();
-                _socket = new ClientWebSocket();
-                var streamUrl = ApiManager.Instance.StreamApiUrl;
-                if (string.IsNullOrWhiteSpace(streamUrl)) return;
-                var source = new Uri(streamUrl, UriKind.Absolute);
-                var builder = new UriBuilder(source) { Scheme = source.Scheme == "https" ? "wss" : "ws", Path = "/ws/metadata", Query = string.Empty };
-                await _socket.ConnectAsync(builder.Uri, _lifetime.Token).ConfigureAwait(false);
+                _socket = null;
+                var connection = await OpenMetadataSocketAsync(_lifetime.Token).ConfigureAwait(false);
+                if (connection == null) return;
+                _socket = connection.Socket;
+                LoggerManager.LogInfo("Live View _v3 metadata WebSocket connected: " + connection.Uri);
                 await SendSubscriptionsAsync().ConfigureAwait(false);
                 _receiveTask = ReceiveLoopAsync(_socket, _lifetime.Token);
                 _ = HeartbeatLoopAsync(_socket, _lifetime.Token);
             }
             catch (Exception ex) { LoggerManager.LogException(ex, "Live View _v3 metadata WebSocket connection failed"); }
             finally { _connectionGate.Release(); }
+        }
+
+        /// <summary>
+        /// Resolves the FastAPI metadata hub independently from the browser's
+        /// /streams development proxy.  The previous code always used
+        /// localhost:3000, which only exists while the Next.js dev server is
+        /// running and is why native Live View never received AI messages.
+        /// </summary>
+        private sealed class MetadataSocketConnection
+        {
+            public ClientWebSocket Socket { get; set; }
+            public Uri Uri { get; set; }
+        }
+
+        private static async Task<MetadataSocketConnection> OpenMetadataSocketAsync(CancellationToken token)
+        {
+            Exception lastError = null;
+            foreach (var endpoint in GetMetadataEndpoints())
+            {
+                var socket = new ClientWebSocket();
+                try
+                {
+                    await socket.ConnectAsync(endpoint, token).ConfigureAwait(false);
+                    return new MetadataSocketConnection { Socket = socket, Uri = endpoint };
+                }
+                catch (Exception ex)
+                {
+                    lastError = ex;
+                    LoggerManager.LogWarn("Live View _v3 metadata endpoint unavailable: " + endpoint + " (" + ex.Message + ")");
+                    try { socket.Abort(); } catch { }
+                    socket.Dispose();
+                }
+            }
+
+            if (lastError != null) throw new InvalidOperationException(
+                "Không thể kết nối dịch vụ AI metadata. Cấu hình MetadataWsUrl tới FastAPI /ws/metadata.", lastError);
+            return null;
+        }
+
+        private static IEnumerable<Uri> GetMetadataEndpoints()
+        {
+            var values = new List<string>();
+            var configured = ConfigurationManager.AppSettings["MetadataWsUrl_v3"];
+            if (!string.IsNullOrWhiteSpace(configured)) values.Add(configured);
+            if (!string.IsNullOrWhiteSpace(ApiManager.Instance.MetadataWsUrl)) values.Add(ApiManager.Instance.MetadataWsUrl);
+
+            // The metadata FastAPI app is deployed with the Assets service in
+            // the current system.  Its discovered URL may end with /static.
+            var assets = ApiManager.Instance.GetEndpointUrl("Assets");
+            if (!string.IsNullOrWhiteSpace(assets)) values.Add(assets);
+            var stream = ApiManager.Instance.StreamApiUrl;
+            if (!string.IsNullOrWhiteSpace(stream) &&
+                stream.IndexOf("localhost:3000", StringComparison.OrdinalIgnoreCase) < 0)
+                values.Add(stream);
+            if (!string.IsNullOrWhiteSpace(ApiManager.Instance.BaseUrl)) values.Add(ApiManager.Instance.BaseUrl);
+
+            var emitted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var value in values)
+            {
+                Uri source;
+                if (!Uri.TryCreate(value, UriKind.Absolute, out source)) continue;
+                var path = source.AbsolutePath ?? string.Empty;
+                var isExplicitMetadataPath = path.EndsWith("/ws/metadata", StringComparison.OrdinalIgnoreCase);
+                if (!isExplicitMetadataPath && path.EndsWith("/static", StringComparison.OrdinalIgnoreCase)) path = path.Substring(0, path.Length - "/static".Length);
+                if (!isExplicitMetadataPath && path.EndsWith("/streams", StringComparison.OrdinalIgnoreCase)) path = path.Substring(0, path.Length - "/streams".Length);
+                var uri = new UriBuilder(source)
+                {
+                    Scheme = string.Equals(source.Scheme, "https", StringComparison.OrdinalIgnoreCase) ? "wss" : "ws",
+                    Path = isExplicitMetadataPath ? path : path.TrimEnd('/') + "/ws/metadata",
+                    Query = string.Empty
+                }.Uri;
+                if (emitted.Add(uri.AbsoluteUri)) yield return uri;
+            }
         }
 
         private async Task ReceiveLoopAsync(ClientWebSocket socket, CancellationToken token)
@@ -112,11 +197,20 @@ namespace V3SClient.Services
                 var root = JObject.Parse(json);
                 if (!string.Equals((string)root["type"], "ai_metadata", StringComparison.OrdinalIgnoreCase)) return;
                 var cameraId = (string)root["camera_id"];
-                var frame = new AiMetadataFrame_v3 { CameraId = cameraId, Objects = new List<AiMetadataBox_v3>() };
+                var debug = root["debug"] as JObject;
+                var frame = new AiMetadataFrame_v3
+                {
+                    CameraId = cameraId,
+                    Objects = new List<AiMetadataBox_v3>(),
+                    SourceWidth = (int?)debug?["source_width"] ?? 0,
+                    SourceHeight = (int?)debug?["source_height"] ?? 0,
+                    ReceivedAtUtc = DateTime.UtcNow
+                };
                 foreach (var item in root["objects"] as JArray ?? new JArray())
                 {
                     var bbox = item["bbox"];
                     if (bbox == null) continue;
+                    var pixel = item["bbox_pixel"] as JObject;
                     frame.Objects.Add(new AiMetadataBox_v3
                     {
                         Label = (string)item["label"] ?? (string)item["name"] ?? "object",
@@ -125,7 +219,12 @@ namespace V3SClient.Services
                         Left = (double?)bbox["left"] ?? (double?)bbox["x"] ?? 0,
                         Top = (double?)bbox["top"] ?? (double?)bbox["y"] ?? 0,
                         Width = (double?)bbox["width"] ?? 0,
-                        Height = (double?)bbox["height"] ?? 0
+                        Height = (double?)bbox["height"] ?? 0,
+                        HasPixelBounds = pixel != null,
+                        PixelLeft = pixel == null ? 0 : (double?)pixel["left"] ?? (double?)pixel["x"] ?? 0,
+                        PixelTop = pixel == null ? 0 : (double?)pixel["top"] ?? (double?)pixel["y"] ?? 0,
+                        PixelWidth = pixel == null ? 0 : (double?)pixel["width"] ?? 0,
+                        PixelHeight = pixel == null ? 0 : (double?)pixel["height"] ?? 0
                     });
                 }
                 Action<AiMetadataFrame_v3>[] callbacks;

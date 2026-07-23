@@ -46,6 +46,7 @@ namespace V3SClient.libs
         // Backend Domain (The Center Server entry point)
         private string _baseUrl = "http://localhost:8100";
         private string _streamApiUrl = "http://localhost:3000/streams";
+        private string _metadataWsUrl;
         private string _backendToken;
 
         // Multi-service Endpoint Registry
@@ -66,6 +67,7 @@ namespace V3SClient.libs
        
         public string BaseUrl => _baseUrl;
         public string StreamApiUrl => _streamApiUrl;
+        public string MetadataWsUrl => _metadataWsUrl;
         public string NetworkMode => _networkMode;
         public string StorageUrl => _storageUrl;
         public string BackendToken => _backendToken;
@@ -100,6 +102,9 @@ namespace V3SClient.libs
                         _baseUrl = config.ApiUrl;
                         if (!string.IsNullOrWhiteSpace(config.StreamApiUrl))
                             _streamApiUrl = config.StreamApiUrl.TrimEnd('/');
+                        _metadataWsUrl = string.IsNullOrWhiteSpace(config.MetadataWsUrl)
+                            ? null
+                            : config.MetadataWsUrl.Trim();
                         _networkMode = config.NetworkMode;
                     }
                 }
@@ -120,6 +125,7 @@ namespace V3SClient.libs
                 {
                     ApiUrl = apiUrl,
                     StreamApiUrl = _streamApiUrl,
+                    MetadataWsUrl = _metadataWsUrl,
                     NetworkMode = networkMode
                 };
                 string json = JsonConvert.SerializeObject(config, Formatting.Indented);

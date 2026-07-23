@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -46,12 +47,21 @@ namespace V3SClient.UI.Views
         private int _fullscreenTransitionVersion;
         private int _geometryTransitionVersion;
         private readonly TranslateTransform _headerActionTransform = new TranslateTransform();
+        private readonly DispatcherTimer _resizeSettledTimer;
+        private readonly Stopwatch _resizeStopwatch = new Stopwatch();
+        private bool _resizeOverlaysSuspended;
+        private bool _geometryTransitionInProgress;
+        private bool _headerActionCenteringQueued;
+        private int _resizeEventCount;
+        private int _resizeSettlementVersion;
         private LiveTile_v3 _dragTile;
         private Point _dragStart;
 
         public LivePage_v3()
         {
             InitializeComponent();
+            _resizeSettledTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(140) };
+            _resizeSettledTimer.Tick += ResizeSettledTimer_Tick;
             // The action icons are centred against the complete header at all
             // window sizes, not against the space left between side controls.
             HeaderActionPanel.RenderTransform = _headerActionTransform;
@@ -97,17 +107,81 @@ namespace V3SClient.UI.Views
 
         private void LivePageHeader_SizeChanged(object sender, SizeChangedEventArgs e)
         {
-            QueueHeaderActionCentering();
+            ScheduleResizeSettle();
         }
 
         private void LivePage_SizeChanged(object sender, SizeChangedEventArgs e)
         {
-            QueueHeaderActionCentering();
+            ScheduleResizeSettle();
         }
 
         private void CameraGrid_SizeChanged(object sender, SizeChangedEventArgs e)
         {
-            QueueHeaderActionCentering();
+            ScheduleResizeSettle();
+        }
+
+        /// <summary>
+        /// A native D3D video surface follows every WPF arrange pass while a
+        /// window is being resized. Do not force a transaction for every
+        /// SizeChanged event; restore native popups only after final bounds.
+        /// </summary>
+        private void ScheduleResizeSettle()
+        {
+            if (_disposed || _fullscreenTile != null || _geometryTransitionInProgress)
+                return;
+
+            _resizeEventCount++;
+            _resizeSettlementVersion++;
+            if (!_resizeOverlaysSuspended)
+            {
+                _resizeOverlaysSuspended = true;
+                _resizeStopwatch.Restart();
+                foreach (var tile in _tiles.Values)
+                    tile.SuspendPopupPlacementForResize();
+            }
+
+            _resizeSettledTimer.Stop();
+            _resizeSettledTimer.Start();
+        }
+
+        private void ResizeSettledTimer_Tick(object sender, EventArgs e)
+        {
+            _resizeSettledTimer.Stop();
+            var settlementVersion = _resizeSettlementVersion;
+            RunAfterNativeLayout(new Action(() =>
+            {
+                if (_disposed || settlementVersion != _resizeSettlementVersion ||
+                    _fullscreenTile != null || _geometryTransitionInProgress)
+                    return;
+
+                CameraGrid.InvalidateMeasure();
+                CameraGrid.InvalidateArrange();
+                CameraGrid.UpdateLayout();
+                foreach (var tile in _tiles.Values)
+                    tile.ResumePopupPlacementAfterResize();
+
+                _resizeOverlaysSuspended = false;
+                QueueHeaderActionCentering();
+
+                var elapsed = _resizeStopwatch.IsRunning ? _resizeStopwatch.ElapsedMilliseconds : 0;
+                _resizeStopwatch.Reset();
+                if (elapsed >= 16 || _resizeEventCount > 1)
+                {
+                    LoggerManager.LogDebug(string.Format(
+                        "Live View _v3 resize settled: {0} layout events, {1} tiles, {2} active cameras, {3} ms.",
+                        _resizeEventCount, _tiles.Count, _viewModel.ActiveCameraCount, elapsed));
+                }
+                _resizeEventCount = 0;
+            }));
+        }
+
+        private void CancelPendingResizeSettle()
+        {
+            _resizeSettledTimer.Stop();
+            _resizeSettlementVersion++;
+            _resizeEventCount = 0;
+            _resizeStopwatch.Reset();
+            _resizeOverlaysSuspended = false;
         }
 
         /// <summary>
@@ -135,40 +209,62 @@ namespace V3SClient.UI.Views
                 return;
             }
 
+            CancelPendingResizeSettle();
+            _geometryTransitionInProgress = true;
             var transitionVersion = ++_geometryTransitionVersion;
             CameraGrid.Visibility = Visibility.Hidden;
             foreach (var tile in _tiles.Values)
+            {
+                tile.SuspendPopupPlacementForResize();
                 tile.SetVideoSurfaceVisible(false);
+            }
 
             if (applyLayout != null) applyLayout();
 
             RunAfterNativeLayout(new Action(() =>
             {
                 if (_disposed || transitionVersion != _geometryTransitionVersion || _fullscreenTile != null)
-                    return;
-
-                CameraGrid.InvalidateMeasure();
-                CameraGrid.InvalidateArrange();
-                CameraGrid.UpdateLayout();
-                CameraGrid.Visibility = Visibility.Visible;
-                foreach (var tile in _tiles.Values)
                 {
-                    tile.SetVideoSurfaceVisible(tile.Slot == null ||
-                        tile.Slot.State != LiveConnectionState_v3.Error);
-                    tile.RefreshPopupPlacement();
+                    if (transitionVersion == _geometryTransitionVersion)
+                        _geometryTransitionInProgress = false;
+                    return;
                 }
-                QueueHeaderActionCentering();
+
+                try
+                {
+                    CameraGrid.InvalidateMeasure();
+                    CameraGrid.InvalidateArrange();
+                    CameraGrid.UpdateLayout();
+                    CameraGrid.Visibility = Visibility.Visible;
+                    foreach (var tile in _tiles.Values)
+                    {
+                        tile.SetVideoSurfaceVisible(tile.Slot == null ||
+                            tile.Slot.State != LiveConnectionState_v3.Error);
+                        tile.ResumePopupPlacementAfterResize();
+                    }
+                    QueueHeaderActionCentering();
+                }
+                finally
+                {
+                    if (transitionVersion == _geometryTransitionVersion)
+                        _geometryTransitionInProgress = false;
+                }
             }));
         }
 
         private void QueueHeaderActionCentering()
         {
+            if (_disposed || _headerActionCenteringQueued)
+                return;
+
+            _headerActionCenteringQueued = true;
             // Grid columns reserve different widths for the title/sidebar
             // controls at narrow aspect ratios. Calculate against the real
             // header bounds after arrange so the icon group stays at the
             // actual visual centre for every window size.
             Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(() =>
             {
+                _headerActionCenteringQueued = false;
                 if (!IsLoaded || !LivePageHeader.IsVisible ||
                     LivePageHeader.ActualWidth <= 0 || HeaderActionPanel.ActualWidth <= 0)
                     return;
@@ -1066,6 +1162,8 @@ namespace V3SClient.UI.Views
             _cameraOperation.Dispose();
             _lifetime.Cancel();
             _lifetime.Dispose();
+            _resizeSettledTimer.Stop();
+            _resizeSettledTimer.Tick -= ResizeSettledTimer_Tick;
             LivePageHeader.SizeChanged -= LivePageHeader_SizeChanged;
             CameraGrid.SizeChanged -= CameraGrid_SizeChanged;
             SizeChanged -= LivePage_SizeChanged;

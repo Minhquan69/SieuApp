@@ -102,12 +102,27 @@ namespace V3SClient
             }
             #endregion License
 
-            string gstlibBase = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "x64" );
+            string configuredGStreamerRoot = System.Configuration.ConfigurationManager.AppSettings["GStreamerRoot_v3"];
+            string installedGStreamerRoot = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                "gstreamer", "1.0", "msvc_x86_64");
+            string gstlibBase = !string.IsNullOrWhiteSpace(configuredGStreamerRoot) &&
+                Directory.Exists(configuredGStreamerRoot)
+                ? configuredGStreamerRoot
+                : installedGStreamerRoot;
             string gstPath = System.IO.Path.Combine(gstlibBase, "bin");
             string gstPluginPath = System.IO.Path.Combine(gstlibBase, "lib", "gstreamer-1.0");
 
-            Environment.SetEnvironmentVariable("GST_PLUGIN_PATH", gstPluginPath, EnvironmentVariableTarget.Process);
-            Environment.SetEnvironmentVariable("PATH", $@"{gstPath};" + Environment.GetEnvironmentVariable("PATH"), EnvironmentVariableTarget.Process);
+            if (File.Exists(System.IO.Path.Combine(gstPath, "gstreamer-1.0-0.dll")) && Directory.Exists(gstPluginPath))
+            {
+                Environment.SetEnvironmentVariable("GST_PLUGIN_PATH", gstPluginPath, EnvironmentVariableTarget.Process);
+                Environment.SetEnvironmentVariable("PATH", $@"{gstPath};" + Environment.GetEnvironmentVariable("PATH"), EnvironmentVariableTarget.Process);
+                LoggerManager.LogInfo("Using GStreamer runtime: " + gstlibBase);
+            }
+            else
+            {
+                LoggerManager.LogError("GStreamer runtime is incomplete: " + gstlibBase, null);
+            }
 
             //Debug mode GST
             
