@@ -48,7 +48,28 @@ namespace V3SClient.models
         private readonly object _pipelineLock = new object();
         public Visibility ShowVideoSlider { get; set; } = Visibility.Collapsed;
         public bool RoiInfoShow { get; set; } = MetaAIResultStorage.Instance.RoiInfoShow;
+        // The native overlay stays connected for the lifetime of the pipeline.
+        // This gate lets Playback show/hide AI instantly without restarting video.
+        private int _aiOverlayEnabled = 1;
+        public bool AiOverlayEnabled
+        {
+            get { return Volatile.Read(ref _aiOverlayEnabled) != 0; }
+            set
+            {
+                Interlocked.Exchange(ref _aiOverlayEnabled, value ? 1 : 0);
+                if (!value)
+                    ClearPendingAiDraws();
+            }
+        }
         private BlockingCollection<List<MetaAIResult>> _aiResult;
+        // Metadata arrives slower than decoded video. Keep the newest bbox frame
+        // briefly and draw it on every video frame, just as WhepPlayer_v3 does.
+        private List<MetaAIResult> _lastAiDrawResult;
+        private long _lastAiDrawTicks;
+        // Playback metadata is selected with the same three-second tolerance as
+        // the Web client. Keeping the last valid frame for that interval prevents
+        // a box from blinking out while the decoder presents intermediate frames.
+        private static readonly TimeSpan AiDrawHoldDuration = TimeSpan.FromSeconds(3);
         // Short seek is intentionally small for responsive review.  Longer seeks
         // are explicitly requested by the playback toolbar.
         private const long _seekStep = 10;
@@ -63,6 +84,11 @@ namespace V3SClient.models
 
         int widthFrame = 0;
         int heightFrame = 0;
+        // Playback HLS metadata is carried beside the media payload rather than
+        // in SEI. Derived players use the current native render dimensions to
+        // scale that metadata onto the same d3d11overlay surface.
+        protected int OverlayFrameWidth { get { return widthFrame; } }
+        protected int OverlayFrameHeight { get { return heightFrame; } }
         float _maxRate = 4.0f;
 
         private HashSet<string> CocoBlacklists;
@@ -92,6 +118,17 @@ namespace V3SClient.models
         private RawColor4 _blueColorBrush;
         private RawColor4 _goldOrangeColorBrush;
         private RawColor4 _roiInfoColorBrush;
+        // Exact palette and order used by the deployed Web playback renderer:
+        // yellow, orange, blue, pink; then repeats for later ROI entries.
+        private static readonly RawColor4[] RoiPalette =
+        {
+            new RawColor4(1f, 1f, 0f, 1f),
+            new RawColor4(1f, 180f / 255f, 0f, 1f),
+            new RawColor4(0f, 120f / 255f, 1f, 1f),
+            new RawColor4(1f, 120f / 255f, 220f / 255f, 1f)
+        };
+        private readonly object _roiColorSync = new object();
+        private readonly Dictionary<string, int> _roiColorIndices = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
         private SharpDX.DirectWrite.TextFormat _textFormat;
         private SharpDX.DirectWrite.Factory _textFactory;
@@ -278,6 +315,7 @@ namespace V3SClient.models
                                         if (kv.Value && analysis.RoiDwellSeconds.ContainsKey(kv.Key))
                                         {
                                             metaAi.RoiDwellSecondsInfo = $"{analysis.RoiDwellSeconds[kv.Key]:F1}s";
+                                            metaAi.RoiId = kv.Key;
                                             break; // Lấy ROI đầu tiên match
                                         }
                                     }
@@ -361,7 +399,42 @@ namespace V3SClient.models
         }
         public void Send2Draw(List<MetaAIResult> result)
         {
-            _aiResult.TryAdd(result, TimeSpan.FromMilliseconds(30));
+            if (!AiOverlayEnabled || result == null || result.Count == 0)
+                return;
+
+            var queue = _aiResult;
+            if (queue == null || queue.IsAddingCompleted)
+                return;
+
+            try
+            {
+                List<MetaAIResult> ignored;
+                while (queue.TryTake(out ignored, 0)) { }
+                queue.TryAdd(result, TimeSpan.FromMilliseconds(30));
+            }
+            catch (InvalidOperationException)
+            {
+                // A late SEI callback during teardown must not crash playback.
+            }
+        }
+
+        protected void ClearPendingAiDraws()
+        {
+            var queue = _aiResult;
+            if (queue != null)
+            {
+                try
+                {
+                    List<MetaAIResult> ignored;
+                    while (queue.TryTake(out ignored, 0)) { }
+                }
+                catch (InvalidOperationException)
+                {
+                    // Queue was completed while the pipeline was shutting down.
+                }
+            }
+            Interlocked.Exchange(ref _lastAiDrawResult, null);
+            Interlocked.Exchange(ref _lastAiDrawTicks, 0);
         }
 
 
@@ -820,13 +893,96 @@ namespace V3SClient.models
         }
 
 
+        /// <summary>Uses the ROI API order, matching the Web application's colour assignment.</summary>
+        public void SetRoiColorOrder(IEnumerable<string> roiIds)
+        {
+            lock (_roiColorSync)
+            {
+                _roiColorIndices.Clear();
+                var index = 0;
+                foreach (var roiId in roiIds ?? Enumerable.Empty<string>())
+                {
+                    if (!string.IsNullOrWhiteSpace(roiId) && !_roiColorIndices.ContainsKey(roiId))
+                        _roiColorIndices[roiId] = index++ % RoiPalette.Length;
+                }
+            }
+        }
+
+        private RawColor4 GetRoiColor(string roiId)
+        {
+            lock (_roiColorSync)
+            {
+                int index;
+                if (!string.IsNullOrWhiteSpace(roiId) && _roiColorIndices.TryGetValue(roiId, out index))
+                    return RoiPalette[index];
+
+                // Metadata can arrive before the ROI API response. Keep a
+                // stable sequential fallback per ROI instead of colouring every
+                // unknown ROI yellow.
+                if (!string.IsNullOrWhiteSpace(roiId))
+                {
+                    index = _roiColorIndices.Count % RoiPalette.Length;
+                    _roiColorIndices[roiId] = index;
+                    return RoiPalette[index];
+                }
+            }
+
+            // If the ROI lookup fails, use the first Web palette colour
+            // (yellow) instead of assigning a random hash colour.
+            return RoiPalette[0];
+        }
+
+        private static string NormalizeOverlayLabel(string caption, string metaType)
+        {
+            var value = (caption ?? string.Empty).Replace('\r', ' ').Replace('\n', ' ').Trim();
+            value = string.Join(" ", value.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries));
+            if (string.IsNullOrWhiteSpace(value) || string.Equals(value, "object", StringComparison.OrdinalIgnoreCase))
+            {
+                var type = (metaType ?? string.Empty).Trim();
+                value = string.IsNullOrWhiteSpace(type) || string.Equals(type, "object", StringComparison.OrdinalIgnoreCase)
+                    ? "car" : type;
+            }
+            return value;
+        }
+
+        /// <summary>Current overlay data for source-resolution snapshot export.</summary>
+        protected List<MetaAIResult> GetCurrentAiDrawResults()
+        {
+            var current = Volatile.Read(ref _lastAiDrawResult);
+            return current == null ? new List<MetaAIResult>() : current.ToList();
+        }
+
+        protected System.Drawing.Color GetAiSnapshotColor(MetaAIResult item)
+        {
+            if (item != null && item.IsBlackList)
+                return System.Drawing.Color.Red;
+            if (item != null && RoiInfoShow && !string.IsNullOrEmpty(item.RoiDwellSecondsInfo))
+            {
+                var color = GetRoiColor(item.RoiId);
+                return System.Drawing.Color.FromArgb(
+                    (int)(color.R * 255), (int)(color.G * 255), (int)(color.B * 255));
+            }
+            return System.Drawing.Color.FromArgb(34, 197, 94);
+        }
+
+        protected string GetAiSnapshotLabel(MetaAIResult item)
+        {
+            if (item == null) return "car";
+            var label = NormalizeOverlayLabel(item.Caption, item.MetaType);
+            return RoiInfoShow && !string.IsNullOrEmpty(item.RoiDwellSecondsInfo)
+                ? label + " - " + item.RoiDwellSecondsInfo
+                : label;
+        }
+
         private void InitDraw()
         {
             _aiResult = new BlockingCollection<List<MetaAIResult>>(2);
 
 
             _redColorBrush = new RawColor4(1, 0, 0, 1);
-            _greenColorBrush = new RawColor4(0, 1, 0, 1);
+            // Exact WebApp colour: #22c55e.  Web uses this same green for
+            // regular boxes and boxes that have entered an ROI.
+            _greenColorBrush = new RawColor4(34f / 255f, 197f / 255f, 94f / 255f, 1f);
             _blueColorBrush = new RawColor4(0, 0, 1, 1);
             _roiInfoColorBrush = new RawColor4(0, 1, 0, 1);
             _goldOrangeColorBrush = new RawColor4(1, 0.65f, 0, 1);
@@ -854,26 +1010,42 @@ namespace V3SClient.models
         {
             // Do not dispose args.Args[0] (the Gst Element) here as it will destroy the pipeline overlay!
 
+            var texturePointer = (IntPtr)args.Args[1];
+            if (texturePointer == IntPtr.Zero) return;
+            EnsureOverlayFrameSize(texturePointer);
+
             // Use non-blocking TryTake to avoid pausing the GStreamer rendering thread
-            bool ret = _aiResult.TryTake(out List<MetaAIResult> arr, 0);
+            bool drawAi = AiOverlayEnabled;
+            List<MetaAIResult> incoming = null;
+            if (drawAi && _aiResult != null && _aiResult.TryTake(out incoming, 0))
+            {
+                Interlocked.Exchange(ref _lastAiDrawResult, incoming);
+                Interlocked.Exchange(ref _lastAiDrawTicks, System.DateTime.UtcNow.Ticks);
+            }
+
+            var lastTicks = Interlocked.Read(ref _lastAiDrawTicks);
+            var hasFreshAi = drawAi && _lastAiDrawResult != null && lastTicks > 0 &&
+                System.DateTime.UtcNow.Ticks - lastTicks <= AiDrawHoldDuration.Ticks;
+            List<MetaAIResult> arr = hasFreshAi ? _lastAiDrawResult : null;
             bool drawSelectionDim = DimForCaptureSelection;
 
-            if (!ret && !drawSelectionDim) return;
+            if (arr == null && !drawSelectionDim) return;
 
             if (arr == null) arr = new List<MetaAIResult>();
             if (arr.Count == 0 && !drawSelectionDim) return;
             try
             {
                 arr = arr.ToList();
+                // A toggle can happen between TryTake and this render callback.
+                // Do not draw one stale bbox after AI was switched off.
+                if (!AiOverlayEnabled)
+                    arr.Clear();
             }
             catch
             {
                 LoggerManager.LogWarn("Không thể nhận dữ liệu AI để vẽ overlay (Draw Exception).");
                 return;
             }
-
-            var texturePointer = (IntPtr)args.Args[1];
-            if (texturePointer == IntPtr.Zero) return;
 
             try
             {
@@ -883,11 +1055,6 @@ namespace V3SClient.models
                 using (var surface = resource.QueryInterface<Surface>())
                 {
                     var description = surface.Description;
-                    if (widthFrame == 0)
-                    {
-                        widthFrame = description.Width;
-                        heightFrame = description.Height;
-                    }
 
                     using (var d2dRenderTarget = new RenderTarget(_solidFactory, surface, _renderTargetProperties))
                     {
@@ -912,13 +1079,29 @@ namespace V3SClient.models
                         // Create the brush locally to avoid re-using a brush across different RenderTargets
                         using (var localSolidBrush = new SolidColorBrush(d2dRenderTarget, _blueColorBrush))
                         {
+                            // Pass 1: draw every bbox first.  Labels are drawn
+                            // in the second pass so another bbox can never cover
+                            // a plate label that was already painted.
                             foreach (var item in arr)
                             {
-                                bool isChange = false;
-                                if (item.IsDisplay && item.Caption != null && item.Caption != "")
+                                var isInRoi = RoiInfoShow && !string.IsNullOrEmpty(item.RoiDwellSecondsInfo);
+                                localSolidBrush.Color = item.IsBlackList ? _redColorBrush :
+                                    isInRoi ? GetRoiColor(item.RoiId) : _greenColorBrush;
+                                d2dRenderTarget.DrawRectangle(item.BoundingBox, localSolidBrush, 3.0f);
+                            }
+
+                            // Pass 2: labels always stay above all boxes.
+                            foreach (var item in arr)
+                            {
+                                var isInRoi = RoiInfoShow && !string.IsNullOrEmpty(item.RoiDwellSecondsInfo);
+                                var label = NormalizeOverlayLabel(item.Caption, item.MetaType);
+                                if (isInRoi)
+                                    label = (string.IsNullOrWhiteSpace(label) ? "object" : label) + " - " + item.RoiDwellSecondsInfo;
+
+                                if (item.IsDisplay && !string.IsNullOrWhiteSpace(label))
                                 {
                                     // Đo kích thước thực tế của text caption
-                                    using (var textLayout = new SharpDX.DirectWrite.TextLayout(_textFactory, item.Caption, _textFormat, 500, 50))
+                                    using (var textLayout = new SharpDX.DirectWrite.TextLayout(_textFactory, label, _textFormat, 1000, 35))
                                     {
                                         float textWidth = textLayout.Metrics.Width;
                                         float textHeight = textLayout.Metrics.Height;
@@ -929,23 +1112,24 @@ namespace V3SClient.models
 
                                         // Background vừa khít chữ
                                         var bgRect = new SharpDX.RectangleF(bgX, bgY, textWidth + padding * 2, textHeight + padding * 2);
-                                        using (var bgBrush = new SolidColorBrush(d2dRenderTarget, new RawColor4(0, 0, 0, 0.6f)))
+                                        using (var bgBrush = new SolidColorBrush(d2dRenderTarget,
+                                            item.IsBlackList ? _redColorBrush : isInRoi ? GetRoiColor(item.RoiId) : _greenColorBrush))
                                         {
                                             d2dRenderTarget.FillRectangle(bgRect, bgBrush);
                                         }
 
                                         // Vẽ text trên background
                                         var captionRect = new SharpDX.RectangleF(bgX + padding, bgY + padding, textWidth, textHeight);
-                                        using (var captionBrush = new SolidColorBrush(d2dRenderTarget, _goldOrangeColorBrush))
+                                        using (var captionBrush = new SolidColorBrush(d2dRenderTarget,
+                                            new RawColor4(3f / 255f, 19f / 255f, 10f / 255f, 1f)))
                                         {
-                                            d2dRenderTarget.DrawText(item.Caption, _textFormat, captionRect, captionBrush);
+                                            d2dRenderTarget.DrawText(label, _textFormat, captionRect, captionBrush);
                                         }
                                     }
-                                    isChange = true;
                                 }
                                
 
-                                if (RoiInfoShow && !string.IsNullOrEmpty(item.RoiDwellSecondsInfo))
+                                if (false && RoiInfoShow && !string.IsNullOrEmpty(item.RoiDwellSecondsInfo))
                                 {
                                     // Move text above the bounding box (Top - 30) instead of inside
                                     // Increased width to 120 to prevent the 's' from wrapping to the next line
@@ -953,13 +1137,9 @@ namespace V3SClient.models
                                     {
                                         var timeRect = new SharpDX.RectangleF(item.BoundingBox.Left + 5, item.BoundingBox.Top + 2, 120, 35);
                                         d2dRenderTarget.DrawText(item.RoiDwellSecondsInfo, _textFormat, timeRect, roiInfoSolibrush);
-                                        isChange = true;
                                     }
                                    
                                 }
-                                localSolidBrush.Color = item.IsBlackList ? _redColorBrush : isChange ? _goldOrangeColorBrush : _greenColorBrush;
-                                d2dRenderTarget.DrawRectangle(item.BoundingBox, localSolidBrush, 3.0f);
-
                                 if (item.IsBlackList && !string.IsNullOrWhiteSpace(item.Caption))
                                 {
                                     if (!_warningCache.TryGetValue(item.Caption, out System.DateTime lastWarningTime) ||
@@ -991,6 +1171,35 @@ namespace V3SClient.models
                 System.Diagnostics.Debug.WriteLine($"â Œ Draw Exception: {ex.Message}");
             }
             return;
+        }
+
+        private void EnsureOverlayFrameSize(IntPtr texturePointer)
+        {
+            if (widthFrame > 0 && heightFrame > 0) return;
+            RenderTargetView renderTargetView = null;
+            try
+            {
+                renderTargetView = new RenderTargetView(texturePointer);
+                using (var resource = renderTargetView.Resource)
+                using (var surface = resource.QueryInterface<Surface>())
+                {
+                    widthFrame = surface.Description.Width;
+                    heightFrame = surface.Description.Height;
+                }
+            }
+            catch
+            {
+                // The native texture can be recreated while the pipeline starts.
+                // The next draw signal will retry without interrupting playback.
+            }
+            finally
+            {
+                if (renderTargetView != null)
+                {
+                    renderTargetView.NativePointer = IntPtr.Zero;
+                    renderTargetView.Dispose();
+                }
+            }
         }
 
         protected virtual void ReConnect()
@@ -1035,13 +1244,24 @@ namespace V3SClient.models
             long newPos = pos + seekStep * Gst.Constants.SECOND;
             newPos = System.Math.Max(0, newPos);
 
-            player.Seek(currentRate, Gst.Format.Time, SeekFlags.Flush | SeekFlags.KeyUnit, Gst.SeekType.Set, newPos, Gst.SeekType.None, 0);
+            OnSeek(newPos);
+            player.Seek(currentRate, Gst.Format.Time, GetSeekFlags(), Gst.SeekType.Set, newPos, Gst.SeekType.None, 0);
         }
 
         public void SeekAbsolute(long targetTime)
         {
             if (player == null) return;
-            player.Seek(currentRate, Gst.Format.Time, SeekFlags.Flush | SeekFlags.KeyUnit, Gst.SeekType.Set, targetTime, Gst.SeekType.None, 0);
+            OnSeek(targetTime);
+            player.Seek(currentRate, Gst.Format.Time, GetSeekFlags(), Gst.SeekType.Set, targetTime, Gst.SeekType.None, 0);
+        }
+
+        /// <summary>Lets specialised players reset frame-bound side data before a flushing seek.</summary>
+        protected virtual void OnSeek(long targetTime) { }
+
+        /// <summary>Live/default seek is keyframe-oriented; recorded players can request exact presentation.</summary>
+        protected virtual SeekFlags GetSeekFlags()
+        {
+            return SeekFlags.Flush | SeekFlags.KeyUnit;
         }
         protected virtual void ReleasePipeline()
         {

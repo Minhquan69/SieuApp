@@ -117,6 +117,10 @@ namespace V3SClient.models
             }
         }
 
+        // Identifier of the ROI containing this object.  The renderer uses it
+        // to select a stable, distinct colour from the shared ROI palette.
+        public string RoiId { get; set; }
+
 
 
 

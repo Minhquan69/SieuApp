@@ -39,7 +39,7 @@ namespace V3SClient.UI.Pages
             DataContext = VM;
 
             DateTime now = DateTime.Now;
-            datetimeFrom.Value = now.AddDays(-1);
+            datetimeFrom.Value = now.AddHours(-6);
             datetimeTo.Value = now;
         }
 

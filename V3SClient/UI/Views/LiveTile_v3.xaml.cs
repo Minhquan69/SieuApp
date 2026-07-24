@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -14,6 +15,26 @@ namespace V3SClient.UI.Views
 {
     public partial class LiveTile_v3 : UserControl, IDisposable
     {
+        private sealed class SubscriptionGroup : IDisposable
+        {
+            private IDisposable _first;
+            private IDisposable _second;
+
+            public SubscriptionGroup(IDisposable first, IDisposable second)
+            {
+                _first = first;
+                _second = second;
+            }
+
+            public void Dispose()
+            {
+                var first = System.Threading.Interlocked.Exchange(ref _first, null);
+                var second = System.Threading.Interlocked.Exchange(ref _second, null);
+                first?.Dispose();
+                second?.Dispose();
+            }
+        }
+
         private readonly DispatcherTimer _retryTimer;
         private readonly DispatcherTimer _connectTimeoutTimer;
         private readonly DispatcherTimer _hideActionsTimer;
@@ -165,7 +186,10 @@ namespace V3SClient.UI.Views
             OpenCameraBadgeIfActive();
             if (_fullscreenMode)
             {
-                if (_ownerWindow != null) _ownerWindow.Topmost = true;
+                // Fullscreen is deliberately scoped to the application window.
+                // Setting Topmost here also promotes the native Popup HWNDs used
+                // by the action bar, making those buttons appear above other
+                // applications after Alt+Tab.
                 _actionsPinned = true;
                 ShowActions();
             }
@@ -649,7 +673,12 @@ namespace V3SClient.UI.Views
 
         private void ShowActions()
         {
-            if (_disposed || _popupPlacementSuspended || !IsLoaded || _ownerWindow == null || ActionBar.Visibility != Visibility.Visible) return;
+            // The action bar is a native WPF Popup so it is not clipped by the
+            // WindowsFormsHost video surface.  Native video mouse messages can
+            // arrive a little late after Alt+Tab; never let one reopen a popup
+            // while the iVista window is inactive.
+            if (_disposed || _popupPlacementSuspended || !IsLoaded || _ownerWindow == null ||
+                !_ownerWindow.IsActive || ActionBar.Visibility != Visibility.Visible) return;
             OpenCameraBadgeIfActive();
             SafeStopHideActionsTimer();
             ActionPopup.IsOpen = true;
@@ -848,6 +877,7 @@ namespace V3SClient.UI.Views
             var isAi = Slot != null && Slot.Camera != null &&
                 (Slot.Camera.HasAIStream ||
                  (Slot.SelectedStream != null && Slot.SelectedStream.IsAiMode == true) ||
+                 (Slot.Camera.Streams != null && Slot.Camera.Streams.Any(stream => stream != null && stream.IsAiMode == true)) ||
                  string.Equals(Slot.Camera.type, "ai_processed", StringComparison.OrdinalIgnoreCase));
 
             // This runs before ConnectAsync creates either player pipeline.
@@ -859,17 +889,35 @@ namespace V3SClient.UI.Views
             _metadataSubscription = null;
             if (!isAi || string.IsNullOrWhiteSpace(Slot.Camera.camID)) return;
 
-            _metadataSubscription = MetadataSocketService_v3.Instance.Subscribe(
-                Slot.Camera.camID, OnAiMetadataFrame);
+            var cameraId = Slot.Camera.camID;
+            var streamCameraId = Slot.SelectedStream == null ? null : Slot.SelectedStream.RtspRelayRaw;
+            var primarySubscription = MetadataSocketService_v3.Instance.Subscribe(cameraId, OnAiMetadataFrame);
+            // WebApp changes its logical camera ID to relayRawPath when a
+            // stream is selected. Subscribe to that alias too, otherwise a
+            // camera can play normally but silently drop its ai_metadata.
+            _metadataSubscription = string.IsNullOrWhiteSpace(streamCameraId) ||
+                string.Equals(cameraId, streamCameraId, StringComparison.OrdinalIgnoreCase)
+                ? primarySubscription
+                : new SubscriptionGroup(primarySubscription,
+                    MetadataSocketService_v3.Instance.Subscribe(streamCameraId, OnAiMetadataFrame));
         }
 
         private void OnAiMetadataFrame(AiMetadataFrame_v3 frame)
         {
             if (_disposed || frame == null || Slot == null || Slot.Camera == null ||
-                !string.Equals(frame.CameraId, Slot.Camera.camID, StringComparison.OrdinalIgnoreCase))
+                !IsCurrentMetadataCameraId(frame.CameraId))
                 return;
             Player.Send2Draw(frame);
             MainPlayer.Send2Draw(frame);
+        }
+
+        private bool IsCurrentMetadataCameraId(string cameraId)
+        {
+            if (string.IsNullOrWhiteSpace(cameraId) || Slot == null || Slot.Camera == null) return false;
+            if (string.Equals(cameraId, Slot.Camera.camID, StringComparison.OrdinalIgnoreCase)) return true;
+            var streamCameraId = Slot.SelectedStream == null ? null : Slot.SelectedStream.RtspRelayRaw;
+            return !string.IsNullOrWhiteSpace(streamCameraId) &&
+                string.Equals(cameraId, streamCameraId, StringComparison.OrdinalIgnoreCase);
         }
 
         private void RefreshVisuals()

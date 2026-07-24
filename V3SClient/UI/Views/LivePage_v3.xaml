@@ -205,48 +205,29 @@
                                         <ItemsControl ItemsSource="{Binding CameraItems}" Margin="10,0,0,0">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
-                                                    <Border Tag="{Binding Camera}" MouseLeftButtonDown="Camera_MouseDown" Padding="7,3" Margin="0,1" Background="Transparent">
+                                                    <!-- Keep this camera row identical to the playback camera-picker row. -->
+                                                    <Border Tag="{Binding Camera}" MouseLeftButtonDown="Camera_MouseDown" Padding="7,3" Margin="0,1" CornerRadius="5">
                                                         <Border.Style>
                                                             <Style TargetType="Border">
                                                                 <Setter Property="Background" Value="Transparent"/>
                                                                 <Setter Property="BorderBrush" Value="Transparent"/>
-                                                                <Setter Property="BorderThickness" Value="1"/>
+                                                                <Setter Property="BorderThickness" Value="0"/>
                                                                 <Style.Triggers>
                                                                     <DataTrigger Binding="{Binding IsSelected}" Value="True">
                                                                         <Setter Property="Background" Value="{StaticResource VmsPrimarySoftBrush_v3}"/>
-                                                                        <Setter Property="BorderBrush" Value="{StaticResource VmsPrimaryBrush_v3}"/>
-                                                                        <Setter Property="BorderThickness" Value="1"/>
+                                                                        <Setter Property="BorderBrush" Value="Transparent"/>
+                                                                        <Setter Property="BorderThickness" Value="0"/>
                                                                     </DataTrigger>
                                                                 </Style.Triggers>
                                                             </Style>
                                                         </Border.Style>
                                                         <Grid>
-                                                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                                            <Icon:PackIconMaterial Kind="CameraOutline" Width="12" Height="12" Margin="0,0,5,0" VerticalAlignment="Center">
-                                                                <Icon:PackIconMaterial.Style>
-                                                                    <Style TargetType="Icon:PackIconMaterial">
-                                                                        <Setter Property="Foreground" Value="{StaticResource VmsTextTertiaryBrush_v3}"/>
-                                                                        <Style.Triggers>
-                                                                            <DataTrigger Binding="{Binding IsConnected}" Value="True"><Setter Property="Foreground" Value="{StaticResource VmsSuccessBrush_v3}"/></DataTrigger>
-                                                                            <DataTrigger Binding="{Binding IsConnecting}" Value="True"><Setter Property="Foreground" Value="{StaticResource VmsWarningBrush_v3}"/></DataTrigger>
-                                                                            <DataTrigger Binding="{Binding HasConnectionError}" Value="True"><Setter Property="Foreground" Value="{StaticResource VmsErrorBrush_v3}"/></DataTrigger>
-                                                                        </Style.Triggers>
-                                                                    </Style>
-                                                                </Icon:PackIconMaterial.Style>
-                                                            </Icon:PackIconMaterial>
-                                                            <Icon:PackIconMaterial Grid.Column="1" Kind="Check" Foreground="{StaticResource VmsSuccessBrush_v3}" Width="14" Height="14" Visibility="Collapsed" Margin="0,0,0,0">
+                                                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                            <Icon:PackIconMaterial Kind="CameraOutline" Width="12" Height="12" Margin="0,0,5,0" VerticalAlignment="Center" Foreground="{StaticResource VmsTextTertiaryBrush_v3}"/>
+                                                            <TextBlock Grid.Column="1" Text="{Binding DisplayName}" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" TextTrimming="CharacterEllipsis" FontSize="11"/>
+                                                            <Icon:PackIconMaterial Grid.Column="2" Kind="Check" Foreground="{StaticResource VmsSuccessBrush_v3}" Width="14" Height="14" Margin="5,0,0,0">
                                                                 <Icon:PackIconMaterial.Style><Style TargetType="Icon:PackIconMaterial"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsSelected}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Icon:PackIconMaterial.Style>
                                                             </Icon:PackIconMaterial>
-                                                            <Border Grid.Column="3" Background="{StaticResource VmsPrimarySoftBrush_v3}" BorderBrush="{StaticResource VmsPrimaryBorderBrush_v3}" BorderThickness="1" CornerRadius="3" Padding="3,1" Margin="0,0,5,0">
-                                                                <Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsAiCamera}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style>
-                                                                <StackPanel Orientation="Horizontal"><Icon:PackIconMaterial Kind="RobotOutline" Width="10" Height="10" Foreground="{StaticResource VmsPrimaryBrush_v3}" Margin="0,0,2,0"/><TextBlock Text="AI" Foreground="{StaticResource VmsPrimaryBrush_v3}" FontSize="9" FontWeight="SemiBold"/></StackPanel>
-                                                            </Border>
-                                                            <TextBlock Grid.Column="2" Text="{Binding DisplayName}" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" TextTrimming="CharacterEllipsis" FontSize="11"/>
-                                                            <StackPanel Grid.Column="4" Orientation="Horizontal" Visibility="Collapsed">
-                                                                <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=Border}, Path=IsMouseOver}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
-                                                                <Button Content="＋" Tag="{Binding Camera}" Click="InlineFill_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="4,0" Margin="2,0,0,0" ToolTip="Add to layout"/>
-                                                                <Button Content="▶" Tag="{Binding Camera}" Click="InlineConnect_Click" Style="{StaticResource PrimaryButtonStyle_v3}" Padding="4,0" Margin="2,0,0,0" ToolTip="Connect"/>
-                                                            </StackPanel>
                                                         </Grid>
                                                     </Border>
                                                 </DataTemplate>
