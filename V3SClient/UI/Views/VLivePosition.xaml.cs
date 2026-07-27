@@ -45,6 +45,7 @@ namespace V3SClient.UI.Views
         Dictionary<string, PositionPoint> _camerasPosition = new Dictionary<string, PositionPoint>();
         public PositionPoint _startPostion = new PositionPoint(20.995250, 105.903059);
         public ObservableCollection<models.Camera> CameraList { get; set; }
+        public MapViewModel_v3 Sidebar { get; } = new MapViewModel_v3();
 
         private ObservableCollection<viewModels.VMTalkGroup> _rawGroupList;
 
@@ -56,6 +57,7 @@ namespace V3SClient.UI.Views
             CameraList = new ObservableCollection<models.Camera>(
                 cam_group_list.Where(group => group != null && group.Cameras.Count > 0)
                               .SelectMany(group => group.Cameras));
+            Sidebar.Refresh(_rawGroupList, CameraList);
 
             this.Loaded += LoadMapAsync;
             this.Unloaded += VLivePosition_Unloaded;
@@ -741,8 +743,48 @@ namespace V3SClient.UI.Views
         // ========= PUBLIC API (Called by other WPF modules) =========
         public void UpdateActiveCameras(List<models.Camera> activeCameras)
         {
-            this.CameraList = new ObservableCollection<models.Camera>(activeCameras);
+            this.CameraList = new ObservableCollection<models.Camera>(activeCameras ?? new List<models.Camera>());
+            Sidebar.Refresh(_rawGroupList, CameraList);
             Dispatcher.Invoke(() => SendCamerasToMap());
+        }
+
+        private void ToggleSidebar_Click(object sender, RoutedEventArgs e)
+        {
+            bool collapsed = SidebarColumn.Width.Value > 0;
+            SidebarColumn.Width = collapsed ? new GridLength(0) : new GridLength(350);
+            CameraSidebar.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+            SidebarOpenButton.Visibility = collapsed ? Visibility.Visible : Visibility.Collapsed;
+            if (_isMapLoaded)
+                _ = mapWebView.ExecuteScriptAsync("window.map && window.map.resize && window.map.resize();");
+        }
+
+        private void VLivePosition_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (ActualWidth < 1000 && SidebarColumn.Width.Value > 0)
+                ToggleSidebar_Click(null, null);
+        }
+
+        private void SidebarAllFilter_Click(object sender, RoutedEventArgs e) => Sidebar.AiOnly = false;
+        private void SidebarAiFilter_Click(object sender, RoutedEventArgs e) => Sidebar.AiOnly = true;
+        private void SidebarExpandAll_Click(object sender, RoutedEventArgs e) => Sidebar.ExpandAll();
+        private void SidebarCollapseAll_Click(object sender, RoutedEventArgs e) => Sidebar.CollapseAll();
+
+        private void SidebarCamera_Click(object sender, RoutedEventArgs e)
+        {
+            var item = (sender as FrameworkElement)?.Tag as MapCameraItem_v3;
+            if (item == null || !item.HasLocation || !_isMapLoaded) return;
+            var message = new
+            {
+                action = "focusCamera",
+                data = new { camId = item.Id, lat = item.Camera.Latitude.Value, lng = item.Camera.Longitude.Value }
+            };
+            mapWebView.CoreWebView2.PostWebMessageAsJson(JsonConvert.SerializeObject(message));
+        }
+
+        private void SidebarLive_Click(object sender, RoutedEventArgs e)
+        {
+            var item = (sender as FrameworkElement)?.Tag as MapCameraItem_v3;
+            if (item != null) HandleMarkerClick(item.Id);
         }
 
         public void CamerasPositionUpdating(Dictionary<string, PointLatLng> camerasPosition)
@@ -810,6 +852,7 @@ namespace V3SClient.UI.Views
             }
             _timer?.Stop();
             _demoTimer?.Stop();
+            Sidebar.Dispose();
         }
     }
 }

@@ -15,7 +15,7 @@ const CAMERA_MARKER_TIP_OFFSET_Y = 5;
 // Khởi tạo HTML tự động
 const liveHTML = `
     <!-- Sidebar: Camera List + Search -->
-    <div id="sidebar">
+    <div id="legacySidebarRemoved" style="display:none">
         <div id="sidebarHeader" onclick="toggleSidebar()">
             <div class="title-group">
                 <div class="accent-bar"></div>
@@ -381,6 +381,12 @@ document.addEventListener('mapCommand', function(e) {
     if (cmd.action === 'updateCameras') updateCameras(cmd.data);
     else if (cmd.action === 'triggerAlarm') triggerAlarm(cmd.camId, cmd.duration);
     else if (cmd.action === 'updatePositions') updatePositions(cmd.data);
+    else if (cmd.action === 'focusCamera') {
+        const d = cmd.data || {};
+        if (Number.isFinite(Number(d.lat)) && Number.isFinite(Number(d.lng))) {
+            window.map.flyTo({ center: [Number(d.lng), Number(d.lat)], zoom: 15, duration: 800, essential: true });
+        }
+    }
 });
 
 // Hàm từ index.html map_assets cũ
@@ -648,7 +654,8 @@ window.stopTracking = function() {
     trackingCamId = null;
 
     document.getElementById('trackingBar').classList.remove('active');
-    document.getElementById('btnStopTrack').style.display = 'none';
+    const stopButton = document.getElementById('btnStopTrack');
+    if (stopButton) stopButton.style.display = 'none';
     document.querySelectorAll('#cameraList li').forEach(li => li.classList.remove('active'));
 
     updatePathLayer();
@@ -657,6 +664,9 @@ window.stopTracking = function() {
 };
 
 function rebuildSidebar() {
+    /* Camera list is rendered by the WPF right sidebar. */
+    return;
+    /*
     const ul = document.getElementById('cameraList');
     ul.innerHTML = '';
     const keyword = document.getElementById('searchBox').value.toLowerCase();
@@ -670,6 +680,7 @@ function rebuildSidebar() {
         li.onclick = () => window.startTracking(cam.camID);
         ul.appendChild(li);
     });
+    */
 }
 window.filterCameras = rebuildSidebar;
 

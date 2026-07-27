@@ -86,11 +86,14 @@ namespace V3SClient.window
                 : bundledRuntimeRoot;
             var runtimeBin = Path.Combine(runtimeRoot, "bin");
             var pluginPath = Path.Combine(runtimeRoot, "lib", "gstreamer-1.0");
+            var gioModulePath = Path.Combine(runtimeRoot, "lib", "gio", "modules");
             var pluginScanner = Path.Combine(runtimeRoot, "libexec", "gstreamer-1.0", "gst-plugin-scanner.exe");
             var currentPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
 
             Environment.SetEnvironmentVariable("GST_PLUGIN_PATH", pluginPath, EnvironmentVariableTarget.Process);
             Environment.SetEnvironmentVariable("GST_PLUGIN_SYSTEM_PATH_1_0", pluginPath, EnvironmentVariableTarget.Process);
+            Environment.SetEnvironmentVariable("GIO_MODULE_DIR", gioModulePath, EnvironmentVariableTarget.Process);
+            Environment.SetEnvironmentVariable("GIO_EXTRA_MODULES", gioModulePath, EnvironmentVariableTarget.Process);
             if (File.Exists(pluginScanner))
                 Environment.SetEnvironmentVariable("GST_PLUGIN_SCANNER_1_0", pluginScanner, EnvironmentVariableTarget.Process);
             if (!currentPath.StartsWith(runtimeBin + ";", StringComparison.OrdinalIgnoreCase))
