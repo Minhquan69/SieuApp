@@ -50,22 +50,6 @@
                     </WindowsFormsHost>
                 </Border>
 
-                <!-- Connect Button -->
-                <wfi:WindowsFormsHost Panel.ZIndex="2"
-                                      Background="Gray"
-                                      VerticalAlignment="Center"
-                                      HorizontalAlignment="Center"
-                                      Height="30"
-                                      Width="70"
-                                      x:Name="btnLive"
-                                      Visibility="{Binding ShowConnectButton}">
-                    <wfi:ElementHost AutoSize="True" Dock="Fill">
-                        <Border Style="{StaticResource LiveButton}" CornerRadius="5" MouseDown="btnLive_MouseDown">
-                            <TextBlock Text="Kết nối" x:Name="centerButton" Foreground="White" Style="{StaticResource General_TextBlock}" FontSize="12" />
-                        </Border>
-                    </wfi:ElementHost>
-                </wfi:WindowsFormsHost>
-
                 <!-- Playback has no HLS segments in the selected interval.  This is
                      a tile state, not a pipeline error, so no player is created. -->
                 <Grid x:Name="NoPlaybackDataOverlay" Panel.ZIndex="8" Background="#FF0B1A2A" Visibility="Collapsed" IsHitTestVisible="False">
@@ -76,7 +60,8 @@
                             Background="#FF0B1A2A" BorderBrush="#243E5B" BorderThickness="1" CornerRadius="6">
                         <StackPanel HorizontalAlignment="Center">
                             <TextBlock Text="&#xE7BA;" FontFamily="Segoe MDL2 Assets" Foreground="#FFF59E0B" FontSize="30" HorizontalAlignment="Center"/>
-                            <TextBlock Text="Không tìm thấy dữ liệu trong khoảng thời gian này" Foreground="White" FontSize="14" FontWeight="SemiBold" Margin="0,12,0,0" TextAlignment="Center" TextWrapping="NoWrap"/>
+                            <TextBlock x:Name="NoPlaybackDataText" Text="Không tìm thấy dữ liệu trong khoảng thời gian này" Foreground="White" FontSize="14" FontWeight="SemiBold" Margin="0,12,0,0" TextAlignment="Center" TextWrapping="NoWrap"/>
+                            <TextBlock x:Name="NoPlaybackDataTimeText" Visibility="Collapsed" Foreground="#FF9DB4C8" FontSize="12" Margin="0,6,0,0" TextAlignment="Center"/>
                         </StackPanel>
                     </Border>
                 </Grid>
@@ -88,9 +73,9 @@
                     <Border Width="390" MaxWidth="390" Margin="20" Padding="24,18" HorizontalAlignment="Center" VerticalAlignment="Center"
                             Background="#FF0B1A2A" BorderBrush="#243E5B" BorderThickness="1" CornerRadius="6">
                         <StackPanel HorizontalAlignment="Center">
-                            <TextBlock Text="&#xE9F5;" FontFamily="Segoe MDL2 Assets" Foreground="#FF2F80FF" FontSize="27" HorizontalAlignment="Center"/>
+                            <TextBlock x:Name="PreparingPlaybackIcon" Text="&#xE9F5;" FontFamily="Segoe MDL2 Assets" Foreground="#FF2F80FF" FontSize="27" HorizontalAlignment="Center"/>
                             <TextBlock x:Name="PreparingPlaybackText" Text="Đang chuẩn bị dữ liệu..." Foreground="White" FontSize="14" FontWeight="SemiBold" Margin="0,10,0,0" TextAlignment="Center" TextWrapping="NoWrap"/>
-                            <TextBlock Text="Vui lòng chờ đồng bộ dữ liệu phát lại" Foreground="#FF9DB4C8" FontSize="11" Margin="0,6,0,0" TextAlignment="Center"/>
+                            <TextBlock x:Name="PreparingPlaybackHint" Text="Vui lòng chờ đồng bộ dữ liệu phát lại" Foreground="#FF9DB4C8" FontSize="11" Margin="0,6,0,0" TextAlignment="Center"/>
                         </StackPanel>
                     </Border>
                 </Grid>

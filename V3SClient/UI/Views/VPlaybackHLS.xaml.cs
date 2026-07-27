@@ -68,6 +68,7 @@ namespace V3SClient.UI.Views
         private PackIconMaterial _nativePlaybackPlayIcon;
         private PackIconMaterial _nativePlaybackFullscreenIcon;
         private Button _nativePlaybackRateButton;
+        private Button _nativePlaybackAiButton;
         private TextBlock _nativePlaybackTimeText;
         private System.Windows.Forms.Integration.WindowsFormsHost _nativePlaybackDownloadHost;
         private System.Windows.Forms.Integration.ElementHost _nativePlaybackDownloadElementHost;
@@ -330,10 +331,25 @@ namespace V3SClient.UI.Views
             var owner = Window.GetWindow(this);
             if (ReferenceEquals(owner, _playbackOwnerWindow)) return;
             if (_playbackOwnerWindow != null)
+            {
                 _playbackOwnerWindow.PreviewKeyDown -= PlaybackOwnerWindow_PreviewKeyDown;
+                _playbackOwnerWindow.Deactivated -= PlaybackOwnerWindow_Deactivated;
+            }
             _playbackOwnerWindow = owner;
             if (_playbackOwnerWindow != null)
+            {
                 _playbackOwnerWindow.PreviewKeyDown += PlaybackOwnerWindow_PreviewKeyDown;
+                _playbackOwnerWindow.Deactivated += PlaybackOwnerWindow_Deactivated;
+            }
+        }
+
+        // Popup creates its own top-level HWND to overlay the native GStreamer
+        // surface. Close it explicitly whenever this application loses focus;
+        // otherwise that HWND can remain visible above another application.
+        private void PlaybackOwnerWindow_Deactivated(object sender, EventArgs e)
+        {
+            _globalPlaybackToolbarHideTimer.Stop();
+            SetNativePlaybackToolbarOpen(false);
         }
 
         private void PlaybackOwnerWindow_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -389,7 +405,6 @@ namespace V3SClient.UI.Views
                 new { Text = "▶", Command = "Play", Tip = "Phát / tạm dừng" },
                 new { Text = "▶|", Command = "Forward", Tip = "Tiến" },
                 new { Text = "10↷", Command = "Faster", Tip = "Tăng tốc độ" },
-                new { Text = "AI", Command = "AiAll", Tip = "Bật / tắt AI cho tất cả camera" },
                 new { Text = "📷", Command = "SnapshotAll", Tip = "Chụp ảnh tất cả camera" },
                 new { Text = "⇩", Command = "DownloadAll", Tip = "Tải video tất cả camera" }
             };
@@ -461,6 +476,8 @@ namespace V3SClient.UI.Views
         {
             if (_nativePlaybackToolbarPopup == null)
                 return;
+            if (isOpen && (_playbackOwnerWindow == null || !_playbackOwnerWindow.IsActive))
+                isOpen = false;
             _nativePlaybackToolbarPopup.PlacementTarget = gridCameraList;
             _nativePlaybackToolbarPopup.IsOpen = isOpen;
         }
@@ -744,7 +761,8 @@ namespace V3SClient.UI.Views
             _nativePlaybackRateButton.Width = 62;
             commands.Children.Add(_nativePlaybackRateButton);
             commands.Children.Add(CreateNativeToolbarSeparator(border));
-            commands.Children.Add(CreateNativeToolbarTextButton("AI", "AiAll", "Bật / tắt AI", buttonBackground, buttonHover, foreground));
+            commands.Children.Add(CreateNativeToolbarButton(PackIconMaterialKind.RobotOutline, "AiAll", "Bật/tắt AI cho tất cả camera", buttonBackground, buttonHover, foreground));
+            commands.Children.Add(CreateNativeToolbarSeparator(border));
             commands.Children.Add(CreateNativeToolbarButton(PackIconMaterialKind.CameraOutline, "SnapshotAll", "Chụp ảnh tất cả", buttonBackground, buttonHover, foreground));
             _snapshotSelectedButton = CreateNativeToolbarButton(PackIconMaterialKind.Camera, "SnapshotSelected", "Chụp ảnh", buttonBackground, buttonHover, foreground, out _snapshotSelectedIcon);
             commands.Children.Add(_snapshotSelectedButton);
@@ -752,8 +770,33 @@ namespace V3SClient.UI.Views
             commands.Children.Add(_downloadSelectedButton);
             commands.Children.Add(CreateNativeToolbarButton(PackIconMaterialKind.Fullscreen, "Fullscreen", "Toàn màn hình", buttonBackground, buttonHover, foreground, out _nativePlaybackFullscreenIcon));
 
+            _nativePlaybackAiButton = commands.Children
+                .OfType<Button>()
+                .FirstOrDefault(button => string.Equals(button.Tag as string, "AiAll", StringComparison.Ordinal));
+            UpdateNativePlaybackAiButton();
             root.Child = commands;
             return root;
+        }
+
+        private void UpdateNativePlaybackAiButton()
+        {
+            if (_nativePlaybackAiButton == null)
+                return;
+
+            var tiles = GetPlaybackCameras().ToList();
+            var enabled = tiles.Count > 0 && tiles.All(tile => tile.IsAiOverlayEnabled);
+            _nativePlaybackAiButton.Background = new SolidColorBrush(enabled
+                ? Color.FromRgb(0, 137, 123)
+                : Color.FromRgb(13, 34, 54));
+            _nativePlaybackAiButton.BorderBrush = new SolidColorBrush(enabled
+                ? Color.FromRgb(72, 255, 212)
+                : Color.FromRgb(41, 73, 102));
+
+            var label = _nativePlaybackAiButton.Content as TextBlock;
+            if (label != null)
+                label.Foreground = new SolidColorBrush(enabled
+                    ? Color.FromRgb(235, 255, 250)
+                    : Color.FromRgb(224, 234, 246));
         }
 
         private static Border CreateNativeToolbarSeparator(Brush color)
@@ -1256,7 +1299,7 @@ namespace V3SClient.UI.Views
                 var cursor = System.Windows.Forms.Cursor.Position;
                 var point = gridCameraList.PointFromScreen(new Point(cursor.X, cursor.Y));
                 var insideGrid = point.X >= 0 && point.Y >= 0 && point.X <= gridCameraList.ActualWidth && point.Y <= gridCameraList.ActualHeight;
-                var hasPlayers = GetPlaybackCameras().Any();
+                var hasPlayers = _playbackOwnerWindow != null && _playbackOwnerWindow.IsActive && GetPlaybackCameras().Any();
                 SetNativePlaybackToolbarOpen(insideGrid && hasPlayers);
             }
             catch
@@ -1327,6 +1370,12 @@ namespace V3SClient.UI.Views
                 btnDownload.Visibility = Visibility.Collapsed;
                 _searchStartTime = fromdate;
                 _searchEndTime = todate;
+
+                // The API can take several seconds to materialise an HLS playlist.
+                // Put the selected tiles into their synchronising state before the
+                // first awaited request, rather than leaving the "ready"/blank grid
+                // on screen until every playlist has returned.
+                ShowPlaybackSynchronizingTiles(selectedForSearch, reuseCurrentPlayback);
                 // Move the aggregate timeline to the newly requested interval
                 // immediately.  It must never keep showing the preceding search
                 // range while playlist validation is still in progress.
@@ -1636,6 +1685,26 @@ namespace V3SClient.UI.Views
             }
         }
 
+        private void ShowPlaybackSynchronizingTiles(IList<models.Camera> cameras, bool reuseCurrentPlayback)
+        {
+            if (cameras == null || cameras.Count == 0 || reuseCurrentPlayback)
+                return;
+
+            // A selection made from the legacy tree may not yet have a visual tile.
+            // Create its non-playing tile now so the user gets immediate feedback.
+            if (!gridCameraList.Children.OfType<ViewCameraPlayback>().Any())
+            {
+                foreach (var camera in cameras)
+                    AddReadyPlaybackTile(camera);
+            }
+
+            foreach (var tile in gridCameraList.Children.OfType<ViewCameraPlayback>())
+            {
+                if (tile.Player == null && IsCameraStillSelected(tile.Camera?.camID))
+                    tile.ShowPreparingPlayback("Đang tải video đã ghi...", "Đang lấy danh sách video từ máy chủ...");
+            }
+        }
+
         private static IEnumerable<Tuple<System.DateTime, System.DateTime>> SplitPlaybackExportRange(System.DateTime start, System.DateTime end)
         {
             // Keep a margin below the one-hour server limit. A six-hour export
@@ -1653,7 +1722,10 @@ namespace V3SClient.UI.Views
 
         private async System.Threading.Tasks.Task<string> GetPlaybackPlaylistWithRetryAsync(string hlsUrl, string playbackToken)
         {
-            const int attempts = 4;
+            // The playback service creates fMP4 playlists asynchronously.  A
+            // second/third selected camera can legitimately become ready after
+            // the first one, so do not label it as empty after only 2.4 seconds.
+            const int attempts = 10;
             for (var attempt = 0; attempt < attempts; attempt++)
             {
                 try
@@ -1680,7 +1752,7 @@ namespace V3SClient.UI.Views
                 }
 
                 if (attempt < attempts - 1)
-                    await System.Threading.Tasks.Task.Delay(400 * (attempt + 1));
+                    await System.Threading.Tasks.Task.Delay(Math.Min(1500, 250 * (attempt + 1)));
             }
 
             return null;
@@ -1781,6 +1853,7 @@ namespace V3SClient.UI.Views
             if (_playbackOwnerWindow != null)
             {
                 _playbackOwnerWindow.PreviewKeyDown -= PlaybackOwnerWindow_PreviewKeyDown;
+                _playbackOwnerWindow.Deactivated -= PlaybackOwnerWindow_Deactivated;
                 _playbackOwnerWindow = null;
             }
             _playbackToastTimer.Stop();
@@ -1906,7 +1979,7 @@ namespace V3SClient.UI.Views
                         continue;
                     }
                     cam.HlsUrl = hlsUrl;
-                    cam.ShowPreparingPlayback("Đang chuẩn bị dữ liệu phát lại...");
+                    cam.ShowPreparingPlayback("Đang đồng bộ dữ liệu phát lại...", "Đang thiết lập trình phát video...");
 
                     Grid.SetRow(cam, i); Grid.SetColumn(cam, j);
                     gridCameraList.Children.Add(cam);
@@ -1933,7 +2006,7 @@ namespace V3SClient.UI.Views
                             {
                                 client.DefaultRequestHeaders.Add("X-Playback-Token", token);
                             }
-                            cam.ShowPreparingPlayback("Đang đồng bộ dữ liệu phát lại...");
+                            cam.ShowPreparingPlayback("Đang đồng bộ dữ liệu phát lại...", "Đang đọc và đồng bộ dữ liệu video...");
                             string m3u8Content;
                             if (!_camWithPlaylistContent.TryGetValue(camModel.camID, out m3u8Content))
                                 m3u8Content = await GetPlaybackPlaylistWithRetryAsync(hlsUrl, token);
@@ -1962,7 +2035,14 @@ namespace V3SClient.UI.Views
 
                     // Tá»± Ä‘á»™ng káº¿t ná»‘i luá»“ng khi load lÃªn grid
                     if (IsPlaybackTileStillSelected(cam) && playlistSynchronized)
-                        cam.ConnectedCamera();
+                    {
+                        // GStreamer/D3D creates native windows synchronously.
+                        // A tiny, bounded stagger lets all tiles attach reliably
+                        // without making later cameras wait for a manual search.
+                        await System.Threading.Tasks.Task.Delay(125);
+                        if (IsPlaybackTileStillSelected(cam))
+                            cam.ConnectedCamera();
+                    }
                     else if (IsPlaybackTileStillSelected(cam))
                     {
                         cam.ShowNoPlaybackData();
@@ -1984,6 +2064,7 @@ namespace V3SClient.UI.Views
                 ForwardGPSBuffer?.Invoke("Playback", _gpsBuffer);
             };
             _timerGPS.Start();
+            UpdateNativePlaybackAiButton();
             Dispatcher.BeginInvoke(new Action(BringNativePlaybackToolbarToFront), DispatcherPriority.ContextIdle);
         }
 
@@ -2469,11 +2550,14 @@ namespace V3SClient.UI.Views
             RenderAggregateTimeline();
 
 
-            if (forceSeek || (System.DateTime.Now - _lastSeekInteractionTime).TotalMilliseconds > AggregateTimelineSeekThrottleMs)
-            {
-                _lastSeekInteractionTime = System.DateTime.Now;
-                SeekAllPlaybackCamerasTo(targetTime, forceSeek);
-            }
+            // Moving the playhead is UI-only. Repeated flushing seeks while the
+            // pointer is dragged make hlsdemux restart the same GOP several
+            // times, which is seen as video looping for a few seconds.
+            if (!forceSeek)
+                return;
+
+            _lastSeekInteractionTime = System.DateTime.Now;
+            SeekAllPlaybackCamerasTo(targetTime, true);
         }
 
         private IEnumerable<ViewCameraPlayback> GetPlaybackCameras()
@@ -2496,6 +2580,7 @@ namespace V3SClient.UI.Views
 
         private void PlaybackTile_AiOverlayRequested(object sender, ViewCameraPlayback tile)
         {
+            UpdateNativePlaybackAiButton();
             ShowPlaybackToast("AI", "Đã cập nhật hiển thị AI cho " + (tile?.Camera?.name ?? "camera"));
         }
 
@@ -2744,9 +2829,13 @@ namespace V3SClient.UI.Views
             switch (action)
             {
                 case "AiAll":
+                    var enableAi = tiles.Any(tile => !tile.IsAiOverlayEnabled);
                     foreach (var tile in tiles)
-                        tile.ToggleAiOverlay();
-                    ShowPlaybackToast("AI", "Đã cập nhật hiển thị AI cho tất cả camera.");
+                        tile.SetAiOverlayEnabled(enableAi, notify: false);
+                    UpdateNativePlaybackAiButton();
+                    ShowPlaybackToast("AI", enableAi
+                        ? "Đã bật hiển thị AI cho tất cả camera."
+                        : "Đã tắt hiển thị AI cho tất cả camera.");
                     break;
                 case "SnapshotAll":
                     var count = await SavePlaybackSnapshotsAsync(tiles);
@@ -2812,9 +2901,56 @@ namespace V3SClient.UI.Views
             Add_Remove_SelectedCameraList(sender, camera);
             if (!wasSelected)
             {
+                // First selection is deliberately only a selection.  The user can
+                // review the default six-hour range and press Search to start
+                // playback.  Once a playback session exists, newly selected
+                // cameras automatically use that exact active range.
+                var hasActivePlayback = _renderedPlaybackStart.HasValue &&
+                                        _renderedPlaybackEnd.HasValue &&
+                                        _renderedPlaybackEnd > _renderedPlaybackStart &&
+                                        gridCameraList.Children.OfType<ViewCameraPlayback>().Any();
+                if (!hasActivePlayback)
+                {
+                    AddReadyPlaybackTile(camera);
+                    ShowPlaybackToast("Camera sẵn sàng", "Đã chọn " + camera.camID + ". Nhấn Tìm kiếm để phát video đã ghi.");
+                    return;
+                }
+
+                var activeStart = _renderedPlaybackStart.Value;
+                var activeEnd = _renderedPlaybackEnd.Value;
+                _viewSearch.datetimeFrom.Value = activeStart;
+                _viewSearch.datetimeTo.Value = activeEnd;
                 Dispatcher.BeginInvoke(new Action(() => btnSearch_Click(this,
-                    new List<System.DateTime?> { _viewSearch.datetimeFrom.Value, _viewSearch.datetimeTo.Value })), DispatcherPriority.Background);
+                    new List<System.DateTime?> { activeStart, activeEnd })), DispatcherPriority.Background);
             }
+        }
+
+        // First camera selection is intentionally visual-only: it gives the
+        // operator an immediate, removable tile while keeping playback idle
+        // until Search supplies the time range.
+        private void AddReadyPlaybackTile(models.Camera camera)
+        {
+            if (camera == null || string.IsNullOrWhiteSpace(camera.camID))
+                return;
+
+            var existing = gridCameraList.Children
+                .OfType<ViewCameraPlayback>()
+                .FirstOrDefault(tile => string.Equals(tile.Camera?.camID, camera.camID, StringComparison.OrdinalIgnoreCase));
+            if (existing != null)
+            {
+                ReflowPlaybackGrid();
+                return;
+            }
+
+            var readyTile = new ViewCameraPlayback(camera);
+            readyTile.TimelineArea.Visibility = Visibility.Collapsed;
+            readyTile.EventClosed += PlaybackTile_EventClosed;
+            readyTile.PlaybackHoverEntered += PlaybackTile_PlaybackHoverEntered;
+            readyTile.PlaybackHoverLeft += PlaybackTile_PlaybackHoverLeft;
+            readyTile.PlaybackTileClicked += PlaybackTile_PlaybackTileClicked;
+            readyTile.ShowPlaybackReady();
+            gridCameraList.Children.Add(readyTile);
+            ReflowPlaybackGrid();
         }
 
         private static void GetPlaybackGridDimensions(int count, out int rows, out int columns)

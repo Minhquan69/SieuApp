@@ -44,6 +44,7 @@ namespace V3SClient.ucs
 
         private List<string> _videoFiles;
         private List<PlaybackSegment> _segments = new List<PlaybackSegment>();
+        private List<PlaybackHLS.HlsAiSegment> _hlsAiSegments = new List<PlaybackHLS.HlsAiSegment>();
         private double _totalDurationSeconds = 0;
         private System.DateTime _searchStartTime;
         private System.DateTime _searchEndTime;
@@ -62,7 +63,10 @@ namespace V3SClient.ucs
         private float _currentPlaybackRate = 1.0f;
         private bool _isPlaying = true;
         private readonly DispatcherTimer _hideHoverActionsTimer;
-        private bool _aiOverlayEnabled;
+        // Playback AI is rendered from metadata embedded in the HLS fragments.
+        // Playback follows the Web application: AI is on when a recorded
+        // camera opens, and the toolbar remains available to turn it off.
+        private bool _aiOverlayEnabled = true;
         private bool _disposed;
         // This is a native-hosted card, deliberately kept inside this tile.  A
         // normal WPF overlay would be painted underneath GStreamer's HWND.
@@ -455,15 +459,43 @@ namespace V3SClient.ucs
             }
             _aiMarkers.Clear();
 
-            Player = new PlaybackHLS(HlsUrl, _videoPanelHandle, this.Camera.is_H264, isNvidiaGPU: libs.Counter.HasNvidiaGPU);
-          
+            var playbackPlayer = new PlaybackHLS(HlsUrl, _videoPanelHandle, this.Camera.is_H264, isNvidiaGPU: libs.Counter.HasNvidiaGPU);
+            Player = playbackPlayer;
+            Player.AiOverlayEnabled = _aiOverlayEnabled;
+            Player.RoiInfoShow = _aiOverlayEnabled;
+            // Keep normal playback on the server URL.  A local observer must
+            // never sit in front of a camera while AI is off: a server can use
+            // byte-range/fMP4 responses that only the direct HLS path handles.
+            if (_aiOverlayEnabled)
+                playbackPlayer.ConfigureHlsAiMetadata(_hlsAiSegments, GetPlaybackRealTimeAtVideoPosition);
             Player.InitPipeline();
             Player.QueryPositionPlaying();
+            _ = ConfigurePlaybackRoiColorsAsync(playbackPlayer);
           
             Player.SendGPS += SendGPS2Parent;
             Player.PlayerSending += GetPlayerState;
             Player.SendWarning += SendWarning2Parent;
             Player.SendMetaAIResult += ForwardMetaAI;
+        }
+
+        private async System.Threading.Tasks.Task ConfigurePlaybackRoiColorsAsync(PlaybackHLS playbackPlayer)
+        {
+            if (playbackPlayer == null || Camera == null || string.IsNullOrWhiteSpace(Camera.camID))
+                return;
+
+            try
+            {
+                var rois = await new V3SClient.Services.LiveStreamService_v3()
+                    .FetchRoisAsync(Camera.camID, CancellationToken.None);
+                if (_disposed || !ReferenceEquals(Player, playbackPlayer))
+                    return;
+
+                playbackPlayer.SetRoiColorOrder(rois.Select(roi => roi.Id));
+            }
+            catch (Exception ex)
+            {
+                LoggerManager.LogDebug("Playback ROI colour lookup skipped: " + ex.Message);
+            }
         }
 
         private void SendWarning2Parent(object sender, string e)
@@ -504,12 +536,27 @@ namespace V3SClient.ucs
                 case PlayerStatus.Duration:
                     VideoDuration = long.Parse(info.Value);
                     ShowConnectButton = Visibility.Hidden;
+                    // Do not remove the loading state just because the pipeline
+                    // was created.  It stays visible until GStreamer confirms the
+                    // playlist has a playable duration, then the native video host
+                    // is revealed in the same UI turn.
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        if (_disposed || VideoDuration <= 0)
+                            return;
+                        PreparingPlaybackOverlay.Visibility = Visibility.Collapsed;
+                        NoPlaybackDataOverlay.Visibility = Visibility.Collapsed;
+                        videoWindow.Visibility = Visibility.Visible;
+                        VideoPanel.Visible = true;
+                    }));
                     break;
                 case PlayerStatus.Stop:
                     // During HLS startup a temporary Stop can arrive before the
                     // first duration/state notification. Give the pipeline a short
                     // grace period; otherwise a valid camera is incorrectly marked
                     // as having no playback data.
+                    if (NoPlaybackDataOverlay.Visibility == Visibility.Visible)
+                        break;
                     if (VideoDuration <= 0)
                         ShowNoPlaybackDataAfterStartupGrace(Player);
                     else
@@ -530,12 +577,11 @@ namespace V3SClient.ucs
         {
             try
             {
-                PreparingPlaybackOverlay.Visibility = Visibility.Collapsed;
+                // Keep the synchronisation card visible while HLS/GStreamer opens
+                // the playlist.  Previously it disappeared immediately here and
+                // left a blank tile for several seconds.
+                ShowPreparingPlayback("Đang đồng bộ dữ liệu phát lại...");
                 NoPlaybackDataOverlay.Visibility = Visibility.Collapsed;
-                // A WindowsFormsHost is an HWND and paints above normal WPF controls.
-                // Restore it only when a real playback pipeline is about to start.
-                videoWindow.Visibility = Visibility.Visible;
-                VideoPanel.Visible = true;
                 ShowConnectButton = Visibility.Hidden;
                 InitPipeline();
                 Player.player.SetState(State.Playing);
@@ -605,16 +651,39 @@ namespace V3SClient.ucs
 
         private void btn_AiOverlay_Click(object sender, RoutedEventArgs e)
         {
-            _aiOverlayEnabled = !_aiOverlayEnabled;
-            if (Player != null)
-                Player.RoiInfoShow = _aiOverlayEnabled;
-            AiOverlayRequested?.Invoke(this, this);
+            SetAiOverlayEnabled(!_aiOverlayEnabled);
         }
 
         /// <summary>Invoked by the single page-level playback toolbar.</summary>
         public void ToggleAiOverlay()
         {
             btn_AiOverlay_Click(this, null);
+        }
+
+        public bool IsAiOverlayEnabled => _aiOverlayEnabled;
+
+        /// <summary>
+        /// Changes only the native overlay gate; the HLS/GStreamer pipeline stays
+        /// running. RoiInfoShow is kept in sync for the ROI dwell-time label.
+        /// </summary>
+        public void SetAiOverlayEnabled(bool enabled, bool notify = true)
+        {
+            _aiOverlayEnabled = enabled;
+            if (Player != null)
+            {
+                Player.AiOverlayEnabled = enabled;
+                Player.RoiInfoShow = enabled;
+                var hlsPlayer = Player as PlaybackHLS;
+                if (hlsPlayer != null)
+                {
+                    if (enabled)
+                        hlsPlayer.ConfigureHlsAiMetadata(_hlsAiSegments, GetPlaybackRealTimeAtVideoPosition);
+                    else
+                        hlsPlayer.StopHlsAiMetadata();
+                }
+            }
+            if (notify)
+                AiOverlayRequested?.Invoke(this, this);
         }
 
         private void btn_SnapshotCurrent_Click(object sender, RoutedEventArgs e)
@@ -652,6 +721,8 @@ namespace V3SClient.ucs
                 // source resolution.  Prefer it so snapshots are Full HD when the
                 // source is Full HD and never include the grid, badge or controls.
                 var playback = Player as models.PlaybackHLS;
+                // PlaybackHLS repaints the active AI overlay on this source-size
+                // bitmap before saving, so snapshots remain Full HD with AI.
                 if (playback != null)
                 {
                     if (playback.TrySaveDecodedSnapshot(savedPath))
@@ -677,7 +748,7 @@ namespace V3SClient.ucs
             }
         }
 
-        public void ShowPreparingPlayback(string status)
+        public void ShowPreparingPlayback(string status, string hint = null)
         {
             if (_disposed)
                 return;
@@ -686,6 +757,12 @@ namespace V3SClient.ucs
             {
                 if (PreparingPlaybackText != null)
                     PreparingPlaybackText.Text = string.IsNullOrWhiteSpace(status) ? "Đang chuẩn bị dữ liệu..." : status;
+                if (PreparingPlaybackHint != null)
+                    PreparingPlaybackHint.Text = string.IsNullOrWhiteSpace(hint)
+                        ? "Vui lòng chờ đồng bộ dữ liệu phát lại"
+                        : hint;
+                if (PreparingPlaybackIcon != null)
+                    PreparingPlaybackIcon.Text = "\uE9F5";
                 NoPlaybackDataOverlay.Visibility = Visibility.Collapsed;
                 VideoPanel.Visible = false;
                 videoWindow.Visibility = Visibility.Collapsed;
@@ -698,10 +775,41 @@ namespace V3SClient.ucs
             }
         }
 
+        // A selected playback camera must be visible immediately, but must not
+        // allocate a GStreamer pipeline until the user explicitly presses Search.
+        public void ShowPlaybackReady()
+        {
+            if (_disposed)
+                return;
+
+            try
+            {
+                if (PreparingPlaybackText != null)
+                    PreparingPlaybackText.Text = Camera?.camID ?? Camera_Name ?? "Camera";
+                if (PreparingPlaybackHint != null)
+                    PreparingPlaybackHint.Text = "Sẵn sàng phát video đã ghi";
+                if (PreparingPlaybackIcon != null)
+                    PreparingPlaybackIcon.Text = "\uE714";
+                NoPlaybackDataOverlay.Visibility = Visibility.Collapsed;
+                VideoPanel.Visible = false;
+                videoWindow.Visibility = Visibility.Collapsed;
+                PreparingPlaybackOverlay.Visibility = Visibility.Visible;
+                SetHoverActionsVisible(false);
+            }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Không thể hiển thị trạng thái sẵn sàng playback");
+            }
+        }
+
         private async void ShowNoPlaybackDataAfterStartupGrace(models.RtspPlayer playerAtStop)
         {
-            await System.Threading.Tasks.Task.Delay(1800);
-            if (_disposed || !ReferenceEquals(Player, playerAtStop) || VideoDuration > 0)
+            await System.Threading.Tasks.Task.Delay(4000);
+            // A parsed playlist containing video is authoritative.  hlsdemux can
+            // emit a temporary Stop while it opens a later tile, especially in a
+            // multi-camera wall; that is a connection state, never "no data".
+            if (_disposed || !ReferenceEquals(Player, playerAtStop) || VideoDuration > 0 ||
+                _segments.Any(segment => segment.HasVideo))
                 return;
 
             if (Dispatcher.CheckAccess())
@@ -767,6 +875,12 @@ namespace V3SClient.ucs
                     }
                 }
 
+                // Preserve the source-resolution ffmpeg frame in either mode.
+                // When AI is active, PlaybackHLS paints the same overlay onto the
+                // exported PNG instead of falling back to a grid-sized screen grab.
+                var playback = Player as models.PlaybackHLS;
+                if (playback != null && playback.AiOverlayEnabled)
+                    playback.TryDrawAiOnSnapshotFile(outputPath);
                 return outputPath;
             }
             catch (Exception ex)
@@ -977,6 +1091,14 @@ namespace V3SClient.ucs
 
         public void ShowNoPlaybackData()
         {
+            ShowNoPlaybackDataAtTime(System.DateTime.MinValue);
+        }
+
+        // A gap inside a valid playlist is different from an empty playlist.
+        // Keep that feedback in the tile so the selected aggregate-timeline time
+        // is never silently replaced with the first/next available recording.
+        public void ShowNoPlaybackDataAtTime(System.DateTime time)
+        {
             ShowConnectButton = Visibility.Hidden;
             // Hide the complete native host, not only its child panel. A hidden
             // WinForms panel can still leave its D3D/GStreamer HWND painted gray
@@ -985,6 +1107,15 @@ namespace V3SClient.ucs
             VideoPanel.Visible = false;
             videoWindow.Visibility = Visibility.Collapsed;
             PreparingPlaybackOverlay.Visibility = Visibility.Collapsed;
+            if (NoPlaybackDataText != null)
+                NoPlaybackDataText.Text = time == System.DateTime.MinValue
+                    ? "Không tìm thấy dữ liệu trong khoảng thời gian này"
+                    : "Không có video tại thời điểm này";
+            if (NoPlaybackDataTimeText != null)
+            {
+                NoPlaybackDataTimeText.Visibility = time == System.DateTime.MinValue ? Visibility.Collapsed : Visibility.Visible;
+                NoPlaybackDataTimeText.Text = time == System.DateTime.MinValue ? string.Empty : time.ToString("HH:mm:ss");
+            }
             NoPlaybackDataOverlay.Visibility = Visibility.Visible;
             SetHoverActionsVisible(false);
         }
@@ -1235,6 +1366,14 @@ namespace V3SClient.ucs
                 }
             }
 
+            _hlsAiSegments = _segments
+                .Where(segment => segment.HasVideo && !string.IsNullOrWhiteSpace(segment.Url) && segment.RealStartTime != System.DateTime.MinValue)
+                .Select(segment => new PlaybackHLS.HlsAiSegment
+                {
+                    Url = segment.Url,
+                    StartTime = segment.RealStartTime,
+                    DurationSeconds = segment.Duration
+                }).ToList();
             RenderMiniTimeline();
         }
 
@@ -1260,7 +1399,23 @@ namespace V3SClient.ucs
 
             double realTimeOffset = (targetTime - _searchStartTime).TotalSeconds;
             realTimeOffset = Math.Max(0, Math.Min(realTimeOffset, _totalRealDurationSeconds));
-            double gstTargetTime = MapRealTimeOffsetToVideoPosition(realTimeOffset);
+            double gstTargetTime;
+            if (!TryMapRealTimeOffsetToVideoPosition(realTimeOffset, out gstTargetTime))
+            {
+                _isPlaying = false;
+                if (Player != null && Player.player != null)
+                    Player.Pause();
+                ShowNoPlaybackDataAtTime(_searchStartTime.AddSeconds(realTimeOffset));
+                return;
+            }
+
+            // Seeking back from a gap must reveal the native video host again.
+            if (NoPlaybackDataOverlay.Visibility == Visibility.Visible)
+            {
+                NoPlaybackDataOverlay.Visibility = Visibility.Collapsed;
+                videoWindow.Visibility = Visibility.Visible;
+                VideoPanel.Visible = true;
+            }
 
             this.Dispatcher.BeginInvoke(new Action(() =>
             {
@@ -1285,16 +1440,23 @@ namespace V3SClient.ucs
                 if (Player != null && Player.player != null)
                 {
                     Player.SeekAbsolute((long)(gstTargetTime * Gst.Constants.SECOND));
+                    Player.Playing();
+                    _isPlaying = true;
                 }
             }
         }
 
         public System.DateTime GetCurrentPlaybackRealTime()
         {
+            return GetPlaybackRealTimeAtVideoPosition(VideoPosition);
+        }
+
+        private System.DateTime GetPlaybackRealTimeAtVideoPosition(double videoPosition)
+        {
             if (_searchStartTime == System.DateTime.MinValue)
                 return System.DateTime.MinValue;
 
-            return _searchStartTime.AddSeconds(MapVideoPositionToRealTimeOffset(VideoPosition));
+            return _searchStartTime.AddSeconds(MapVideoPositionToRealTimeOffset(videoPosition));
         }
 
         public void SetSnapshotPickVisual(bool active, bool highlighted)
@@ -1423,6 +1585,31 @@ namespace V3SClient.ucs
             return lastValidVideoPos;
         }
 
+        private bool TryMapRealTimeOffsetToVideoPosition(double realTimeOffset, out double videoPosition)
+        {
+            videoPosition = 0;
+            double currentVideoPosition = 0;
+            foreach (var segment in _segments)
+            {
+                double segmentEnd = segment.StartOffset + segment.Duration;
+                bool isLastSegment = ReferenceEquals(segment, _segments.LastOrDefault());
+                if (realTimeOffset >= segment.StartOffset &&
+                    (realTimeOffset < segmentEnd || (isLastSegment && realTimeOffset <= segmentEnd)))
+                {
+                    if (!segment.HasVideo)
+                        return false;
+
+                    videoPosition = currentVideoPosition + (realTimeOffset - segment.StartOffset);
+                    return true;
+                }
+
+                if (segment.HasVideo)
+                    currentVideoPosition += segment.Duration;
+            }
+
+            return false;
+        }
+
         private void UpdateMiniPlayhead()
         {
             if (_totalRealDurationSeconds <= 0 || _isDraggingTimeline || miniPlayhead == null) return;
@@ -1457,14 +1644,14 @@ namespace V3SClient.ucs
             if (_totalRealDurationSeconds <= 0) return;
             _isDraggingTimeline = true;
             canvasMiniTimeline.CaptureMouse();
-            HandleTimelineSeek(e.GetPosition(canvasMiniTimeline));
+            HandleTimelineSeek(e.GetPosition(canvasMiniTimeline), false);
         }
 
         private void canvasMiniTimeline_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
         {
             if (_isDraggingTimeline)
             {
-                HandleTimelineSeek(e.GetPosition(canvasMiniTimeline));
+                HandleTimelineSeek(e.GetPosition(canvasMiniTimeline), false);
             }
         }
 
@@ -1474,11 +1661,11 @@ namespace V3SClient.ucs
             {
                 _isDraggingTimeline = false;
                 canvasMiniTimeline.ReleaseMouseCapture();
-                HandleTimelineSeek(e.GetPosition(canvasMiniTimeline));
+                HandleTimelineSeek(e.GetPosition(canvasMiniTimeline), true);
             }
         }
 
-        private void HandleTimelineSeek(Point p)
+        private void HandleTimelineSeek(Point p, bool commitSeek)
         {
             double width = canvasMiniTimeline.ActualWidth;
             if (width <= 0 || double.IsNaN(width) || _totalRealDurationSeconds <= 0) return;
@@ -1487,7 +1674,7 @@ namespace V3SClient.ucs
             if (double.IsNaN(x)) x = 0;
             
             double realTimeOffset = (x / width) * _totalRealDurationSeconds;
-            double gstTargetTime = MapRealTimeOffsetToVideoPosition(realTimeOffset);
+            double gstTargetTime;
             
             Canvas.SetLeft(miniPlayhead, x);
             
@@ -1499,14 +1686,22 @@ namespace V3SClient.ucs
                 Canvas.SetLeft(currentTimeBorder, Math.Max(0, x - 25));
             }
 
-            if ((System.DateTime.Now - _lastSeekInteractionTime).TotalMilliseconds > SeekThrottleMs || !_isDraggingTimeline)
+            if (!TryMapRealTimeOffsetToVideoPosition(realTimeOffset, out gstTargetTime))
             {
-                _lastSeekInteractionTime = System.DateTime.Now;
+                _isPlaying = false;
                 if (Player != null && Player.player != null)
-                {
-                    Player.SeekAbsolute((long)(gstTargetTime * Gst.Constants.SECOND));
-                }
+                    Player.Pause();
+                ShowNoPlaybackDataAtTime(currentRealTime);
+                return;
             }
+
+            // Do not flush the HLS decoder for every mouse-move. Commit one
+            // seek on mouse-up so the selected GOP is decoded once, not replayed.
+            if (!commitSeek) return;
+
+            _lastSeekInteractionTime = System.DateTime.Now;
+            if (Player != null && Player.player != null)
+                Player.SeekAbsolute((long)(gstTargetTime * Gst.Constants.SECOND));
         }
 
         private void canvasMiniTimeline_SizeChanged(object sender, SizeChangedEventArgs e)

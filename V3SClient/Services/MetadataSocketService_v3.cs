@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.WebSockets;
 using System.Configuration;
+using System.Globalization;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,6 +21,9 @@ namespace V3SClient.Services
         public double Top { get; set; }
         public double Width { get; set; }
         public double Height { get; set; }
+        public bool IsInsideRoi { get; set; }
+        public string RoiId { get; set; }
+        public string RoiDwellSecondsInfo { get; set; }
 
         // The metadata API can provide both normalized bbox coordinates and
         // source-frame pixels.  Keep both so the native D3D overlay can map
@@ -208,18 +212,26 @@ namespace V3SClient.Services
                 };
                 foreach (var item in root["objects"] as JArray ?? new JArray())
                 {
+                    // Match WebApp isNormalAiObject: normal detections are
+                    // transport/status metadata, not a drawable AI bbox.
+                    if (IsNormalAiObject(item)) continue;
                     var bbox = item["bbox"];
                     if (bbox == null) continue;
                     var pixel = item["bbox_pixel"] as JObject;
+                    string roiDwellSecondsInfo, roiId;
+                    var isInsideRoi = TryGetRoiDwellInfo(item, out roiDwellSecondsInfo, out roiId);
                     frame.Objects.Add(new AiMetadataBox_v3
                     {
-                        Label = (string)item["label"] ?? (string)item["name"] ?? "object",
+                        Label = (string)item["name"] ?? (string)item["label"] ?? "object",
                         Confidence = (double?)item["confidence"] ?? 0,
                         IsBlacklist = (bool?)item["is_blacklist"] ?? false,
                         Left = (double?)bbox["left"] ?? (double?)bbox["x"] ?? 0,
                         Top = (double?)bbox["top"] ?? (double?)bbox["y"] ?? 0,
                         Width = (double?)bbox["width"] ?? 0,
                         Height = (double?)bbox["height"] ?? 0,
+                        IsInsideRoi = isInsideRoi,
+                        RoiId = roiId,
+                        RoiDwellSecondsInfo = roiDwellSecondsInfo,
                         HasPixelBounds = pixel != null,
                         PixelLeft = pixel == null ? 0 : (double?)pixel["left"] ?? (double?)pixel["x"] ?? 0,
                         PixelTop = pixel == null ? 0 : (double?)pixel["top"] ?? (double?)pixel["y"] ?? 0,
@@ -236,6 +248,87 @@ namespace V3SClient.Services
                 foreach (var callback in callbacks) callback(frame);
             }
             catch (Exception ex) { LoggerManager.LogException(ex, "Live View _v3 metadata message parse failed"); }
+        }
+
+        private static bool IsNormalAiObject(JToken item)
+        {
+            var objectName = ((string)item["name"] ?? string.Empty).Trim();
+            if (string.Equals(objectName, "normal", StringComparison.OrdinalIgnoreCase)) return true;
+            var identifiers = item["detected_object_ids"];
+            var values = identifiers is JArray
+                ? identifiers.Values<string>()
+                : new[] { identifiers == null ? null : identifiers.ToString() };
+            return values.Any(value => string.Equals((value ?? string.Empty).Trim(), "normal", StringComparison.OrdinalIgnoreCase));
+        }
+
+        // Metadata follows the same shape used by WebApp/base RtspPlayer:
+        // object_analysis[].roi_inside plus roi_dwell_seconds (or *_ms).
+        private static bool TryGetRoiDwellInfo(JToken item, out string dwellInfo, out string roiId)
+        {
+            dwellInfo = null;
+            roiId = null;
+            var sources = new List<JObject>();
+            var root = item as JObject;
+            if (root != null) sources.Add(root);
+            var analysis = root == null ? null : root["object_analysis"];
+            var analysisItems = analysis as JArray;
+            if (analysisItems != null)
+                sources.AddRange(analysisItems.OfType<JObject>());
+            else if (analysis is JObject)
+                sources.Add((JObject)analysis);
+
+            foreach (var source in sources)
+            {
+                var insideMap = source["roi_inside"] as JObject;
+                if (insideMap == null) continue;
+                foreach (var roi in insideMap.Properties())
+                {
+                    if (!IsTruthy(roi.Value)) continue;
+                    roiId = roi.Name;
+                    var value = GetRoiMapValue(sources, "roi_dwell_seconds", roi.Name);
+                    var isMilliseconds = false;
+                    if (value == null)
+                    {
+                        value = GetRoiMapValue(sources, "roi_dwell_ms", roi.Name);
+                        isMilliseconds = true;
+                    }
+                    dwellInfo = FormatRoiDwell(value, isMilliseconds);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static JToken GetRoiMapValue(IEnumerable<JObject> sources, string key, string roiId)
+        {
+            foreach (var source in sources)
+            {
+                var map = source[key] as JObject;
+                JToken value;
+                if (map != null && map.TryGetValue(roiId, StringComparison.OrdinalIgnoreCase, out value)) return value;
+            }
+            return null;
+        }
+
+        private static bool IsTruthy(JToken value)
+        {
+            if (value == null || value.Type == JTokenType.Null) return false;
+            if (value.Type == JTokenType.Boolean) return value.Value<bool>();
+            if (value.Type == JTokenType.Integer || value.Type == JTokenType.Float) return value.Value<double>() != 0;
+            var text = value.ToString().Trim();
+            return string.Equals(text, "1", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(text, "true", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(text, "yes", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(text, "y", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string FormatRoiDwell(JToken value, bool isMilliseconds)
+        {
+            if (value == null || value.Type == JTokenType.Null) return null;
+            double seconds;
+            if (double.TryParse(value.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out seconds))
+                return (isMilliseconds ? seconds / 1000d : seconds).ToString("0.0", CultureInfo.InvariantCulture) + "s";
+            return value + "s";
         }
 
         private async Task SendSubscriptionsAsync()

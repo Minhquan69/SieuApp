@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Windows;
@@ -50,6 +51,16 @@ namespace V3SClient.UI.Views
             public bool IsH264 { get; set; }
         }
 
+        private sealed class AiDrawable
+        {
+            public float Left { get; set; }
+            public float Top { get; set; }
+            public float Width { get; set; }
+            public float Height { get; set; }
+            public SolidColorBrush Brush { get; set; }
+            public string Label { get; set; }
+        }
+
         private readonly System.Windows.Forms.Panel _videoPanel = new System.Windows.Forms.Panel { Dock = System.Windows.Forms.DockStyle.Fill };
         private readonly System.Windows.Forms.Label _cameraBadge = new System.Windows.Forms.Label();
         private CancellationTokenSource _cancellation;
@@ -70,15 +81,27 @@ namespace V3SClient.UI.Views
         // messages, while the bounded queue still provides the base player's
         // non-blocking producer/consumer hand-off.
         private AiMetadataFrame_v3 _lastAiFrame;
+        private readonly object _roiColorSync = new object();
+        private readonly Dictionary<string, int> _roiColorIndices = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         private readonly object _aiRendererSync = new object();
         private SharpDX.Direct2D1.Factory _aiDrawFactory;
         private SharpDX.DirectWrite.Factory _aiTextFactory;
         private TextFormat _aiTextFormat;
         private RenderTargetProperties _aiRenderTargetProperties;
+        // AiBboxOverlay.tsx uses this same colour for every bbox, whether
+        // the object is inside an ROI or not.
         private static readonly RawColor4 AiSuccessColor = new RawColor4(34f / 255f, 197f / 255f, 94f / 255f, 1f);
+        // Exact palette and index order used by the deployed Web live/playback
+        // renderer: yellow, orange, blue, pink; then repeats.
+        private static readonly RawColor4[] AiRoiColors =
+        {
+            new RawColor4(1f, 1f, 0f, 1f),
+            new RawColor4(1f, 180f / 255f, 0f, 1f),
+            new RawColor4(0f, 120f / 255f, 1f, 1f),
+            new RawColor4(1f, 120f / 255f, 220f / 255f, 1f)
+        };
         private static readonly RawColor4 AiErrorColor = new RawColor4(239f / 255f, 68f / 255f, 68f / 255f, 1f);
-        private static readonly RawColor4 AiLabelTextColor = new RawColor4(1f, 1f, 1f, 1f);
-        private static readonly RawColor4 AiLabelBackgroundColor = new RawColor4(6f / 255f, 20f / 255f, 34f / 255f, 0.86f);
+        private static readonly RawColor4 AiLabelTextColor = new RawColor4(3f / 255f, 19f / 255f, 10f / 255f, 1f);
 
         public event EventHandler<WhepPlaybackStateChangedEventArgs_v3> PlaybackStateChanged;
         public event EventHandler VideoMouseEnter;
@@ -140,7 +163,7 @@ namespace V3SClient.UI.Views
                 if (_aiDrawFactory != null) return;
                 _aiDrawFactory = new SharpDX.Direct2D1.Factory(SharpDX.Direct2D1.FactoryType.MultiThreaded);
                 _aiTextFactory = new SharpDX.DirectWrite.Factory();
-                _aiTextFormat = new TextFormat(_aiTextFactory, "Segoe UI", 17f) { WordWrapping = WordWrapping.NoWrap };
+                _aiTextFormat = new TextFormat(_aiTextFactory, "Segoe UI", 19f) { WordWrapping = WordWrapping.NoWrap };
                 _aiRenderTargetProperties = new RenderTargetProperties(
                     new PixelFormat(Format.R8G8B8A8_UNorm, SharpDX.Direct2D1.AlphaMode.Premultiplied));
             }
@@ -297,6 +320,7 @@ namespace V3SClient.UI.Views
             var cancellation = new CancellationTokenSource();
             _cancellation = cancellation;
             var selectedCamera = _camera;
+            _ = RefreshRoiColorIndicesAsync(selectedCamera.camID, cancellation.Token);
 
             StatusPanel.Visibility = Visibility.Visible;
             StatusText.Text = "Connecting to " + (selectedCamera.name ?? selectedCamera.camID) + "...";
@@ -478,9 +502,12 @@ namespace V3SClient.UI.Views
                 using (var surface = resource.QueryInterface<Surface>())
                 using (var target = new RenderTarget(_aiDrawFactory, surface, _aiRenderTargetProperties))
                 using (var successBrush = new SolidColorBrush(target, AiSuccessColor))
+                using (var roiBrush0 = new SolidColorBrush(target, AiRoiColors[0]))
+                using (var roiBrush1 = new SolidColorBrush(target, AiRoiColors[1]))
+                using (var roiBrush2 = new SolidColorBrush(target, AiRoiColors[2]))
+                using (var roiBrush3 = new SolidColorBrush(target, AiRoiColors[3]))
                 using (var errorBrush = new SolidColorBrush(target, AiErrorColor))
                 using (var labelBrush = new SolidColorBrush(target, AiLabelTextColor))
-                using (var labelBackground = new SolidColorBrush(target, AiLabelBackgroundColor))
                 {
                     var description = surface.Description;
                     var sourceWidth = frame.SourceWidth > 0 ? frame.SourceWidth : description.Width;
@@ -492,24 +519,53 @@ namespace V3SClient.UI.Views
                     target.BeginDraw();
                     try
                     {
+                        var roiBrushes = new[]
+                        {
+                            roiBrush0, roiBrush1, roiBrush2, roiBrush3
+                        };
+                        var drawables = new List<AiDrawable>();
                         foreach (var item in frame.Objects)
                         {
                             float left, top, width, height;
                             if (!TryMapAiBounds(item, sourceWidth, sourceHeight, ratioX, ratioY,
                                 out left, out top, out width, out height)) continue;
 
-                            var boxBrush = item.IsBlacklist ? errorBrush : successBrush;
-                            target.DrawRectangle(new RectangleF(left, top, width, height), boxBrush, 2f);
-                            var label = string.IsNullOrWhiteSpace(item.Label) ? "object" : item.Label;
-                            if (item.Confidence > 0) label += " " + item.Confidence.ToString("P0");
-                            using (var layout = new TextLayout(_aiTextFactory, label, _aiTextFormat, Math.Max(80, description.Width), 40))
+                            var boxBrush = item.IsBlacklist ? errorBrush :
+                                (item.IsInsideRoi ? roiBrushes[GetRoiColorIndex(item.RoiId)] : successBrush);
+                            // Match WebApp: show the detection/plate name, not
+                            // the confidence percentage.
+                            var label = (item.Label ?? string.Empty).Replace('\r', ' ').Replace('\n', ' ').Trim();
+                            label = string.Join(" ", label.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries));
+                            if (string.IsNullOrWhiteSpace(label) || string.Equals(label, "object", StringComparison.OrdinalIgnoreCase))
+                                label = "car";
+                            if (item.IsInsideRoi)
+                                label += string.IsNullOrWhiteSpace(item.RoiDwellSecondsInfo)
+                                    ? " in ROI" : " - " + item.RoiDwellSecondsInfo;
+
+                            drawables.Add(new AiDrawable
                             {
-                                var labelWidth = Math.Min(description.Width - left, layout.Metrics.Width + 10);
+                                Left = left, Top = top, Width = width, Height = height,
+                                Brush = boxBrush, Label = label
+                            });
+                        }
+
+                        // Keep labels above every box: a later box must never
+                        // cover a plate label belonging to an earlier object.
+                        foreach (var drawable in drawables)
+                            target.DrawRectangle(new RectangleF(drawable.Left, drawable.Top,
+                                drawable.Width, drawable.Height), drawable.Brush, 2.5f);
+
+                        foreach (var drawable in drawables)
+                        {
+                            using (var layout = new TextLayout(_aiTextFactory, drawable.Label, _aiTextFormat,
+                                Math.Max(80, description.Width), 40))
+                            {
+                                var labelWidth = Math.Min(description.Width - drawable.Left, layout.Metrics.Width + 10);
                                 var labelHeight = layout.Metrics.Height + 6;
-                                var labelTop = Math.Max(0, top - labelHeight);
-                                target.FillRectangle(new RectangleF(left, labelTop, labelWidth, labelHeight), labelBackground);
-                                target.DrawText(label, _aiTextFormat,
-                                    new RectangleF(left + 5, labelTop + 2, Math.Max(1, labelWidth - 5), labelHeight), labelBrush);
+                                var labelTop = Math.Max(0, drawable.Top - labelHeight);
+                                target.FillRectangle(new RectangleF(drawable.Left, labelTop, labelWidth, labelHeight), drawable.Brush);
+                                target.DrawText(drawable.Label, _aiTextFormat,
+                                    new RectangleF(drawable.Left + 5, labelTop + 2, Math.Max(1, labelWidth - 5), labelHeight), labelBrush);
                             }
                         }
                     }
@@ -530,6 +586,50 @@ namespace V3SClient.UI.Views
                     renderTargetView.Dispose();
                 }
             }
+        }
+
+        private async System.Threading.Tasks.Task RefreshRoiColorIndicesAsync(string cameraId, CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(cameraId)) return;
+            try
+            {
+                var rois = await new LiveStreamService_v3().FetchRoisAsync(cameraId, cancellationToken).ConfigureAwait(false);
+                if (cancellationToken.IsCancellationRequested) return;
+                lock (_roiColorSync)
+                {
+                    _roiColorIndices.Clear();
+                    for (var index = 0; index < rois.Count; index++)
+                    {
+                        var roi = rois[index];
+                        if (roi != null && !string.IsNullOrWhiteSpace(roi.Id))
+                            _roiColorIndices[roi.Id] = index % AiRoiColors.Length;
+                    }
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                LoggerManager.LogDebug("Live View _v3 ROI colour lookup skipped: " + ex.Message);
+            }
+        }
+
+        private int GetRoiColorIndex(string roiId)
+        {
+            lock (_roiColorSync)
+            {
+                int colorIndex;
+                if (!string.IsNullOrWhiteSpace(roiId) && _roiColorIndices.TryGetValue(roiId, out colorIndex))
+                    return colorIndex;
+
+                if (!string.IsNullOrWhiteSpace(roiId))
+                {
+                    colorIndex = _roiColorIndices.Count % AiRoiColors.Length;
+                    _roiColorIndices[roiId] = colorIndex;
+                    return colorIndex;
+                }
+            }
+
+            return 0;
         }
 
         private static bool TryMapAiBounds(AiMetadataBox_v3 item, int sourceWidth, int sourceHeight,
