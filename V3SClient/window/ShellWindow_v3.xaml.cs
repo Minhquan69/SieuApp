@@ -62,7 +62,7 @@ namespace V3SClient.window
             Close();
             Dispatcher.BeginInvoke(new Action(() =>
             {
-                var login = new LoginWindow();
+                var login = new LoginWindow_v3();
                 if (login.ShowDialog() == true)
                 {
                     var next = new ShellWindow_v3();

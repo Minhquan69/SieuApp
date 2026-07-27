@@ -38,7 +38,7 @@ namespace V3SClient
                     // The isolated migrated executable always uses the migrated login flow.
                     // The legacy login remains available in the preserved source but is not
                     // selected by this deliverable.
-                    Window loginWindow = new LoginWindow();
+                    Window loginWindow = new LoginWindow_v3();
                     bool? dialogResult = loginWindow.ShowDialog(); // Chờ kết quả đăng nhập
 
                     if (dialogResult == true)
@@ -47,10 +47,7 @@ namespace V3SClient
                         MetaAIResultStorage.Instance.ToString();
                         // Đăng nhập thành công, mở MainWindow
                         // Keep the migrated shell as the only startup shell for this copy.
-                        bool useShellV3 = true;
-                        Window mainWindow = useShellV3
-                            ? (Window)new ShellWindow_v3()
-                            : new MainWindow();
+                        Window mainWindow = new ShellWindow_v3();
                         mainWindow.Show();
                     }
                     else

@@ -427,3 +427,6 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Local verification/runtime output (executables, native dependencies, and logs)
+.verify-ai/

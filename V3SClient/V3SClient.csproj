@@ -311,9 +311,6 @@
     <Compile Include="ucs\LineChart.xaml.cs">
       <DependentUpon>LineChart.xaml</DependentUpon>
     </Compile>
-    <Compile Include="ucs\LoginControl.xaml.cs">
-      <DependentUpon>LoginControl.xaml</DependentUpon>
-    </Compile>
     <Compile Include="ucs\SelectDeviceWindow.xaml.cs">
       <DependentUpon>SelectDeviceWindow.xaml</DependentUpon>
     </Compile>
@@ -498,9 +495,14 @@
     <Compile Include="window\ManualPlateProcessingWindow.xaml.cs">
       <DependentUpon>ManualPlateProcessingWindow.xaml</DependentUpon>
     </Compile>
-    <Compile Include="window\LoginWindow.xaml.cs">
-      <DependentUpon>LoginWindow.xaml</DependentUpon>
+    <Compile Include="window\LoginWindow_v3.xaml.cs">
+      <DependentUpon>LoginWindow_v3.xaml</DependentUpon>
     </Compile>
+    <Compile Include="UI\Views\LoginPage_v3.xaml.cs">
+      <DependentUpon>LoginPage_v3.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="viewModels\LoginViewModel_v3.cs" />
+    <Compile Include="Services\AuthenticationService_v3.cs" />
     <Compile Include="window\ROIConfigWindow.xaml.cs">
       <DependentUpon>ROIConfigWindow.xaml</DependentUpon>
     </Compile>
@@ -685,7 +687,6 @@
     <Page Include="styles\form_base.xaml" />
     <Page Include="styles\left_menu_styles.xaml" />
     <Page Include="styles\line_chart_styles.xaml" />
-    <Page Include="styles\login_window_styles.xaml" />
     <Page Include="styles\ql_bsx_dk_styles.xaml" />
     <Page Include="styles\ql_bsx_job_grid_scope_styles.xaml" />
     <Page Include="styles\roiconfig_window_styles.xaml" />
@@ -758,10 +759,6 @@
     <Page Include="ucs\LineChart.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
-    </Page>
-    <Page Include="ucs\LoginControl.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="ucs\SelectDeviceWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
@@ -988,7 +985,11 @@
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
-    <Page Include="window\LoginWindow.xaml">
+    <Page Include="window\LoginWindow_v3.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Views\LoginPage_v3.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
@@ -1215,9 +1216,6 @@
     <Resource Include="images\imageViewer.png" />
     <Resource Include="images\imageViewer\pan.png" />
     <Resource Include="images\map\marker_off.png" />
-    <Resource Include="images\login\login_password.png" />
-    <Resource Include="images\login\login_user.png" />
-    <Resource Include="images\login\logout.png" />
     <Resource Include="images\change_50px.png" />
     <Resource Include="images\province.png" />
     <Resource Include="images\layer_1.png" />

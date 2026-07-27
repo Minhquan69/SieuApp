@@ -186,7 +186,8 @@ namespace V3SClient.UI.Views
                     _isMapLoaded = true;
                     ConfigureOfflineMap();
                     
-                    var defaultCenter = _startPostion;
+                    // Follow the web behavior: open around a real camera coordinate, never a fabricated marker.
+                    var defaultCenter = GetFirstCameraPosition();
                     System.Diagnostics.Debug.WriteLine("Center"+ defaultCenter.Lat+defaultCenter.Lng);
                     var centerMsg = new { action = "flyTo", lng = defaultCenter.Lng, lat = defaultCenter.Lat };
                     mapWebView.CoreWebView2.PostWebMessageAsJson(JsonConvert.SerializeObject(centerMsg));
@@ -439,11 +440,8 @@ namespace V3SClient.UI.Views
         {
             if (CameraList != null && CameraList.Count > 0)
             {
-                var first = CameraList[0];
-                if (first != null && first.Latitude.HasValue && first.Longitude.HasValue && Math.Abs(first.Latitude.Value) > 0.000001)
-                {
-                    return new PositionPoint(first.Latitude.Value, first.Longitude.Value);
-                }
+                var first = CameraList.FirstOrDefault(camera => camera != null && IsValidCoordinate(camera.Latitude, camera.Longitude));
+                if (first != null) return new PositionPoint(first.Latitude.Value, first.Longitude.Value);
             }
             return _startPostion;
             // Chạy demo simulation nếu cần (để test UI)
@@ -537,10 +535,13 @@ namespace V3SClient.UI.Views
             if (CameraList == null || CameraList.Count == 0) return camDataList;
 
             var points = new Dictionary<string, PositionPoint>();
+            var mappedCameras = new List<models.Camera>();
             foreach (models.Camera cam in CameraList)
             {
-                double lat = _startPostion.Lat;
-                double lng = _startPostion.Lng;
+                if (cam == null || string.IsNullOrWhiteSpace(cam.camID)) continue;
+                double lat = 0;
+                double lng = 0;
+                var hasCoordinate = IsValidCoordinate(cam.Latitude, cam.Longitude);
                 string camType = "ip_cam"; // Mặc định là cam tĩnh
 
                 if (!string.IsNullOrEmpty(cam.type))
@@ -548,15 +549,10 @@ namespace V3SClient.UI.Views
                     camType = cam.type.ToLower();
                 }
 
-                if (cam.Latitude.HasValue && cam.Longitude.HasValue)
+                if (hasCoordinate)
                 {
-                    double parsedLat = cam.Latitude.Value;
-                    double parsedLng = cam.Longitude.Value;
-                    if (parsedLat != 0)
-                    {
-                        lat = parsedLat;
-                        lng = parsedLng;
-                    }
+                    lat = cam.Latitude.Value;
+                    lng = cam.Longitude.Value;
                 }
 
                 // LUẬT MỚI: Chỉ cập nhật vị trí realtime từ bản tin GPS nếu nó SẼ DI CHUYỂN (bodycam)
@@ -565,11 +561,14 @@ namespace V3SClient.UI.Views
                     if (_camerasPosition != null && _camerasPosition.ContainsKey(cam.camID))
                     {
                         var p = _camerasPosition[cam.camID];
-                        if (p.Lat != 0) { lat = p.Lat; lng = p.Lng; }
+                        if (IsValidCoordinate(p.Lat, p.Lng)) { lat = p.Lat; lng = p.Lng; hasCoordinate = true; }
                     }
                 }
 
+                // Same as the web E-Map: cameras without a valid location are not rendered.
+                if (!hasCoordinate) continue;
                 points[cam.camID] = new PositionPoint(lat, lng);
+                mappedCameras.Add(cam);
             }
 
             double degreesPerPixel = 360.0 / (256.0 * Math.Pow(2, _currentZoom));
@@ -647,7 +646,7 @@ namespace V3SClient.UI.Views
 
                         foreach (var k in clusterKeys)
                         {
-                            var camRef = CameraList.FirstOrDefault(c => c.camID == k);
+                            var camRef = mappedCameras.FirstOrDefault(c => c.camID == k);
                             if (camRef != null && camRef.is_Master)
                             {
                                 repId = k;
@@ -689,7 +688,7 @@ namespace V3SClient.UI.Views
                 }
             }
 
-            foreach (models.Camera cam in CameraList)
+            foreach (models.Camera cam in mappedCameras)
             {
                 bool isOnline = cam.is_online ?? true; 
                 double heading = 0; double fov = 90;
@@ -738,6 +737,18 @@ namespace V3SClient.UI.Views
 
             camDataList.AddRange(clustersToDraw);
             return camDataList;
+        }
+        private static bool IsValidCoordinate(double? latitude, double? longitude)
+        {
+            return latitude.HasValue && longitude.HasValue &&
+                   latitude.Value >= -90 && latitude.Value <= 90 &&
+                   longitude.Value >= -180 && longitude.Value <= 180 &&
+                   (Math.Abs(latitude.Value) > 0.000001 || Math.Abs(longitude.Value) > 0.000001);
+        }
+        private static bool IsValidCoordinate(double latitude, double longitude)
+        {
+            return latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180 &&
+                   (Math.Abs(latitude) > 0.000001 || Math.Abs(longitude) > 0.000001);
         }
 
         // ========= PUBLIC API (Called by other WPF modules) =========

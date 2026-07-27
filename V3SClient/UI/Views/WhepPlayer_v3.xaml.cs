@@ -61,6 +61,12 @@ namespace V3SClient.UI.Views
             public string Label { get; set; }
         }
 
+        private struct AiLabelMetrics
+        {
+            public float Width;
+            public float Height;
+        }
+
         private readonly System.Windows.Forms.Panel _videoPanel = new System.Windows.Forms.Panel { Dock = System.Windows.Forms.DockStyle.Fill };
         private readonly System.Windows.Forms.Label _cameraBadge = new System.Windows.Forms.Label();
         private CancellationTokenSource _cancellation;
@@ -88,6 +94,14 @@ namespace V3SClient.UI.Views
         private SharpDX.DirectWrite.Factory _aiTextFactory;
         private TextFormat _aiTextFormat;
         private RenderTargetProperties _aiRenderTargetProperties;
+        // Drawing occurs on GStreamer's streaming thread.  Creating a
+        // DirectWrite TextLayout for every bbox on every decoded frame was
+        // the hottest managed allocation when several AI cameras were open.
+        // Labels repeat across frames, so retain only their measured size.
+        private readonly Dictionary<string, AiLabelMetrics> _aiLabelMetrics =
+            new Dictionary<string, AiLabelMetrics>(StringComparer.Ordinal);
+        private readonly Queue<string> _aiLabelMetricsOrder = new Queue<string>();
+        private const int MaxAiLabelMetrics = 256;
         // AiBboxOverlay.tsx uses this same colour for every bbox, whether
         // the object is inside an ROI or not.
         private static readonly RawColor4 AiSuccessColor = new RawColor4(34f / 255f, 197f / 255f, 94f / 255f, 1f);
@@ -402,11 +416,11 @@ namespace V3SClient.UI.Views
             // always match the actual selected RTSP stream.
             var videoChain = isH264
                 ? "rtph264depay ! h264parse ! video/x-h264,stream-format=(string)avc,alignment=(string)au ! d3d11h264dec qos=false"
-                : "rtph265depay ! h265parse ! video/x-h265,stream-format=(string)hvc1,alignment=(string)au ! d3d11h265dec";
+                : "rtph265depay ! h265parse ! video/x-h265,stream-format=(string)hvc1,alignment=(string)au ! d3d11h265dec qos=false";
             var pipelineText =
                 "rtspsrc name=videoSource protocols=tcp latency=300 timeout=15000000 drop-on-latency=true " +
-                "videoSource. ! queue leaky=downstream max-size-buffers=8 ! application/x-rtp,media=video ! " +
-                videoChain + " ! d3d11convert ! queue leaky=downstream max-size-buffers=4 ! " +
+                "videoSource. ! queue leaky=downstream max-size-buffers=8 max-size-bytes=0 max-size-time=0 ! application/x-rtp,media=video ! " +
+                videoChain + " ! d3d11convert ! queue leaky=downstream max-size-buffers=4 max-size-bytes=0 max-size-time=0 ! " +
                 (enableAiOverlay ? "d3d11overlay name=videoOverlay ! " : string.Empty) +
                 "d3d11videosink async=false sync=false qos=false";
             _pipeline = (Pipeline)Parse.Launch(pipelineText);
@@ -519,11 +533,7 @@ namespace V3SClient.UI.Views
                     target.BeginDraw();
                     try
                     {
-                        var roiBrushes = new[]
-                        {
-                            roiBrush0, roiBrush1, roiBrush2, roiBrush3
-                        };
-                        var drawables = new List<AiDrawable>();
+                        var drawables = new List<AiDrawable>(frame.Objects.Count);
                         foreach (var item in frame.Objects)
                         {
                             float left, top, width, height;
@@ -531,7 +541,8 @@ namespace V3SClient.UI.Views
                                 out left, out top, out width, out height)) continue;
 
                             var boxBrush = item.IsBlacklist ? errorBrush :
-                                (item.IsInsideRoi ? roiBrushes[GetRoiColorIndex(item.RoiId)] : successBrush);
+                                (item.IsInsideRoi ? GetRoiBrush(GetRoiColorIndex(item.RoiId), roiBrush0,
+                                    roiBrush1, roiBrush2, roiBrush3) : successBrush);
                             // Match WebApp: show the detection/plate name, not
                             // the confidence percentage.
                             var label = (item.Label ?? string.Empty).Replace('\r', ' ').Replace('\n', ' ').Trim();
@@ -557,16 +568,13 @@ namespace V3SClient.UI.Views
 
                         foreach (var drawable in drawables)
                         {
-                            using (var layout = new TextLayout(_aiTextFactory, drawable.Label, _aiTextFormat,
-                                Math.Max(80, description.Width), 40))
-                            {
-                                var labelWidth = Math.Min(description.Width - drawable.Left, layout.Metrics.Width + 10);
-                                var labelHeight = layout.Metrics.Height + 6;
-                                var labelTop = Math.Max(0, drawable.Top - labelHeight);
-                                target.FillRectangle(new RectangleF(drawable.Left, labelTop, labelWidth, labelHeight), drawable.Brush);
-                                target.DrawText(drawable.Label, _aiTextFormat,
-                                    new RectangleF(drawable.Left + 5, labelTop + 2, Math.Max(1, labelWidth - 5), labelHeight), labelBrush);
-                            }
+                            var metrics = GetAiLabelMetrics(drawable.Label, description.Width);
+                            var labelWidth = Math.Min(description.Width - drawable.Left, metrics.Width + 10);
+                            var labelHeight = metrics.Height + 6;
+                            var labelTop = Math.Max(0, drawable.Top - labelHeight);
+                            target.FillRectangle(new RectangleF(drawable.Left, labelTop, labelWidth, labelHeight), drawable.Brush);
+                            target.DrawText(drawable.Label, _aiTextFormat,
+                                new RectangleF(drawable.Left + 5, labelTop + 2, Math.Max(1, labelWidth - 5), labelHeight), labelBrush);
                         }
                     }
                     finally { target.EndDraw(); }
@@ -585,6 +593,37 @@ namespace V3SClient.UI.Views
                     renderTargetView.NativePointer = IntPtr.Zero;
                     renderTargetView.Dispose();
                 }
+            }
+        }
+
+        private static SolidColorBrush GetRoiBrush(int index, SolidColorBrush first, SolidColorBrush second,
+            SolidColorBrush third, SolidColorBrush fourth)
+        {
+            switch (index & 3)
+            {
+                case 1: return second;
+                case 2: return third;
+                case 3: return fourth;
+                default: return first;
+            }
+        }
+
+        private AiLabelMetrics GetAiLabelMetrics(string label, int surfaceWidth)
+        {
+            lock (_aiRendererSync)
+            {
+                AiLabelMetrics metrics;
+                if (_aiLabelMetrics.TryGetValue(label, out metrics)) return metrics;
+                using (var layout = new TextLayout(_aiTextFactory, label, _aiTextFormat,
+                    Math.Max(80, surfaceWidth), 40))
+                {
+                    metrics = new AiLabelMetrics { Width = layout.Metrics.Width, Height = layout.Metrics.Height };
+                }
+                while (_aiLabelMetricsOrder.Count >= MaxAiLabelMetrics)
+                    _aiLabelMetrics.Remove(_aiLabelMetricsOrder.Dequeue());
+                _aiLabelMetrics[label] = metrics;
+                _aiLabelMetricsOrder.Enqueue(label);
+                return metrics;
             }
         }
 
