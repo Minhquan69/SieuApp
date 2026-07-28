@@ -384,18 +384,33 @@ document.addEventListener('mapCommand', function(e) {
     else if (cmd.action === 'focusCamera') {
         const d = cmd.data || {};
         if (Number.isFinite(Number(d.lat)) && Number.isFinite(Number(d.lng))) {
-            window.map.flyTo({ center: [Number(d.lng), Number(d.lat)], zoom: 15, duration: 800, essential: true });
+            // A selection in the camera list is an explicit request to inspect
+            // that camera: centre it and zoom in to a useful detail level.
+            // Never zoom out a user who is already viewing the map closer.
+            window.map.flyTo({
+                center: [Number(d.lng), Number(d.lat)],
+                zoom: Math.min(Math.max(window.map.getZoom(), 17), window.map.getMaxZoom()),
+                duration: 800,
+                essential: true
+            });
         }
     }
 });
 
 // Hàm từ index.html map_assets cũ
-window.toggleFOVLayer = function() {
-    const visible = document.getElementById('chkFOV').checked;
-    if (window.map.getLayer('fov-layer')) {
-        window.map.setLayoutProperty('fov-layer', 'visibility', visible ? 'visible' : 'none');
+window.setFovVisible = function(visible) {
+    const isVisible = !!visible;
+    const checkbox = document.getElementById('chkFOV');
+    if (checkbox) checkbox.checked = isVisible;
+    if (window.map && window.map.getLayer('fov-layer')) {
+        window.map.setLayoutProperty('fov-layer', 'visibility', isVisible ? 'visible' : 'none');
     }
-}
+};
+
+window.toggleFOVLayer = function() {
+    const checkbox = document.getElementById('chkFOV');
+    window.setFovVisible(!checkbox || checkbox.checked);
+};
 
 function getFOVWedge(lng, lat, heading, fov, radius = 0.001) {
     const coordinates = [[lng, lat]];
@@ -413,15 +428,31 @@ function getFOVWedge(lng, lat, heading, fov, radius = 0.001) {
     return [coordinates];
 }
 
+function normalizeHeading(value) {
+    const heading = Number(value);
+    const safeHeading = Number.isFinite(heading) ? heading : 0;
+    return ((safeHeading % 360) + 360) % 360;
+}
+
 function updateFOVSource() {
-    const features = Object.values(cameraData).filter(cam => !cam.isCluster).map(cam => ({
-        type: 'Feature',
-        properties: { camId: cam.camID, isOnline: cam.isOnline },
-        geometry: {
-            type: 'Polygon',
-            coordinates: getFOVWedge(cam.lng, cam.lat, cam.heading || 0, cam.fov || 90)
-        }
-    }));
+    if (!window.map || !window.map.isStyleLoaded()) return;
+
+    // heading from the API is the physical camera direction.  The map bearing
+    // must be applied when the user rotates the map, otherwise the field of
+    // view continues to use its initial angle and appears fixed on screen.
+    const mapBearing = normalizeHeading(window.map.getBearing());
+    const features = Object.values(cameraData).filter(cam => !cam.isCluster).map(cam => {
+        const cameraHeading = normalizeHeading(cam.heading);
+        const displayedHeading = normalizeHeading(cameraHeading + mapBearing);
+        return {
+            type: 'Feature',
+            properties: { camId: cam.camID, isOnline: cam.isOnline },
+            geometry: {
+                type: 'Polygon',
+                coordinates: getFOVWedge(cam.lng, cam.lat, displayedHeading, cam.fov || 90)
+            }
+        };
+    });
     const source = window.map.getSource('fov-source');
     if (source) {
         source.setData({ type: 'FeatureCollection', features: features });
@@ -437,6 +468,22 @@ function updateFOVSource() {
         });
     }
 }
+
+// Rebuild the FOV source while the user rotates the map.  Coalesce rotate
+// events to one update per rendered frame, so the camera view direction stays
+// synchronized without creating a burst of source updates.
+let fovRefreshPending = false;
+function refreshFOVForMapBearing() {
+    if (fovRefreshPending) return;
+    fovRefreshPending = true;
+    requestAnimationFrame(() => {
+        fovRefreshPending = false;
+        if (window.map && window.map.isStyleLoaded()) updateFOVSource();
+    });
+}
+
+window.map.on('rotate', refreshFOVForMapBearing);
+window.map.on('rotateend', refreshFOVForMapBearing);
 
 const ICONS = {
     Live: `<svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4zM14 13h-3v3H9v-3H6v-2h3V8h2v3h3v2z"/></svg>`,
@@ -587,8 +634,12 @@ window.onRadialAction = function(e, action, camId) {
     e.stopPropagation();
     closeRadial();
 
-    if (action === 'Live') window.notifyCSharp('markerClicked', camId);
-    else window.notifyCSharp('spareCustomAction', { action: action, id: camId });
+    if (action === 'Live') {
+        // Open and start the native live preview immediately.
+        window.notifyCSharp('markerClicked', camId);
+        return;
+    }
+    window.notifyCSharp('spareCustomAction', { action: action, id: camId });
 }
 
 window.startTracking = function(camId) {
@@ -763,7 +814,10 @@ function updateCameras(camList) {
             markerEl.addEventListener('click', (e) => {
                 e.stopPropagation();
                 closeRadial();
-                window.map.flyTo({ center: ll, zoom: 15 });
+                // Do not force zoom 15: it made a zoomed-in map jump back out.
+                window.map.flyTo({ center: ll });
+                // A marker click only focuses the map; it must not start a
+                // second native playback pipeline.
             });
 
             markerEl.addEventListener('contextmenu', (e) => {
@@ -771,7 +825,8 @@ function updateCameras(camList) {
                 e.stopPropagation();
                 closeRadial();
 
-                window.map.flyTo({ center: ll, zoom: 15 });
+                // Right-click only opens the camera menu and must preserve zoom too.
+                window.map.flyTo({ center: ll });
 
                 let radial = markerEl.querySelector('.radial-menu');
                 if (!radial) {
@@ -966,6 +1021,19 @@ function createClusterPanel(cameras, lng, lat) {
             `).join('')}
         </div>
     `;
+
+    // Compact list layout used by the current VMS map design.
+    panel.querySelector('.cluster-header').textContent = `${cameras.length} Cameras`;
+    panel.querySelector('.cluster-grid').innerHTML = cameras.map(cam => `
+        <div class="cluster-item" data-id="${cam.camID}">
+            <div class="cluster-camera-name"><span class="cluster-status-dot"></span><span>${cam.name}</span></div>
+            <div class="cluster-actions">
+                <button title="Xem trực tiếp"><span class="cluster-action-label">▶</span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="12" height="12" rx="2"/><path d="m15 10 5-3v10l-5-3"/></svg></button>
+                <button title="Phát lại"><span class="cluster-action-label">i</span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="m10 8.5 5 3.5-5 3.5z"/></svg></button>
+                <button title="Thông tin"><span class="cluster-action-label">!</span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 10v5M12 7.2v.2"/></svg></button>
+            </div>
+        </div>
+    `).join('');
 
     wrapper.appendChild(panel);
 

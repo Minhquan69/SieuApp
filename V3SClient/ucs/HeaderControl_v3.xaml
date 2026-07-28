@@ -3,7 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:Icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
              Height="48">
-    <Grid Background="{StaticResource VmsHeaderBrush_v3}">
+    <Grid Background="{StaticResource VmsHeaderBrush_v3}" MouseLeftButtonDown="Header_MouseLeftButtonDown">
         <Grid.ColumnDefinitions>
             <ColumnDefinition />
             <ColumnDefinition Width="Auto" />
@@ -19,7 +19,13 @@
                        FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
         </StackPanel>
 
-        <Grid x:Name="AccountPopupAnchor" Grid.Column="1" Margin="0,0,10,0" HorizontalAlignment="Right">
+        <Grid x:Name="AccountPopupAnchor" Grid.Column="1" Margin="0,0,8,0" HorizontalAlignment="Right">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="36" />
+                <ColumnDefinition Width="36" />
+                <ColumnDefinition Width="36" />
+            </Grid.ColumnDefinitions>
             <Button x:Name="AccountButton" Click="AccountButton_Click" Background="Transparent" BorderThickness="0"
                     Cursor="Hand" Padding="4,0" HorizontalAlignment="Right" VerticalAlignment="Center">
                 <StackPanel Orientation="Horizontal">
@@ -32,6 +38,23 @@
                         <TextBlock Text="{Binding SelectedProfileName}" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" FontSize="10" />
                     </StackPanel>
                 </StackPanel>
+            </Button>
+            <Button Grid.Column="1" Click="MinimizeWindowButton_Click" ToolTip="Thu nhỏ"
+                    Background="Transparent" BorderThickness="0" Cursor="Hand" Padding="0">
+                <Icon:PackIconMaterial Kind="Minus" Width="18" Height="18"
+                                       Foreground="#BFD1E5"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Button>
+            <Button Grid.Column="2" Click="WindowModeButton_Click" ToolTip="Thu phóng màn hình"
+                    Background="Transparent" BorderThickness="0" Cursor="Hand" Padding="0">
+                <Icon:PackIconMaterial x:Name="WindowModeIcon" Kind="WindowMaximize" Width="17" Height="17"
+                                       Foreground="#BFD1E5"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Button>
+            <Button Grid.Column="3" Click="CloseApplicationButton_Click" ToolTip="Đóng ứng dụng"
+                    Background="Transparent" BorderThickness="0" Cursor="Hand" Padding="0">
+                <Icon:PackIconMaterial Kind="Close" Width="17" Height="17" Foreground="#BFD1E5"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Button>
         </Grid>
 

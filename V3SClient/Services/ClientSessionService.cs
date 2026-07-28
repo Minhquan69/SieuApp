@@ -46,6 +46,10 @@ namespace V3SClient.Services
 
         public void ClearSession()
         {
+            // Clear HTTP credentials before releasing the in-memory profile.
+            // This guarantees that the login shown after logout starts a new
+            // session instead of silently reusing the old bearer token.
+            ApiManager.Instance.ClearAuthentication();
             var info = GlobalUserInfo.Instance;
             info.ActiveClientId = Guid.Empty;
             info.SelectedClientName = null;
@@ -56,6 +60,15 @@ namespace V3SClient.Services
             info.AuthorizedProfiles = new List<ApiManager.ClientProfile>();
             info.UserId = null;
             info.UserName = null;
+            info.UserPermissions = new List<string>();
+            info.UserRoles = new List<string>();
+            info.TenantId = null;
+            info.IsSuperAdmin = false;
+            info.CamInfoUpdate = false;
+
+            // Do not leave the next shell with the previous client's camera
+            // list while the user is at the login page.
+            GlobalSystem.Instance.ReloadConfig();
         }
     }
 }

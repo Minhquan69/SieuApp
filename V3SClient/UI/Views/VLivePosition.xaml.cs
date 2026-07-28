@@ -23,6 +23,7 @@ namespace V3SClient.UI.Views
     public partial class VLivePosition : Page, INotifyPropertyChanged
     {
         private bool _isTrackingEnabled = false;
+        private bool _isFovVisible = true;
         private string _trackingCameraId = null;
         private System.Windows.Threading.DispatcherTimer _timer;
 
@@ -197,6 +198,10 @@ namespace V3SClient.UI.Views
                 {
                     string camId = cmd["data"]?.ToString();
                     Dispatcher.Invoke(() => HandleMarkerClick(camId));
+                }
+                else if (action == "toggleCameraSidebar")
+                {
+                    Dispatcher.Invoke(() => ToggleSidebar_Click(null, null));
                 }
                 else if (action == "trackingChanged")
                 {
@@ -690,15 +695,9 @@ namespace V3SClient.UI.Views
 
             foreach (models.Camera cam in mappedCameras)
             {
-                bool isOnline = cam.is_online ?? true; 
+                // Match the current web map behavior: every configured camera is shown as online.
+                bool isOnline = true;
                 double heading = 0; double fov = 90;
-
-                if (!cam.is_online.HasValue && !string.IsNullOrEmpty(cam.Status))
-                {
-                    // Nếu không có is_online nhưng có Status, chỉ coi là offline nếu Status thực sự là "offline"
-                    // và không phải là giá trị mặc định (tùy thuộc vào logic kinh doanh, ở đây ta giữ nguyên kiểm tra chuỗi)
-                    isOnline = cam.Status.ToLower() != "offline";
-                }
 
                 if (cam.ExtraMetadata != null)
                 {
@@ -761,8 +760,10 @@ namespace V3SClient.UI.Views
 
         private void ToggleSidebar_Click(object sender, RoutedEventArgs e)
         {
-            bool collapsed = SidebarColumn.Width.Value > 0;
-            SidebarColumn.Width = collapsed ? new GridLength(0) : new GridLength(350);
+            bool collapsed = CameraSidebar.Visibility == Visibility.Visible;
+            SidebarColumn.MinWidth = collapsed ? 0 : 210;
+            SidebarColumn.MaxWidth = collapsed ? double.PositiveInfinity : 320;
+            SidebarColumn.Width = collapsed ? new GridLength(0) : new GridLength(0.20, GridUnitType.Star);
             CameraSidebar.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
             SidebarOpenButton.Visibility = collapsed ? Visibility.Visible : Visibility.Collapsed;
             if (_isMapLoaded)
@@ -777,12 +778,36 @@ namespace V3SClient.UI.Views
 
         private void SidebarAllFilter_Click(object sender, RoutedEventArgs e) => Sidebar.AiOnly = false;
         private void SidebarAiFilter_Click(object sender, RoutedEventArgs e) => Sidebar.AiOnly = true;
-        private void SidebarExpandAll_Click(object sender, RoutedEventArgs e) => Sidebar.ExpandAll();
-        private void SidebarCollapseAll_Click(object sender, RoutedEventArgs e) => Sidebar.CollapseAll();
+
+        private void ToggleFov_Click(object sender, RoutedEventArgs e)
+        {
+            _isFovVisible = !_isFovVisible;
+            if (_isMapLoaded)
+            {
+                _ = mapWebView.ExecuteScriptAsync(
+                    "if(window.setFovVisible){window.setFovVisible(" + (_isFovVisible ? "true" : "false") + ");}");
+            }
+            FovVisibilityIcon.Kind = _isFovVisible
+                ? MahApps.Metro.IconPacks.PackIconMaterialKind.EyeOutline
+                : MahApps.Metro.IconPacks.PackIconMaterialKind.EyeOffOutline;
+        }
 
         private void SidebarCamera_Click(object sender, RoutedEventArgs e)
         {
             var item = (sender as FrameworkElement)?.Tag as MapCameraItem_v3;
+            FocusSidebarCamera(item);
+        }
+
+        // Clicking anywhere on a camera row mirrors the map-pin action.  The
+        // separate camera icon remains dedicated to opening the live stream.
+        private void SidebarCameraRow_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            var item = (sender as FrameworkElement)?.Tag as MapCameraItem_v3;
+            FocusSidebarCamera(item);
+        }
+
+        private void FocusSidebarCamera(MapCameraItem_v3 item)
+        {
             if (item == null || !item.HasLocation || !_isMapLoaded) return;
             var message = new
             {

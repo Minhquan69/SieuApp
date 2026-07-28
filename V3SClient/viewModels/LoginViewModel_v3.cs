@@ -56,7 +56,11 @@ namespace V3SClient.viewModels
             }
             catch (OperationCanceledException) { StatusMessage = null; }
             catch (Exception ex) { LoggerManager.LogException(ex, "Login v3 failed."); ErrorMessage = "Không thể kết nối tới máy chủ."; StatusMessage = null; }
-            finally { Password = string.Empty; IsBusy = false; }
+            // Keep the credentials in the view-model after a transient DNS/
+            // network failure. The PasswordBox still contains the text, and
+            // clearing only this backing value made the next click fail local
+            // validation with “Vui lòng nhập tài khoản và mật khẩu.”
+            finally { IsBusy = false; }
         }
 
         private async Task ContinueAsync(object parameter)

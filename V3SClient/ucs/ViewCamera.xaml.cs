@@ -158,11 +158,14 @@ namespace V3SClient.ucs
         public double TimelineHeight => IsFullTimeline ? 55.0 : 8.0;
 
         private Visibility _showConnectButton = Visibility.Visible;
+        private bool _useFloatingMapControls;
         public Visibility ShowConnectButton
         {
             get { return _showConnectButton; }
             set
             {
+                if (_useFloatingMapControls)
+                    value = Visibility.Collapsed;
                 if (value != _showConnectButton)
                 {
                     _showConnectButton = value;
@@ -477,6 +480,21 @@ namespace V3SClient.ucs
         {
             centerButton.Text = text;
         }
+
+        /// <summary>Uses the toolbar supplied by the map's floating window.</summary>
+        public void UseFloatingMapControls()
+        {
+            _useFloatingMapControls = true;
+            ShowConnectButton = Visibility.Collapsed;
+            LeftOnTopWindow.Visibility = Visibility.Collapsed;
+            RighOnTopWindow.Visibility = Visibility.Collapsed;
+        }
+
+        /// <summary>Map popups always request the high-resolution main stream.</summary>
+        public void UseMainStreamForFloatingWindow()
+        {
+            isZoomOut = false;
+        }
         private void ViewCamera_Loaded(object sender, RoutedEventArgs e)
         {
             //153, 163, 164
@@ -678,7 +696,15 @@ namespace V3SClient.ucs
                 StreamModeChanged?.Invoke(this, Camera.ActiveStreamMode);
 
                 InitPipeline(rtsp: rtspUrl);
-                Player.player.SetState(State.Playing);
+                // InitPipeline starts a valid GStreamer pipeline itself.  Match
+                // the v3/web flow by treating an unavailable pipeline as a
+                // connection failure instead of dereferencing it directly.
+                if (Player?.player == null)
+                {
+                    ShowConnectButton = Visibility.Visible;
+                    LoggerManager.LogWarn("Cannot start camera stream: the GStreamer pipeline was not created.");
+                    return;
+                }
             }catch (Exception ex)
             {
                 LoggerManager.LogException(ex, "Lỗi ConnectedCamera");

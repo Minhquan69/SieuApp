@@ -48,6 +48,7 @@ namespace V3SClient
                         // Đăng nhập thành công, mở MainWindow
                         // Keep the migrated shell as the only startup shell for this copy.
                         Window mainWindow = new ShellWindow_v3();
+                        MainWindow = mainWindow;
                         mainWindow.Show();
                     }
                     else

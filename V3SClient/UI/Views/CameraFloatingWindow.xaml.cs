@@ -1,126 +1,237 @@
 using System;
+using System.Linq;
 using System.Windows;
 using System.Windows.Input;
-using V3SClient.ucs;
+using System.Windows.Threading;
+using V3SClient.libs;
+using V3SClient.Services;
+using V3SClient.viewModels;
 
 namespace V3SClient.UI.Views
 {
     public partial class CameraFloatingWindow : Window
     {
-        private ViewCamera _cameraView;
-        private bool _isMinimized = false;
-        private double _expandedHeight;
+        private WhepPlayer_v3 _cameraPlayer;
+        private IDisposable _metadataSubscription;
+        private bool _isFullscreen;
+        private bool _allowClose;
+        private bool _adjustingSize;
+        private double _lastWidth;
+        private double _lastHeight;
+        private const double VideoAspectRatio = 16.0 / 9.0;
+        private const double HorizontalChrome = 2.0;
+        private const double VerticalChrome = 31.0;
 
         public CameraFloatingWindow()
         {
             InitializeComponent();
-            _expandedHeight = this.Height;
+            _lastWidth = Width;
+            _lastHeight = Height;
+            StateChanged += (sender, args) => Dispatcher.BeginInvoke(
+                new Action(FitCameraToContainer), DispatcherPriority.ContextIdle);
         }
 
-        /// <summary>
-        /// Hiển thị camera live trong cửa sổ nổi này.
-        /// </summary>
+        /// <summary>Displays and immediately starts the selected live camera.</summary>
         public void ShowCamera(models.Camera camera, Window ownerWindow)
         {
-            // Đóng stream cũ nếu có
+            if (camera == null) return;
+
             StopCamera();
-
             txtCamName.Text = camera.long_Name ?? camera.name;
-            _cameraView = new ViewCamera(camera);
-            gridCameraView.Children.Add(_cameraView);
-
-            // Gắn Owner để Window di chuyển theo cửa sổ chính
-            try
+            _cameraPlayer = new WhepPlayer_v3
             {
-                this.Owner = ownerWindow;
-            }
-            catch { }
+                Camera = camera,
+                // The map is a single-camera presentation, therefore it uses
+                // the same main-stream selection as fullscreen Live View.
+                SelectedStream = LiveViewModel_v3.SelectFullscreenStream(camera),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                AiOverlayEnabled = HasAiStream(camera)
+            };
+            SubscribeAiMetadata(camera, _cameraPlayer.SelectedStream);
+            gridCameraView.Children.Add(_cameraPlayer);
 
-            // Đặt ở góc phải dưới của Owner
-            if (ownerWindow != null)
+            try { Owner = ownerWindow; } catch { }
+
+            WindowState = WindowState.Normal;
+            _isFullscreen = false;
+            SizeAndCenterToOwner(ownerWindow);
+
+            if (!IsVisible) Show();
+            Activate();
+
+            // WindowsFormsHost creates its native handle during Loaded.  Connecting
+            // at this priority guarantees GStreamer receives that ready handle.
+            Dispatcher.BeginInvoke(new Action(async () =>
             {
-                this.Left = ownerWindow.Left + ownerWindow.ActualWidth - this.Width - 20;
-                this.Top = ownerWindow.Top + ownerWindow.ActualHeight - this.Height - 40;
-            }
+                var player = _cameraPlayer;
+                if (player != null) await player.ReconnectAsync();
+            }),
+                DispatcherPriority.Loaded);
+            Dispatcher.BeginInvoke(new Action(FitCameraToContainer), DispatcherPriority.Render);
+        }
 
-            // Nếu đang thu nhỏ thì mở lại
-            if (_isMinimized)
-            {
-                _isMinimized = false;
-                gridCameraView.Visibility = Visibility.Visible;
-                this.Height = _expandedHeight;
-            }
-
-            this.Show();
+        private static bool HasAiStream(models.Camera camera)
+        {
+            return camera != null &&
+                (camera.HasAIStream ||
+                 string.Equals(camera.type, "ai_processed", StringComparison.OrdinalIgnoreCase) ||
+                 (camera.Streams != null && camera.Streams.Any(stream => stream != null && stream.IsAiMode == true)));
         }
 
         public void StopCamera()
         {
-            if (_cameraView != null)
+            _metadataSubscription?.Dispose();
+            _metadataSubscription = null;
+            if (_cameraPlayer == null) return;
+            _cameraPlayer.Dispose();
+            gridCameraView.Children.Clear();
+            _cameraPlayer = null;
+        }
+
+        private void SubscribeAiMetadata(models.Camera camera, CameraStreamInfo stream)
+        {
+            if (!HasAiStream(camera) || string.IsNullOrWhiteSpace(camera.camID)) return;
+
+            var player = _cameraPlayer;
+            var cameraId = camera.camID;
+            var streamCameraId = stream == null ? null : stream.RtspRelayRaw;
+            var primary = MetadataSocketService_v3.Instance.Subscribe(cameraId, frame =>
             {
-                _cameraView.Dispose();
-                gridCameraView.Children.Clear();
-                _cameraView = null;
+                if (!ReferenceEquals(player, _cameraPlayer) || frame == null) return;
+                player.Send2Draw(frame);
+            });
+            if (string.IsNullOrWhiteSpace(streamCameraId) ||
+                string.Equals(cameraId, streamCameraId, StringComparison.OrdinalIgnoreCase))
+            {
+                _metadataSubscription = primary;
+                return;
+            }
+
+            var alias = MetadataSocketService_v3.Instance.Subscribe(streamCameraId, frame =>
+            {
+                if (!ReferenceEquals(player, _cameraPlayer) || frame == null) return;
+                player.Send2Draw(frame);
+            });
+            _metadataSubscription = new CompositeSubscription(primary, alias);
+        }
+
+        private sealed class CompositeSubscription : IDisposable
+        {
+            private IDisposable _first;
+            private IDisposable _second;
+
+            public CompositeSubscription(IDisposable first, IDisposable second)
+            {
+                _first = first;
+                _second = second;
+            }
+
+            public void Dispose()
+            {
+                var first = System.Threading.Interlocked.Exchange(ref _first, null);
+                var second = System.Threading.Interlocked.Exchange(ref _second, null);
+                first?.Dispose();
+                second?.Dispose();
             }
         }
 
-        // Kéo thanh tiêu đề để di chuyển cửa sổ
         private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
         {
-            if (e.ChangedButton == MouseButton.Left)
-                this.DragMove();
+            if (e.ChangedButton == MouseButton.Left && WindowState == WindowState.Normal)
+                DragMove();
         }
 
-        // Slider độ trong suốt — điều chỉnh toàn bộ Window
-        private void OpacitySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        private void BtnFullscreen_Click(object sender, RoutedEventArgs e)
         {
-            this.Opacity = e.NewValue;
+            _isFullscreen = !_isFullscreen;
+            WindowState = _isFullscreen ? WindowState.Maximized : WindowState.Normal;
+            Dispatcher.BeginInvoke(new Action(FitCameraToContainer), DispatcherPriority.ContextIdle);
         }
 
-        // Thu nhỏ / Mở rộng
-        private void BtnMinimize_Click(object sender, RoutedEventArgs e)
-        {
-            if (_isMinimized)
-            {
-                // Mở rộng
-                gridCameraView.Visibility = Visibility.Visible;
-                this.Height = _expandedHeight;
-                _isMinimized = false;
-            }
-            else
-            {
-                // Thu gọn: chỉ giữ header
-                _expandedHeight = this.Height;
-                gridCameraView.Visibility = Visibility.Collapsed;
-                this.Height = 36;
-                _isMinimized = true;
-            }
-        }
-
-        // Đóng (ẩn, không destroy — để tái sử dụng)
-        private void BtnClose_Click(object sender, RoutedEventArgs e)
+        private void BtnStop_Click(object sender, RoutedEventArgs e)
         {
             StopCamera();
-            this.Hide();
+            Hide();
         }
 
-        // Cho phép đóng hẳn khi Page Unloaded
-        private bool _allowClose = false;
+        private void SizeAndCenterToOwner(Window ownerWindow)
+        {
+            // The map can live inside a nested Shell layout whose logical bounds
+            // are not the same as the visible window.  Use the desktop work area
+            // so the floating camera always opens at the visual screen centre.
+            var bounds = SystemParameters.WorkArea;
+
+            var maxWidth = Math.Max(MinWidth, bounds.Width * 0.8);
+            var maxHeight = Math.Max(MinHeight, bounds.Height * 0.8);
+            var width = Math.Min(maxWidth, (maxHeight - VerticalChrome) * VideoAspectRatio + HorizontalChrome);
+            width = Math.Max(MinWidth, width);
+            var height = (width - HorizontalChrome) / VideoAspectRatio + VerticalChrome;
+            if (height > maxHeight)
+            {
+                height = maxHeight;
+                width = (height - VerticalChrome) * VideoAspectRatio + HorizontalChrome;
+            }
+
+            _adjustingSize = true;
+            Width = width;
+            Height = height;
+            _adjustingSize = false;
+            _lastWidth = Width;
+            _lastHeight = Height;
+            Left = bounds.Left + (bounds.Width - Width) / 2;
+            Top = bounds.Top + (bounds.Height - Height) / 2;
+        }
+
+        private void CameraFloatingWindow_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (_adjustingSize || WindowState != WindowState.Normal) return;
+
+            var widthDelta = Math.Abs(ActualWidth - _lastWidth);
+            var heightDelta = Math.Abs(ActualHeight - _lastHeight);
+            _adjustingSize = true;
+            if (widthDelta >= heightDelta * VideoAspectRatio)
+                Height = (ActualWidth - HorizontalChrome) / VideoAspectRatio + VerticalChrome;
+            else
+                Width = (ActualHeight - VerticalChrome) * VideoAspectRatio + HorizontalChrome;
+            _adjustingSize = false;
+            _lastWidth = ActualWidth;
+            _lastHeight = ActualHeight;
+            Dispatcher.BeginInvoke(new Action(FitCameraToContainer), DispatcherPriority.Render);
+        }
+
+        private void CameraContainer_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            FitCameraToContainer();
+        }
+
+        private void FitCameraToContainer()
+        {
+            if (_cameraPlayer == null || gridCameraView.ActualWidth <= 0 || gridCameraView.ActualHeight <= 0)
+                return;
+
+            var width = Math.Min(gridCameraView.ActualWidth,
+                gridCameraView.ActualHeight * VideoAspectRatio);
+            var height = width / VideoAspectRatio;
+            _cameraPlayer.HorizontalAlignment = HorizontalAlignment.Center;
+            _cameraPlayer.VerticalAlignment = VerticalAlignment.Center;
+            _cameraPlayer.Width = Math.Max(1, width);
+            _cameraPlayer.Height = Math.Max(1, height);
+        }
+
         public void ForceClose()
         {
             _allowClose = true;
             StopCamera();
-            this.Close();
+            Close();
         }
 
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
-            if (!_allowClose)
-            {
-                e.Cancel = true;
-                StopCamera();
-                this.Hide();
-            }
+            if (_allowClose) return;
+            e.Cancel = true;
+            StopCamera();
+            Hide();
         }
     }
 }

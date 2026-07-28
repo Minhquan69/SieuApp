@@ -69,6 +69,11 @@ namespace V3SClient.UI.Views
 
         private readonly System.Windows.Forms.Panel _videoPanel = new System.Windows.Forms.Panel { Dock = System.Windows.Forms.DockStyle.Fill };
         private readonly System.Windows.Forms.Label _cameraBadge = new System.Windows.Forms.Label();
+        // Gst.Parse.Launch creates D3D11 decoder/sink resources in native
+        // plugins. The per-player gate protects one tile, but does not make
+        // concurrent creation across a camera wall safe. Serialize only this
+        // short critical phase; the RTSP sessions then decode concurrently.
+        private static readonly SemaphoreSlim PipelineConstructionGate = new SemaphoreSlim(1, 1);
         private CancellationTokenSource _cancellation;
         private Pipeline _pipeline;
         private Element _aiOverlayElement;
@@ -79,6 +84,7 @@ namespace V3SClient.UI.Views
         private IntPtr _videoWindowHandle;
         private bool _useAlternateCodec;
         private bool _alternateCodecAttempted;
+        private string _lastPipelineBuildError;
         private int _aiOverlayEnabled;
         private readonly BlockingCollection<AiMetadataFrame_v3> _aiResult =
             new BlockingCollection<AiMetadataFrame_v3>(new ConcurrentQueue<AiMetadataFrame_v3>(), 1);
@@ -269,18 +275,32 @@ namespace V3SClient.UI.Views
 
         public void SetCameraBadge(string cameraId, bool visible, bool connected, bool error)
         {
-            // Camera IDs are rendered by LiveTile_v3's WPF badge. This
-            // WinForms label was the legacy overlay painted inside the video
-            // surface and could remain visible over stale frames.
+            if (_videoPanel.IsDisposed || _cameraBadge.IsDisposed || !_videoPanel.IsHandleCreated)
+                return;
+            if (_videoPanel.InvokeRequired)
+            {
+                try { _videoPanel.BeginInvoke(new Action(() => SetCameraBadge(cameraId, visible, connected, error))); }
+                catch (ObjectDisposedException) { }
+                catch (InvalidOperationException) { }
+                return;
+            }
+            try
+            {
+            // WindowsFormsHost is an airspace island: WPF labels are painted
+            // behind it. Render the stable camera ID inside the native video
+            // surface rather than using a separate Popup HWND.
             _cameraBadge.Text = string.IsNullOrWhiteSpace(cameraId) ? string.Empty : "●  " + cameraId;
             _cameraBadge.ForeColor = error
                 ? System.Drawing.Color.FromArgb(255, 145, 145)
                 : connected
                 ? System.Drawing.Color.FromArgb(33, 197, 93)
                     : System.Drawing.Color.FromArgb(255, 193, 7);
-            // The WPF Popup in LiveTile_v3 is the only visible badge. Keep
-            // this legacy in-video label disabled in every state.
+            // The D3D11 sink owns the panel's pixels and paints above child
+            // controls. LiveTile_v3 owns the visible, persistent Popup badge.
             _cameraBadge.Visible = false;
+            }
+            catch (ObjectDisposedException) { }
+            catch (InvalidOperationException) { }
         }
 
         public System.Threading.Tasks.Task ReconnectAsync() { return ConnectAsync(); }
@@ -374,21 +394,52 @@ namespace V3SClient.UI.Views
                     !ReferenceEquals(_camera, selectedCamera))
                     return;
 
-                // Capture the HWND while on the dispatcher. The sync bus
-                // callback runs on a GStreamer thread and must not call
-                // Control.Invoke back into a dispatcher that may be busy.
-                _videoWindowHandle = GetVideoWindowHandle();
+                // Capture a valid, laid-out HWND while on the dispatcher.
+                // Creating d3d11videosink while WindowsFormsHost is still at
+                // 0x0 during a multi-monitor fullscreen transition can make
+                // the native sink fail to open its window (and occasionally
+                // terminate the process in the driver/plugin path).
+                _videoWindowHandle = VideoHost.Visibility == Visibility.Visible
+                    ? await WaitForVisibleVideoHostAsync(cancellation.Token).ConfigureAwait(true)
+                    : GetVideoWindowHandle();
                 await _connectionGate.WaitAsync(cancellation.Token).ConfigureAwait(true);
+                bool pipelineCreated;
                 try
                 {
-                    await System.Threading.Tasks.Task.Run(() => CreatePipeline(
-                        source.Url,
-                        source.IsH264,
-                        _videoWindowHandle), cancellation.Token).ConfigureAwait(true);
+                    // Creating all native D3D11 sinks at once can terminate
+                    // the process in the video driver/plugin path. Keep only
+                    // construction serialized; each completed pipeline starts
+                    // immediately and is never held back by slow cameras.
+                    await PipelineConstructionGate.WaitAsync(cancellation.Token).ConfigureAwait(true);
+                    try
+                    {
+                        if (cancellation.IsCancellationRequested ||
+                            !ReferenceEquals(_cancellation, cancellation) ||
+                            !ReferenceEquals(_camera, selectedCamera))
+                            return;
+
+                        pipelineCreated = await System.Threading.Tasks.Task.Run(() => CreatePipeline(
+                            source.Url,
+                            source.IsH264,
+                            _videoWindowHandle), cancellation.Token).ConfigureAwait(true);
+                    }
+                    finally
+                    {
+                        PipelineConstructionGate.Release();
+                    }
                 }
                 finally
                 {
                     _connectionGate.Release();
+                }
+                if (!pipelineCreated)
+                {
+                    PublishError(WhepPlaybackErrorKind_v3.Decoder,
+                        string.IsNullOrWhiteSpace(_lastPipelineBuildError)
+                            ? "GStreamer could not create the direct playback pipeline."
+                            : _lastPipelineBuildError,
+                        false);
+                    return;
                 }
                 LoggerManager.LogInfo("Live View _v3 started direct GStreamer RTSP for camera " +
                     (selectedCamera.camID ?? selectedCamera.name ?? "unknown") +
@@ -405,53 +456,65 @@ namespace V3SClient.UI.Views
             }
         }
 
-        private void CreatePipeline(string rtspUrl, bool isH264, IntPtr videoWindowHandle)
+        private bool CreatePipeline(string rtspUrl, bool isH264, IntPtr videoWindowHandle)
         {
-            var enableAiOverlay = AiOverlayEnabled;
-            _videoWindowHandle = videoWindowHandle;
+            Pipeline pipeline = null;
+            _lastPipelineBuildError = null;
+            try
+            {
+                _videoWindowHandle = videoWindowHandle;
             // Keep the same Direct3D11 decode and render path as the original
             // V3 client.  This avoids software decode and the CPU-side
             // videoconvert copy once several cameras are open.  The URL and
             // codec are resolved together above so that the parser and decoder
             // always match the actual selected RTSP stream.
-            var videoChain = isH264
-                ? "rtph264depay ! h264parse ! video/x-h264,stream-format=(string)avc,alignment=(string)au ! d3d11h264dec qos=false"
-                : "rtph265depay ! h265parse ! video/x-h265,stream-format=(string)hvc1,alignment=(string)au ! d3d11h265dec qos=false";
-            var pipelineText =
-                "rtspsrc name=videoSource protocols=tcp latency=300 timeout=15000000 drop-on-latency=true " +
-                "videoSource. ! queue leaky=downstream max-size-buffers=8 max-size-bytes=0 max-size-time=0 ! application/x-rtp,media=video ! " +
-                videoChain + " ! d3d11convert ! queue leaky=downstream max-size-buffers=4 max-size-bytes=0 max-size-time=0 ! " +
-                (enableAiOverlay ? "d3d11overlay name=videoOverlay ! " : string.Empty) +
-                "d3d11videosink async=false sync=false qos=false";
-            _pipeline = (Pipeline)Parse.Launch(pipelineText);
-            var source = _pipeline.GetByName("videoSource");
-            source["location"] = rtspUrl;
-            if (enableAiOverlay)
-            {
-                var videoOverlay = _pipeline.GetByName("videoOverlay");
-                if (videoOverlay == null)
-                    throw new InvalidOperationException("GStreamer did not create the AI overlay element.");
-                try
+                // Stable pre-merge live pipeline.  It deliberately keeps one
+                // d3d11overlay in the native path, but does not attach the new
+                // managed AI draw callback while the stream is starting.
+                var videoChain = isH264
+                    ? "rtph264depay ! h264parse ! video/x-h264,stream-format=(string)avc,alignment=(string)au ! d3d11h264dec qos=false"
+                    : "rtph265depay ! h265parse ! video/x-h265,stream-format=(string)hvc1,alignment=(string)au ! d3d11h265dec";
+                var pipelineText =
+                    "rtspsrc name=videoSource protocols=tcp latency=300 timeout=15000000 drop-on-latency=true " +
+                    "videoSource. ! queue leaky=downstream max-size-buffers=8 ! application/x-rtp,media=video ! " +
+                    videoChain + " ! d3d11convert ! queue leaky=downstream max-size-buffers=4 ! " +
+                    "d3d11overlay name=videoOverlay ! d3d11videosink async=false sync=false qos=false";
+                pipeline = (Pipeline)Parse.Launch(pipelineText);
+                if (pipeline == null)
+                    throw new InvalidOperationException("GStreamer returned an empty playback pipeline.");
+
+                // AI metadata is delivered out-of-band by /ws/metadata.  The
+                // d3d11overlay still needs this draw callback on every decoded
+                // frame to paint that metadata.  This connection was lost in a
+                // previous pipeline merge, leaving the live/map player with
+                // valid metadata but no visible bounding boxes.
+                var aiOverlay = pipeline.GetByName("videoOverlay");
+                if (aiOverlay == null)
+                    throw new InvalidOperationException("GStreamer did not create the AI video overlay.");
+                aiOverlay.Connect("draw", Draw);
+                lock (_aiRendererSync)
                 {
-                    // Match RtspPlayer.InitPipeline: the Gst element owns the
-                    // draw signal; Draw never disposes args.Args[0].
-                    videoOverlay.Connect("draw", Draw);
-                    lock (_aiRendererSync)
-                    {
-                        _aiOverlayElement = videoOverlay;
-                        _aiOverlayPipeline = _pipeline;
-                    }
-                    videoOverlay = null;
+                    _aiOverlayElement = aiOverlay;
+                    _aiOverlayPipeline = pipeline;
                 }
-                finally
-                {
-                    if (videoOverlay != null) videoOverlay.Dispose();
-                }
+
+                var source = pipeline.GetByName("videoSource");
+                source["location"] = rtspUrl;
+                pipeline.Bus.EnableSyncMessageEmission();
+                pipeline.Bus.SyncMessage += OnSyncMessage;
+                if (pipeline.SetState(State.Playing) == StateChangeReturn.Failure)
+                    throw new InvalidOperationException("GStreamer could not start the direct RTSP playback pipeline.");
+
+                _pipeline = pipeline;
+                return true;
             }
-            _pipeline.Bus.EnableSyncMessageEmission();
-            _pipeline.Bus.SyncMessage += OnSyncMessage;
-            if (_pipeline.SetState(State.Playing) == StateChangeReturn.Failure)
-                throw new InvalidOperationException("GStreamer could not start the direct RTSP playback pipeline.");
+            catch (Exception ex)
+            {
+                _lastPipelineBuildError = ex.Message;
+                LoggerManager.LogException(ex, "Live View _v3 GStreamer pipeline creation failed");
+                if (pipeline != null) DisposePipelineInstance(pipeline);
+                return false;
+            }
         }
 
         private static RtspSource_v3 GetRtspSource(Camera camera, CameraStreamInfo selectedStream)
@@ -508,6 +571,11 @@ namespace V3SClient.UI.Views
             if (texturePointer == IntPtr.Zero) return;
 
             RenderTargetView renderTargetView = null;
+            // The pipeline teardown path can run while GStreamer is still
+            // completing this draw signal. Keep the Direct2D factories alive
+            // for the complete native draw transaction.
+            lock (_aiRendererSync)
+            {
             try
             {
                 InitializeAiOverlayRenderer();
@@ -593,6 +661,7 @@ namespace V3SClient.UI.Views
                     renderTargetView.NativePointer = IntPtr.Zero;
                     renderTargetView.Dispose();
                 }
+            }
             }
         }
 
@@ -871,6 +940,28 @@ namespace V3SClient.UI.Views
             return (IntPtr)_videoPanel.Invoke(new Func<IntPtr>(() => _videoPanel.Handle));
         }
 
+        private async System.Threading.Tasks.Task<IntPtr> WaitForVisibleVideoHostAsync(CancellationToken cancellationToken)
+        {
+            for (var attempt = 0; attempt < 8; attempt++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await Dispatcher.InvokeAsync(new Action(() => { }),
+                    System.Windows.Threading.DispatcherPriority.Render);
+
+                if (!_videoPanel.IsDisposed && _videoPanel.IsHandleCreated &&
+                    VideoHost.IsVisible && VideoHost.ActualWidth >= 2 && VideoHost.ActualHeight >= 2)
+                {
+                    var handle = GetVideoWindowHandle();
+                    if (handle != IntPtr.Zero)
+                        return handle;
+                }
+
+                await System.Threading.Tasks.Task.Delay(40, cancellationToken).ConfigureAwait(true);
+            }
+
+            throw new InvalidOperationException("Video surface is not ready after the window layout transition.");
+        }
+
         public void Dispose()
         {
             _cancellation?.Cancel();
@@ -878,12 +969,15 @@ namespace V3SClient.UI.Views
             _cancellation = null;
             DisposePipeline();
             ClearAiMetadata();
-            _aiTextFormat?.Dispose();
-            _aiTextFormat = null;
-            _aiTextFactory?.Dispose();
-            _aiTextFactory = null;
-            _aiDrawFactory?.Dispose();
-            _aiDrawFactory = null;
+            lock (_aiRendererSync)
+            {
+                _aiTextFormat?.Dispose();
+                _aiTextFormat = null;
+                _aiTextFactory?.Dispose();
+                _aiTextFactory = null;
+                _aiDrawFactory?.Dispose();
+                _aiDrawFactory = null;
+            }
         }
     }
 }

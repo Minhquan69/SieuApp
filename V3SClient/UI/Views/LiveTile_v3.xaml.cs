@@ -8,6 +8,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Input;
 using V3SClient.libs;
+using V3SClient.models;
 using V3SClient.viewModels;
 using V3SClient.Services;
 
@@ -53,6 +54,10 @@ namespace V3SClient.UI.Views
         private int _badgeGeneration;
         private Window _ownerWindow;
         private IDisposable _metadataSubscription;
+        // Player.Camera may be cleared while its native host is arranging.
+        // Keep the logical binding identity so a layout-only rebuild does not
+        // rebind every active tile.
+        private Camera _boundCamera;
 
         public LiveTile_v3()
         {
@@ -108,14 +113,14 @@ namespace V3SClient.UI.Views
 
         private void OpenCameraBadgeIfActive()
         {
-            if (_disposed || _popupPlacementSuspended || _ownerWindow == null || !_ownerWindow.IsActive ||
+            if (_disposed || _popupPlacementSuspended || _ownerWindow == null ||
                 Slot == null || Slot.Camera == null || !TileBorder.IsVisible ||
                 Slot.State == LiveConnectionState_v3.Empty) return;
             var generation = _badgeGeneration;
             Dispatcher.BeginInvoke(new Action(() =>
             {
                 if (_disposed || _popupPlacementSuspended || generation != _badgeGeneration || _ownerWindow == null ||
-                    !_ownerWindow.IsActive || Slot == null || Slot.Camera == null || !TileBorder.IsVisible ||
+                    Slot == null || Slot.Camera == null || !TileBorder.IsVisible ||
                     Slot.State == LiveConnectionState_v3.Empty)
                     return;
                 if (string.IsNullOrWhiteSpace(CameraName.Text))
@@ -167,6 +172,9 @@ namespace V3SClient.UI.Views
             SafeStopHideActionsTimer();
             _actionsPinned = false;
             ActionPopup.IsOpen = false;
+            // Popup owns a native HWND and can otherwise remain above a
+            // different foreground application.  Keep the badge scoped to
+            // the iVista window; OwnerWindow_Activated restores it instantly.
             HideCameraBadge(false);
         }
 
@@ -205,7 +213,7 @@ namespace V3SClient.UI.Views
         public bool RequiresBind(LiveSlotViewModel_v3 slot)
         {
             return !ReferenceEquals(Slot, slot) ||
-                   !ReferenceEquals(Player.Camera, slot == null ? null : slot.Camera);
+                   !ReferenceEquals(_boundCamera, slot == null ? null : slot.Camera);
         }
 
         public event EventHandler RemoveRequested;
@@ -216,7 +224,7 @@ namespace V3SClient.UI.Views
         {
             _badgeGeneration++;
             HideCameraBadge(true);
-            var previousCamera = Slot == null ? null : Slot.Camera;
+            var previousCamera = _boundCamera;
             var nextCamera = slot == null ? null : slot.Camera;
             if (previousCamera != null && !ReferenceEquals(previousCamera, nextCamera))
             {
@@ -228,6 +236,7 @@ namespace V3SClient.UI.Views
             _mainPresentationGeneration++;
             _mainSwitchScheduledGeneration = -1;
             Slot = slot;
+            _boundCamera = nextCamera;
             DataContext = slot;
             RefreshVisuals();
             if (slot == null || slot.Camera == null)
@@ -279,14 +288,15 @@ namespace V3SClient.UI.Views
         public void RefreshPopupPlacement()
         {
             if (_disposed || _popupPlacementSuspended) return;
-            var reopenActions = ActionPopup.IsOpen;
-            HideCameraBadge(false);
-            ActionPopup.IsOpen = false;
             Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(() =>
             {
                 if (_disposed) return;
-                if (reopenActions) ShowActions();
-                OpenCameraBadgeIfActive();
+                // A layout rebuild may move a tile, but it must not close and
+                // recreate every badge Popup. Reposition open overlays in
+                // place; this keeps IDs stable when a new camera is added.
+                if (CameraBadgePopup.IsOpen) PositionCameraBadgePopup();
+                else OpenCameraBadgeIfActive();
+                if (ActionPopup.IsOpen) PositionActionPopup();
             }));
         }
 
@@ -690,21 +700,18 @@ namespace V3SClient.UI.Views
         private void PositionCameraBadgePopup()
         {
             if (_positioningBadge || !CameraBadgePopup.IsOpen || !IsLoaded || !TileBorder.IsVisible) return;
-            var source = PresentationSource.FromVisual(TileBorder);
-            if (source == null || source.CompositionTarget == null) return;
             try
             {
                 _positioningBadge = true;
-                // PointToScreen returns device pixels. Popup offsets are WPF
-                // device-independent units, so convert through the current
-                // presentation source before assigning absolute coordinates.
-                var screenPoint = TileBorder.PointToScreen(new Point(7, 7));
-                var dipPoint = source.CompositionTarget.TransformFromDevice.Transform(screenPoint);
-                if (Math.Abs(CameraBadgePopup.HorizontalOffset - dipPoint.X) > 0.1 ||
-                    Math.Abs(CameraBadgePopup.VerticalOffset - dipPoint.Y) > 0.1)
+                // Relative placement stays in the tile's own visual/DPI
+                // coordinate space. AbsolutePoint uses a virtual-desktop
+                // device coordinate and shifts badges on a second monitor
+                // when Windows uses different monitor scaling.
+                if (Math.Abs(CameraBadgePopup.HorizontalOffset - 7d) > 0.1 ||
+                    Math.Abs(CameraBadgePopup.VerticalOffset - 7d) > 0.1)
                 {
-                    CameraBadgePopup.HorizontalOffset = dipPoint.X;
-                    CameraBadgePopup.VerticalOffset = dipPoint.Y;
+                    CameraBadgePopup.HorizontalOffset = 7d;
+                    CameraBadgePopup.VerticalOffset = 7d;
                 }
             }
             catch (InvalidOperationException) { }
@@ -743,8 +750,41 @@ namespace V3SClient.UI.Views
 
         private void TileBorder_SizeChanged(object sender, SizeChangedEventArgs e)
         {
-            // LivePage_v3 owns the debounced resize coordinator. Updating a
-            // native popup here would run once for every camera tile.
+            UpdateErrorLayoutForTileSize();
+            // The badge is a separate native Popup because the D3D surface
+            // covers normal WPF content.  Move this tile's popup in the same
+            // layout pass rather than hiding every ID until the grid settles.
+            if (!_popupPlacementSuspended && CameraBadgePopup.IsOpen)
+                Dispatcher.BeginInvoke(new Action(PositionCameraBadgePopup), DispatcherPriority.Render);
+        }
+
+        private void UpdateErrorLayoutForTileSize()
+        {
+            var details = ErrorOverlay == null ? null : ErrorOverlay.Child as StackPanel;
+            if (details == null || details.Children.Count < 4 ||
+                TileBorder.ActualWidth <= 0 || TileBorder.ActualHeight <= 0)
+                return;
+
+            var compact = TileBorder.ActualWidth < 220 || TileBorder.ActualHeight < 145;
+            ErrorOverlay.Padding = compact ? new Thickness(4) : new Thickness(8);
+            var icon = details.Children[0] as UIElement;
+            var title = details.Children[1] as UIElement;
+            var message = details.Children[2] as TextBlock;
+            var retry = details.Children[3] as UIElement;
+            if (icon != null) icon.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+            if (title != null) title.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+            if (retry != null) retry.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+            if (message == null) return;
+
+            message.Text = compact
+                ? "Lỗi luồng camera"
+                : (!string.IsNullOrWhiteSpace(Slot == null ? null : Slot.ErrorMessage)
+                    ? Slot.ErrorMessage
+                    : "Kiểm tra mạng, cấu hình camera hoặc máy chủ phát trực tiếp.");
+            message.TextWrapping = compact ? TextWrapping.NoWrap : TextWrapping.Wrap;
+            message.TextTrimming = compact ? TextTrimming.CharacterEllipsis : TextTrimming.None;
+            message.FontSize = compact ? 10 : 11;
+            message.Margin = compact ? new Thickness(0) : new Thickness(0, 4, 0, 8);
         }
 
         private void HideActions()
@@ -943,7 +983,7 @@ namespace V3SClient.UI.Views
             // video surface is hidden in those states, so the WPF badge is
             // visible and guarantees that every selected camera still shows
             // its ID even when the stream fails.
-            CameraBadgeInline.Visibility = Visibility.Collapsed;
+            CameraBadgeInline.Visibility = showCameraId ? Visibility.Visible : Visibility.Collapsed;
             if (!showCameraId)
                 HideCameraBadge(true);
             else
@@ -991,9 +1031,6 @@ namespace V3SClient.UI.Views
                 StatusDot.Visibility = Visibility.Visible;
                 CameraBadge.Visibility = Visibility.Visible;
             }
-            if (showCameraId && !string.IsNullOrWhiteSpace(CameraNameInline.Text) &&
-                (Slot.State == LiveConnectionState_v3.Error || Slot.State == LiveConnectionState_v3.Retrying))
-                CameraBadgeInline.Visibility = Visibility.Visible;
             ErrorText.Text = "Kiểm tra mạng, cấu hình camera hoặc máy chủ phát trực tiếp.";
             ErrorText.Text = !string.IsNullOrWhiteSpace(Slot == null ? null : Slot.ErrorMessage)
                 ? Slot.ErrorMessage
@@ -1006,6 +1043,7 @@ namespace V3SClient.UI.Views
                         Slot.State == LiveConnectionState_v3.Retrying ||
                         Slot.State == LiveConnectionState_v3.Disconnecting)
                         ? "VmsWarningBrush_v3" : "VmsOfflineBrush_v3";
+            UpdateErrorLayoutForTileSize();
             StatusDot.Fill = (System.Windows.Media.Brush)FindResource(statusBrush);
             StatusDotInline.Fill = (System.Windows.Media.Brush)FindResource(statusBrush);
             ConnectButton.Visibility = !empty && (Slot == null || !Slot.IsConnected) ? Visibility.Visible : Visibility.Collapsed;

@@ -81,7 +81,7 @@
                 </StackPanel>
             </Border>
 
-            <Border x:Name="ErrorOverlay" Panel.ZIndex="30" Background="{StaticResource VmsSurfaceBrush_v3}" Visibility="Collapsed" Padding="12" IsHitTestVisible="True">
+            <Border x:Name="ErrorOverlay" Panel.ZIndex="30" Background="{StaticResource VmsSurfaceBrush_v3}" Visibility="Collapsed" Padding="8" IsHitTestVisible="True" ClipToBounds="True">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="280">
                     <Icon:PackIconMaterial Kind="AlertCircleOutline" Width="32" Height="32" Foreground="{StaticResource VmsErrorBrush_v3}" HorizontalAlignment="Center"/>
                     <TextBlock Text="Lỗi kết nối" FontWeight="SemiBold" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" HorizontalAlignment="Center" Margin="0,5,0,0"/>
@@ -90,7 +90,7 @@
                 </StackPanel>
             </Border>
 
-            <Popup x:Name="CameraBadgePopup" Placement="AbsolutePoint" AllowsTransparency="True" IsHitTestVisible="False" IsOpen="False">
+            <Popup x:Name="CameraBadgePopup" Placement="Relative" PlacementTarget="{Binding ElementName=TileBorder}" AllowsTransparency="True" IsHitTestVisible="False" IsOpen="False" StaysOpen="True">
             <Border x:Name="CameraBadge" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0" Padding="7,4" Background="{StaticResource VmsElevatedBrush_v3}" BorderBrush="{StaticResource VmsBorderStrongBrush_v3}" BorderThickness="1" CornerRadius="3">
                 <StackPanel Orientation="Horizontal">
                     <Ellipse x:Name="StatusDot" Width="7" Height="7" Fill="{StaticResource VmsOfflineBrush_v3}" Margin="0,0,6,0" VerticalAlignment="Center"/>

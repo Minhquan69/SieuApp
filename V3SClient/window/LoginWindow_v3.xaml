@@ -1,1 +1,37 @@
-<Window x:Class="V3SClient.window.LoginWindow_v3" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:views="clr-namespace:V3SClient.UI.Views" Title="iVista VMS - Đăng nhập" Width="1280" Height="760" MinWidth="1080" MinHeight="680" WindowStartupLocation="CenterScreen" Background="{StaticResource VmsBackgroundBrush_v3}"><views:LoginPage_v3 x:Name="LoginPage" /></Window>
+<Window x:Class="V3SClient.window.LoginWindow_v3"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:V3SClient.UI.Views"
+        xmlns:Icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="iVista VMS - Đăng nhập"
+        Width="1280" Height="760" MinWidth="960" MinHeight="640"
+        WindowStartupLocation="CenterScreen" WindowStyle="None" ResizeMode="CanResize"
+        Background="{StaticResource VmsBackgroundBrush_v3}">
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="6" CornerRadius="8"
+                            GlassFrameThickness="0" UseAeroCaptionButtons="False" />
+    </shell:WindowChrome.WindowChrome>
+    <Border BorderBrush="#245174" BorderThickness="1" CornerRadius="7" SnapsToDevicePixels="True">
+    <Grid MouseLeftButtonDown="WindowChrome_MouseLeftButtonDown">
+        <Frame x:Name="LoginFrame" NavigationUIVisibility="Hidden" />
+
+        <!-- Window chrome is kept inside the login screen because WindowStyle=None. -->
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top"
+                    Panel.ZIndex="10" Margin="0,8,10,0">
+            <Button Click="MinimizeWindow_Click" Width="36" Height="32" Background="Transparent"
+                    BorderThickness="0" Cursor="Hand" ToolTip="Thu nhỏ">
+                <Icon:PackIconMaterial Kind="Minus" Width="18" Height="18" Foreground="#BFD1E5" />
+            </Button>
+            <Button Click="ToggleWindowState_Click" Width="36" Height="32" Background="Transparent"
+                    BorderThickness="0" Cursor="Hand" ToolTip="Thu phóng màn hình">
+                <Icon:PackIconMaterial x:Name="WindowModeIcon" Kind="WindowMaximize" Width="17" Height="17" Foreground="#BFD1E5" />
+            </Button>
+            <Button Click="CloseApplication_Click" Width="36" Height="32" Background="Transparent"
+                    BorderThickness="0" Cursor="Hand" ToolTip="Đóng ứng dụng">
+                <Icon:PackIconMaterial Kind="Close" Width="17" Height="17" Foreground="#BFD1E5" />
+            </Button>
+        </StackPanel>
+    </Grid>
+    </Border>
+</Window>

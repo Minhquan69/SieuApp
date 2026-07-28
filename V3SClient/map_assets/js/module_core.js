@@ -99,6 +99,61 @@ class Toggle3D {
     onRemove() { this._el.remove(); }
 }
 window.map.addControl(new Toggle3D(), 'top-right');
+
+// These controls live inside MapLibre (rather than WPF) so WebView2 never
+// covers them. They are stacked with the built-in navigation controls.
+class CameraListToggle {
+    onAdd(m) {
+        this._el = document.createElement('div');
+        this._el.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.title = 'Mở / đóng danh sách camera';
+        b.setAttribute('aria-label', b.title);
+        b.innerHTML = '<span style="font-size:18px;line-height:1;color:#163d67">☰</span>';
+        b.onclick = () => window.notifyCSharp('toggleCameraSidebar', null);
+        this._el.appendChild(b);
+        return this._el;
+    }
+    onRemove() { this._el.remove(); }
+}
+
+class DirectionLockToggle {
+    onAdd(m) {
+        this._map = m;
+        this._el = document.createElement('div');
+        this._el.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+        const b = document.createElement('button');
+        b.type = 'button';
+        let locked = false;
+        const render = () => {
+            b.title = locked ? 'Mở xoay hướng bản đồ' : 'Khóa hướng bản đồ';
+            b.setAttribute('aria-label', b.title);
+            b.innerHTML = locked
+                ? '<span style="font-size:16px;line-height:1;color:#7b8794">🔒</span>'
+                : '<span style="font-size:17px;line-height:1;color:#163d67">🧭</span>';
+        };
+        b.onclick = () => {
+            locked = !locked;
+            if (locked) {
+                m.dragRotate.disable();
+                if (m.touchZoomRotate) m.touchZoomRotate.disableRotation();
+                m.easeTo({ bearing: 0, duration: 250 });
+            } else {
+                m.dragRotate.enable();
+                if (m.touchZoomRotate) m.touchZoomRotate.enableRotation();
+            }
+            render();
+        };
+        render();
+        this._el.appendChild(b);
+        return this._el;
+    }
+    onRemove() { this._el.remove(); }
+}
+
+window.map.addControl(new CameraListToggle(), 'top-right');
+window.map.addControl(new DirectionLockToggle(), 'top-right');
 window.map.addControl(new maplibregl.ScaleControl({ maxWidth: 200, unit: 'metric' }), 'bottom-left');
 
 // Lắng nghe sự kiện từ C# (WebView2)

@@ -11,7 +11,10 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using V3SClient.libs;
 using V3SClient.models;
+using V3SClient.ucs;
 using V3SClient.viewModels;
+using V3SClient.window;
+using FormsScreen = System.Windows.Forms.Screen;
 
 namespace V3SClient.UI.Views
 {
@@ -34,6 +37,7 @@ namespace V3SClient.UI.Views
         private double _tileWindowTop;
         private double _tileWindowWidth;
         private double _tileWindowHeight;
+        private bool _tileUsesVirtualDesktop;
         private Visibility _tileSidebarVisibility;
         private GridLength _tileSidebarWidth;
         private bool _tileWindowStateSaved;
@@ -56,11 +60,16 @@ namespace V3SClient.UI.Views
         private int _resizeSettlementVersion;
         private LiveTile_v3 _dragTile;
         private Point _dragStart;
+        private int _customLayoutRows;
+        private int _customLayoutColumns;
+        private List<CustomLayoutCell_v3> _customLayoutCells = new List<CustomLayoutCell_v3>();
 
         public LivePage_v3()
         {
             InitializeComponent();
-            _resizeSettledTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(140) };
+            // Keep resize feedback responsive while still coalescing the many
+            // SizeChanged events raised by WindowsFormsHost/D3D surfaces.
+            _resizeSettledTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(85) };
             _resizeSettledTimer.Tick += ResizeSettledTimer_Tick;
             // The action icons are centred against the complete header at all
             // window sizes, not against the space left between side controls.
@@ -91,6 +100,14 @@ namespace V3SClient.UI.Views
             DataContext = _viewModel;
             Loaded += OnLoaded;
             Unloaded += (s, e) => Dispose();
+        }
+
+        private static ShellPage_v3 GetShellPage(Window window)
+        {
+            var shellWindow = window as ShellWindow_v3;
+            if (shellWindow != null)
+                return shellWindow.ShellPage;
+            return window == null ? null : window.Content as ShellPage_v3;
         }
 
         private void OnLoaded(object sender, RoutedEventArgs e)
@@ -134,10 +151,15 @@ namespace V3SClient.UI.Views
             _resizeSettlementVersion++;
             if (!_resizeOverlaysSuspended)
             {
+                // Camera IDs/actions are native Popup HWNDs. Repositioning
+                // one for every WPF arrange pass is the expensive part of a
+                // live resize, especially on a large wall. Hide those small
+                // overlays only while the pointer is actively resizing; the
+                // D3D video itself continues rendering without interruption.
                 _resizeOverlaysSuspended = true;
-                _resizeStopwatch.Restart();
                 foreach (var tile in _tiles.Values)
                     tile.SuspendPopupPlacementForResize();
+                _resizeStopwatch.Restart();
             }
 
             _resizeSettledTimer.Stop();
@@ -154,9 +176,6 @@ namespace V3SClient.UI.Views
                     _fullscreenTile != null || _geometryTransitionInProgress)
                     return;
 
-                CameraGrid.InvalidateMeasure();
-                CameraGrid.InvalidateArrange();
-                CameraGrid.UpdateLayout();
                 foreach (var tile in _tiles.Values)
                     tile.ResumePopupPlacementAfterResize();
 
@@ -193,10 +212,34 @@ namespace V3SClient.UI.Views
         /// </summary>
         public void BeginGeometryTransition()
         {
-            RunGridGeometryTransition(null);
+            // ShellSidebar raises this event immediately before its Width is
+            // changed.  The next Render pass therefore has the final bounds.
+            // Recreate the native badge popups in that pass; relying on the
+            // ContextIdle resize coordinator made IDs lag several seconds
+            // behind the left navigation pane on a busy video wall.
+            if (_disposed || _fullscreenTile != null)
+                return;
+
+            CancelPendingResizeSettle();
+            var transitionVersion = ++_geometryTransitionVersion;
+            foreach (var tile in _tiles.Values)
+                tile.SuspendPopupPlacementForResize();
+
+            Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(() =>
+            {
+                if (_disposed || transitionVersion != _geometryTransitionVersion || _fullscreenTile != null)
+                    return;
+
+                CameraGrid.InvalidateMeasure();
+                CameraGrid.InvalidateArrange();
+                CameraGrid.UpdateLayout();
+                foreach (var tile in _tiles.Values)
+                    tile.ResumePopupPlacementAfterResize();
+                QueueHeaderActionCentering();
+            }));
         }
 
-        private void RunGridGeometryTransition(Action applyLayout)
+        private void RunGridGeometryTransition(Action applyLayout, bool suspendVideoSurfaces = false)
         {
             if (_disposed)
                 return;
@@ -212,14 +255,39 @@ namespace V3SClient.UI.Views
             CancelPendingResizeSettle();
             _geometryTransitionInProgress = true;
             var transitionVersion = ++_geometryTransitionVersion;
-            CameraGrid.Visibility = Visibility.Hidden;
-            foreach (var tile in _tiles.Values)
+            // A sidebar changes the position of every tile.  Badge popups are
+            // separate native windows, so intentionally recreate them around
+            // this one atomic layout transaction instead of leaving stale IDs
+            // on screen until the D3D idle queue becomes free.
+            var reloadCameraBadges = applyLayout != null && !suspendVideoSurfaces;
+            if (reloadCameraBadges)
             {
-                tile.SuspendPopupPlacementForResize();
-                tile.SetVideoSurfaceVisible(false);
+                foreach (var tile in _tiles.Values)
+                    tile.SuspendPopupPlacementForResize();
+            }
+            if (suspendVideoSurfaces)
+            {
+                CameraGrid.Visibility = Visibility.Hidden;
+                foreach (var tile in _tiles.Values)
+                {
+                    tile.SuspendPopupPlacementForResize();
+                    tile.SetVideoSurfaceVisible(false);
+                }
             }
 
             if (applyLayout != null) applyLayout();
+
+            if (reloadCameraBadges)
+            {
+                // Force the final WPF bounds now. ResumePopupPlacement...
+                // queues each popup at Render priority, after these bounds
+                // have been committed but without waiting for D3D ContextIdle.
+                CameraGrid.InvalidateMeasure();
+                CameraGrid.InvalidateArrange();
+                CameraGrid.UpdateLayout();
+                foreach (var tile in _tiles.Values)
+                    tile.ResumePopupPlacementAfterResize();
+            }
 
             RunAfterNativeLayout(new Action(() =>
             {
@@ -235,12 +303,15 @@ namespace V3SClient.UI.Views
                     CameraGrid.InvalidateMeasure();
                     CameraGrid.InvalidateArrange();
                     CameraGrid.UpdateLayout();
-                    CameraGrid.Visibility = Visibility.Visible;
-                    foreach (var tile in _tiles.Values)
+                    if (suspendVideoSurfaces)
                     {
-                        tile.SetVideoSurfaceVisible(tile.Slot == null ||
-                            tile.Slot.State != LiveConnectionState_v3.Error);
-                        tile.ResumePopupPlacementAfterResize();
+                        CameraGrid.Visibility = Visibility.Visible;
+                        foreach (var tile in _tiles.Values)
+                        {
+                            tile.SetVideoSurfaceVisible(tile.Slot == null ||
+                                tile.Slot.State != LiveConnectionState_v3.Error);
+                            tile.ResumePopupPlacementAfterResize();
+                        }
                     }
                     QueueHeaderActionCentering();
                 }
@@ -268,6 +339,22 @@ namespace V3SClient.UI.Views
                 if (!IsLoaded || !LivePageHeader.IsVisible ||
                     LivePageHeader.ActualWidth <= 0 || HeaderActionPanel.ActualWidth <= 0)
                     return;
+                var shellWindow = Window.GetWindow(this) as ShellWindow_v3;
+                if (shellWindow != null && shellWindow.IsVirtualDesktopMode &&
+                    FormsScreen.AllScreens.Length > 1 && CameraGrid.ActualWidth > 0)
+                {
+                    // The centre of the virtual desktop is often exactly at
+                    // the bezel between two monitors. Keep the header actions
+                    // together on the left display instead of splitting the
+                    // controls across the physical screen boundary.
+                    // Preserve the complete title/status block; actions begin
+                    // immediately after it instead of covering its text.
+                    var desiredLeft = HeaderTitlePanel.TranslatePoint(
+                        new Point(HeaderTitlePanel.ActualWidth + 16, 0), this).X;
+                    var currentLeft = HeaderActionPanel.TranslatePoint(new Point(0, 0), this).X;
+                    _headerActionTransform.X = desiredLeft - (currentLeft - _headerActionTransform.X);
+                    return;
+                }
                 // Centre against the camera grid itself. The surrounding
                 // Shell navigation and camera sidebar are intentionally not
                 // included in this visual centre.
@@ -324,9 +411,26 @@ namespace V3SClient.UI.Views
             _tiles.Clear();
             CameraGrid.RowDefinitions.Clear();
             CameraGrid.ColumnDefinitions.Clear();
-            var dimensions = GetDimensions(_viewModel.Layout, _viewModel.Slots.Count);
-            for (var row = 0; row < dimensions.Item1; row++) CameraGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star), MinHeight = 120 });
-            for (var column = 0; column < dimensions.Item2; column++) CameraGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 150 });
+            var hasMergedCustomLayout = _viewModel.Layout == LiveLayoutMode_v3.Custom &&
+                                        _customLayoutRows > 0 && _customLayoutColumns > 0 &&
+                                        _customLayoutCells.Count > 0 &&
+                                        _customLayoutCells.Count == _viewModel.Slots.Count;
+            var dimensions = hasMergedCustomLayout
+                ? Tuple.Create(_customLayoutRows, _customLayoutColumns)
+                : GetDimensions(_viewModel.Layout, _viewModel.Slots.Count);
+            var compactGrid = dimensions.Item1 >= 5 || dimensions.Item2 >= 5;
+            // Use the current viewport to keep every requested custom slot
+            // inside the live panel.  This is intentionally not a fixed 6x6
+            // cap: installations with many cameras can use their full grid.
+            var viewportWidth = Math.Max(1d, CameraGrid.ActualWidth);
+            var viewportHeight = Math.Max(1d, CameraGrid.ActualHeight);
+            var minimumTileHeight = compactGrid ? Math.Max(32d, Math.Min(92d, viewportHeight / dimensions.Item1)) : 120d;
+            var minimumTileWidth = compactGrid ? Math.Max(44d, Math.Min(118d, viewportWidth / dimensions.Item2)) : 150d;
+            for (var row = 0; row < dimensions.Item1; row++) CameraGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star), MinHeight = minimumTileHeight });
+            for (var column = 0; column < dimensions.Item2; column++)
+            {
+                CameraGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = minimumTileWidth });
+            }
 
             var visualIndex = 0;
             foreach (var slot in _viewModel.Slots)
@@ -350,7 +454,11 @@ namespace V3SClient.UI.Views
                 // newly created or its slot instance genuinely changed.
                 if (tile.RequiresBind(slot))
                     tile.Bind(slot);
-                var placement = GetPlacement(_viewModel.Layout, visualIndex++, dimensions.Item2);
+                var customCell = hasMergedCustomLayout ? _customLayoutCells[visualIndex] : null;
+                var placement = customCell == null
+                    ? GetPlacement(_viewModel.Layout, visualIndex, dimensions.Item2)
+                    : Tuple.Create(customCell.Row, customCell.Column, customCell.RowSpan, customCell.ColumnSpan);
+                visualIndex++;
                 Grid.SetRow(tile, placement.Item1);
                 Grid.SetColumn(tile, placement.Item2);
                 Grid.SetRowSpan(tile, placement.Item3);
@@ -414,14 +522,21 @@ namespace V3SClient.UI.Views
             e.Handled = true;
         }
 
-        private static Tuple<int, int> GetDimensions(LiveLayoutMode_v3 layout, int count)
+        private Tuple<int, int> GetDimensions(LiveLayoutMode_v3 layout, int count)
         {
             if (layout == LiveLayoutMode_v3.Layout1x1) return Tuple.Create(1, 1);
             if (layout == LiveLayoutMode_v3.Layout2x2) return Tuple.Create(2, 2);
             if (layout == LiveLayoutMode_v3.Layout5Plus1 || layout == LiveLayoutMode_v3.Layout3x3) return Tuple.Create(3, 3);
             if (layout == LiveLayoutMode_v3.Layout16Plus1) return Tuple.Create(5, 5);
             if (layout == LiveLayoutMode_v3.Layout6x6) return Tuple.Create(6, 6);
-            var columns = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(count)));
+            // Fit the grid to the viewport aspect ratio instead of using a
+            // square-only grid.  A wide camera wall therefore uses more
+            // columns and fewer rows, avoiding the 10x10 overflow seen when
+            // a large group is selected.
+            var width = CameraGrid.ActualWidth > 0 ? CameraGrid.ActualWidth : 16d;
+            var height = CameraGrid.ActualHeight > 0 ? CameraGrid.ActualHeight : 9d;
+            var aspectRatio = Math.Max(1d, width / Math.Max(1d, height));
+            var columns = Math.Max(1, Math.Min(count, (int)Math.Ceiling(Math.Sqrt(count * aspectRatio))));
             return Tuple.Create((int)Math.Ceiling((double)count / columns), columns);
         }
 
@@ -515,18 +630,32 @@ namespace V3SClient.UI.Views
         {
             try
             {
-                foreach (var slot in (slots ?? Enumerable.Empty<LiveSlotViewModel_v3>()).ToList())
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    LiveTile_v3 tile;
-                    if (!_tiles.TryGetValue(slot.SlotId, out tile)) continue;
-                    if (slot.State == LiveConnectionState_v3.Connected ||
-                        slot.State == LiveConnectionState_v3.Connecting)
-                        continue;
-                    await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
-                    cancellationToken.ThrowIfCancellationRequested();
-                    await tile.ConnectAsync();
-                }
+                var targets = (slots ?? Enumerable.Empty<LiveSlotViewModel_v3>())
+                    .Where(slot => slot != null &&
+                        slot.State != LiveConnectionState_v3.Connected &&
+                        slot.State != LiveConnectionState_v3.Connecting)
+                    .Select(slot =>
+                    {
+                        LiveTile_v3 tile;
+                        return _tiles.TryGetValue(slot.SlotId, out tile) ? tile : null;
+                    })
+                    .Where(tile => tile != null)
+                    .ToArray();
+                cancellationToken.ThrowIfCancellationRequested();
+                await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
+                cancellationToken.ThrowIfCancellationRequested();
+                // Start every pipeline in one batch and deliberately do not
+                // await the whole batch here.  A tile exposes its surface on
+                // its own Playing event, so a fast camera is shown instantly
+                // while slow/offline cameras continue independently.
+                var connectTasks = targets.Select(tile => tile.ConnectAsync()).ToArray();
+                _ = Task.WhenAll(connectTasks).ContinueWith(task =>
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        if (task.IsFaulted)
+                            LoggerManager.LogException(task.Exception, "Live View _v3 batch camera connection failed");
+                        if (!_disposed) UpdateStatus();
+                    })));
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { LoggerManager.LogException(ex, "Live View _v3 deferred camera connection failed"); }
@@ -550,7 +679,7 @@ namespace V3SClient.UI.Views
             var camera = (sender as FrameworkElement)?.Tag as Camera;
             var slots = _viewModel.FillFromCamera(camera);
             BuildGrid();
-            foreach (var slot in slots) if (_tiles.ContainsKey(slot.SlotId)) await _tiles[slot.SlotId].ConnectAsync();
+            await ConnectSlotsDeferredAsync(slots, BeginCameraOperation());
         }
 
         private Camera ContextCamera(object sender)
@@ -573,7 +702,7 @@ namespace V3SClient.UI.Views
             if (camera == null) return;
             var slots = _viewModel.FillFromCamera(camera);
             BuildGrid();
-            foreach (var slot in slots) if (_tiles.ContainsKey(slot.SlotId)) await _tiles[slot.SlotId].ConnectAsync();
+            await ConnectSlotsDeferredAsync(slots, BeginCameraOperation());
         }
 
         private async void ContextConnect_Click(object sender, RoutedEventArgs e)
@@ -618,14 +747,66 @@ namespace V3SClient.UI.Views
             return (sender as FrameworkElement)?.Tag as Camera;
         }
 
-        private void InlineFill_Click(object sender, RoutedEventArgs e)
+        private async void InlineFill_Click(object sender, RoutedEventArgs e)
         {
             e.Handled = true;
             var camera = InlineCamera(sender);
             if (camera == null) return;
-            _viewModel.FillFromCamera(camera);
+            var slots = _viewModel.FillFromCamera(camera);
             BuildGrid();
             _viewModel.RefreshCameraIndicators();
+            await ConnectSlotsDeferredAsync(slots, BeginCameraOperation());
+        }
+
+        private void CameraGridViewport_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            // A Grid measured by a vertical ScrollViewer receives infinite
+            // height.  Consequently, an error overlay with wrapped text can
+            // dictate the desired height of its entire row.  Make the camera
+            // wall exactly the viewport size so star rows/columns stay equal
+            // regardless of a tile's connection state.
+            if (CameraGridViewport.ActualWidth <= 0 || CameraGridViewport.ActualHeight <= 0)
+                return;
+
+            var width = CameraGridViewport.ActualWidth;
+            var height = CameraGridViewport.ActualHeight;
+            if (double.IsNaN(CameraGrid.Width) || Math.Abs(CameraGrid.Width - width) > 0.5)
+                CameraGrid.Width = width;
+            if (double.IsNaN(CameraGrid.Height) || Math.Abs(CameraGrid.Height - height) > 0.5)
+                CameraGrid.Height = height;
+
+            // Do not call BuildGrid from SizeChanged. Rebuilding creates and
+            // arranges native video hosts, which raises SizeChanged again and
+            // can spiral into an unbounded layout/repaint loop. The existing
+            // tiles remain intact; only their row/column limits are updated.
+            UpdateGridCellMinimums();
+            ScheduleResizeSettle();
+        }
+
+        private void UpdateGridCellMinimums()
+        {
+            var rows = CameraGrid.RowDefinitions.Count;
+            var columns = CameraGrid.ColumnDefinitions.Count;
+            if (rows == 0 || columns == 0 ||
+                CameraGridViewport.ActualWidth <= 0 || CameraGridViewport.ActualHeight <= 0)
+                return;
+
+            var compactGrid = rows >= 5 || columns >= 5;
+            var minimumHeight = compactGrid
+                ? Math.Max(32d, Math.Min(92d, CameraGridViewport.ActualHeight / rows))
+                : 120d;
+            var minimumWidth = compactGrid
+                ? Math.Max(44d, Math.Min(118d, CameraGridViewport.ActualWidth / columns))
+                : 150d;
+
+            // Avoid invalidating the complete Grid for every pixel dragged
+            // when the effective minimum did not actually change.
+            foreach (var row in CameraGrid.RowDefinitions)
+                if (Math.Abs(row.MinHeight - minimumHeight) > 0.5)
+                    row.MinHeight = minimumHeight;
+            foreach (var column in CameraGrid.ColumnDefinitions)
+                if (Math.Abs(column.MinWidth - minimumWidth) > 0.5)
+                    column.MinWidth = minimumWidth;
         }
 
         private async void InlineConnect_Click(object sender, RoutedEventArgs e)
@@ -652,6 +833,95 @@ namespace V3SClient.UI.Views
         private void LayoutMenuButton_Click(object sender, RoutedEventArgs e) { LayoutPopup.IsOpen = !LayoutPopup.IsOpen; }
         private void LayoutMenu_MouseEnter(object sender, MouseEventArgs e) { LayoutPopup.IsOpen = true; }
         private void LayoutPopup_MouseLeave(object sender, MouseEventArgs e) { LayoutPopup.IsOpen = false; }
+
+        private void DisplayMenuButton_Click(object sender, RoutedEventArgs e)
+        {
+            var shellWindow = Window.GetWindow(this) as ShellWindow_v3;
+            if (shellWindow != null)
+            {
+                shellWindow.ToggleVirtualDesktopMode();
+                // ShellWindow has now committed its virtual-screen bounds.
+                // Reapply only the Grid placement (never the camera bindings)
+                // so preset layouts become monitor-safe immediately.
+                Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(() =>
+                {
+                    if (!_disposed && _fullscreenTile == null)
+                    {
+                        BuildGrid(deferStaleCleanup: true);
+                        QueueHeaderActionCentering();
+                    }
+                }));
+            }
+        }
+
+        private void DisplayMode_Click(object sender, RoutedEventArgs e)
+        {
+            var mode = Convert.ToString((sender as FrameworkElement)?.Tag);
+            if (string.IsNullOrWhiteSpace(mode)) return;
+
+            try
+            {
+                // DisplaySwitch is the supported Windows command behind the
+                // Win+P options: internal, clone, extend and external.
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = System.IO.Path.Combine(Environment.SystemDirectory, "DisplaySwitch.exe"),
+                    Arguments = mode,
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                LoggerManager.LogError("Không thể thay đổi chế độ nhiều màn hình", ex);
+            }
+        }
+
+        private void RebuildDisplayScreenList()
+        {
+            DisplayScreenList.Children.Clear();
+            var screens = FormsScreen.AllScreens;
+            for (var index = 0; index < screens.Length; index++)
+            {
+                var screen = screens[index];
+                var displayNumber = index + 1;
+                var label = string.Format(
+                    "Màn hình {0}{1} · {2} × {3}",
+                    displayNumber,
+                    screen.Primary ? " (chính)" : string.Empty,
+                    screen.WorkingArea.Width,
+                    screen.WorkingArea.Height);
+                var button = new Button
+                {
+                    Content = new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        Children =
+                        {
+                            new MahApps.Metro.IconPacks.PackIconMaterial
+                            {
+                                Kind = MahApps.Metro.IconPacks.PackIconMaterialKind.Monitor,
+                                Width = 14,
+                                Height = 14,
+                                Margin = new Thickness(0, 0, 6, 0)
+                            },
+                            new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, FontSize = 10 }
+                        }
+                    },
+                    Style = (Style)FindResource("SecondaryButtonStyle_v3"),
+                    HorizontalContentAlignment = HorizontalAlignment.Left,
+                    Margin = new Thickness(0, 1, 0, 1),
+                    Padding = new Thickness(7, 5, 7, 5),
+                    ToolTip = "Mở lưới camera toàn màn hình tại màn hình này"
+                };
+                button.Click += (s, e) =>
+                {
+                    DisplayPopup.IsOpen = false;
+                    SetGridFullscreen(true, screen);
+                };
+                DisplayScreenList.Children.Add(button);
+            }
+        }
+
         private static string LayoutLabel(LiveLayoutMode_v3 layout)
         {
             switch (layout)
@@ -670,6 +940,7 @@ namespace V3SClient.UI.Views
         {
             int count;
             if (!int.TryParse(CustomSlotText.Text, out count)) count = 10;
+            count = Math.Max(1, count);
             _viewModel.ApplyCustomLayout(count);
             CustomSlotText.Text = _viewModel.CustomSlotCount.ToString();
             LayoutMenuButton.Content = "▦ Custom";
@@ -681,10 +952,10 @@ namespace V3SClient.UI.Views
         {
             int count;
             if (!int.TryParse(InlineCustomSlotText.Text, out count)) count = 10;
-            count = Math.Max(1, Math.Min(100, count));
+            count = Math.Max(1, count);
             _viewModel.ApplyCustomLayout(count);
-            InlineCustomSlotText.Text = count.ToString();
-            LayoutMenuButton.Content = "Layout " + count;
+            InlineCustomSlotText.Text = _viewModel.CustomSlotCount.ToString();
+            LayoutMenuButton.Content = "Layout " + _viewModel.CustomSlotCount;
             BuildGrid(deferStaleCleanup: true);
         }
 
@@ -692,21 +963,79 @@ namespace V3SClient.UI.Views
         {
             int count;
             if (!int.TryParse(VisibleCustomSlotText.Text, out count)) count = 10;
-            count = Math.Max(1, Math.Min(100, count));
+            count = Math.Max(1, count);
             _viewModel.ApplyCustomLayout(count);
-            VisibleCustomSlotText.Text = count.ToString();
-            LayoutMenuButton.Content = "Layout " + count;
+            VisibleCustomSlotText.Text = _viewModel.CustomSlotCount.ToString();
+            LayoutMenuButton.Content = "Layout " + _viewModel.CustomSlotCount;
             BuildGrid(deferStaleCleanup: true);
         }
 
+        private void OpenCustomLayoutEditor_Click(object sender, RoutedEventArgs e)
+        {
+            OpenCustomLayoutEditor();
+        }
+
+        private void OpenCustomLayoutEditor()
+        {
+            int rows, columns;
+            List<CustomLayoutCell_v3> currentCells;
+            GetLayoutForEditor(out rows, out columns, out currentCells);
+            var dialog = new CustomLayoutDialog_v3(rows, columns, currentCells)
+            {
+                Owner = Window.GetWindow(this)
+            };
+            if (dialog.ShowDialog() != true) return;
+
+            _customLayoutRows = dialog.Rows;
+            _customLayoutColumns = dialog.Columns;
+            _customLayoutCells = dialog.LayoutCells.Select(cell => cell.Clone()).ToList();
+            _viewModel.ApplyCustomLayout(_customLayoutCells.Count);
+            CustomSlotText.Text = _customLayoutCells.Count.ToString();
+            if (InlineCustomSlotText != null) InlineCustomSlotText.Text = _customLayoutCells.Count.ToString();
+            if (VisibleCustomSlotText != null) VisibleCustomSlotText.Text = _customLayoutCells.Count.ToString();
+            LayoutMenuButton.Content = "Custom";
+            LayoutPopup.IsOpen = false;
+            BuildGrid(deferStaleCleanup: true);
+        }
+
+        private void GetLayoutForEditor(out int rows, out int columns, out List<CustomLayoutCell_v3> cells)
+        {
+            if (_viewModel.Layout == LiveLayoutMode_v3.Custom && _customLayoutRows > 0 &&
+                _customLayoutColumns > 0 && _customLayoutCells.Count == _viewModel.Slots.Count)
+            {
+                rows = _customLayoutRows;
+                columns = _customLayoutColumns;
+                cells = _customLayoutCells.Select(cell => cell.Clone()).ToList();
+                return;
+            }
+
+            var dimensions = GetDimensions(_viewModel.Layout, _viewModel.Slots.Count);
+            rows = dimensions.Item1;
+            columns = dimensions.Item2;
+            var editorColumns = columns;
+            cells = _viewModel.Slots.Select((slot, index) =>
+            {
+                var placement = GetPlacement(_viewModel.Layout, index, editorColumns);
+                return new CustomLayoutCell_v3
+                {
+                    Row = placement.Item1,
+                    Column = placement.Item2,
+                    RowSpan = placement.Item3,
+                    ColumnSpan = placement.Item4
+                };
+            }).ToList();
+        }
 
         private void CustomPreset_Click(object sender, RoutedEventArgs e)
         {
             int count;
             if (!int.TryParse(Convert.ToString((sender as FrameworkElement)?.Tag), out count)) return;
+            _customLayoutRows = 0;
+            _customLayoutColumns = 0;
+            _customLayoutCells.Clear();
             _viewModel.ApplyCustomLayout(count);
-            CustomSlotText.Text = count.ToString();
-            LayoutMenuButton.Content = "Layout " + count;
+            CustomSlotText.Text = _viewModel.CustomSlotCount.ToString();
+            LayoutMenuButton.Content = "Layout " + _viewModel.CustomSlotCount;
             LayoutPopup.IsOpen = false;
             BuildGrid(deferStaleCleanup: true);
         }
@@ -814,10 +1143,11 @@ namespace V3SClient.UI.Views
             {
                 var transitionVersion = ++_fullscreenTransitionVersion;
                 _fullscreenTile = tile;
-                // Hide the grid while changing spans/window chrome. This keeps
-                // WPF from painting an intermediate 4x4 layout before the
-                // selected tile becomes fullscreen.
-                CameraGrid.Visibility = Visibility.Hidden;
+                // Keep the selected tile visible through the span/window
+                // transition. Its existing sub-stream scales immediately;
+                // hiding it here caused the noticeable black flash/stutter
+                // before the fullscreen surface reappeared.
+                CameraGrid.Visibility = Visibility.Visible;
                 foreach (UIElement child in CameraGrid.Children)
                 {
                     var cameraTile = child as LiveTile_v3;
@@ -827,12 +1157,10 @@ namespace V3SClient.UI.Views
                         cameraTile.SetFullscreenVisibility(selected);
                         cameraTile.SetFullscreenMode(selected);
                         cameraTile.HideTransientOverlays();
-                        // WindowsFormsHost ignores WPF opacity. Hide every
-                        // native surface before changing the selected tile's
-                        // span/window size; otherwise a small-window frame is
-                        // painted at (0,0) for one tick before fullscreen.
-                        // The selected player remains connected and is shown
-                        // again after the fullscreen layout has settled.
+                        // A D3D sink retains its previous HWND rectangle for
+                        // one render pass. Hide it during that pass so its old
+                        // small grid-sized surface cannot flash in the centre
+                        // of the fullscreen camera.
                         cameraTile.SetVideoSurfaceVisible(false);
                     }
                     child.Visibility = ReferenceEquals(child, tile) ? Visibility.Visible : Visibility.Collapsed;
@@ -840,13 +1168,8 @@ namespace V3SClient.UI.Views
                 Grid.SetRow(tile, 0); Grid.SetColumn(tile, 0);
                 Grid.SetRowSpan(tile, Math.Max(1, CameraGrid.RowDefinitions.Count));
                 Grid.SetColumnSpan(tile, Math.Max(1, CameraGrid.ColumnDefinitions.Count));
-                tile.Opacity = 0;
+                tile.Opacity = 1;
                 EnterTileFullscreen();
-                // Keep sub1 rendered while a second native player prepares
-                // main in the background. The tile swaps presentation only
-                // after main has reached Playing.
-                _ = tile.PrepareFullscreenMainStreamAsync(
-                    LiveViewModel_v3.SelectFullscreenStream(tile.Slot.Camera));
                 // WindowState, shell chrome, and the grid spans all change
                 // in this transition. Render priority occurs before the
                 // shell's final arrange on small windows, producing the
@@ -859,10 +1182,14 @@ namespace V3SClient.UI.Views
                         CameraGrid.InvalidateMeasure();
                         CameraGrid.InvalidateArrange();
                         CameraGrid.UpdateLayout();
-                        CameraGrid.Visibility = Visibility.Visible;
+                        // Start the heavier main stream only after the WPF
+                        // window and the already-playing grid stream have
+                        // reached their final fullscreen bounds.
                         tile.SetVideoSurfaceVisible(tile.Slot == null ||
                             tile.Slot.State != LiveConnectionState_v3.Error);
-                        tile.Opacity = 1;
+                        if (tile.Slot != null && tile.Slot.Camera != null)
+                            _ = tile.PrepareFullscreenMainStreamAsync(
+                                LiveViewModel_v3.SelectFullscreenStream(tile.Slot.Camera));
                         tile.RefreshPopupPlacement();
                     }
                 }));
@@ -877,6 +1204,8 @@ namespace V3SClient.UI.Views
         {
             var window = Window.GetWindow(this);
             if (window == null) return;
+            var shellWindow = window as ShellWindow_v3;
+            _tileUsesVirtualDesktop = shellWindow != null && shellWindow.IsVirtualDesktopMode;
             // If the user is already viewing the complete grid fullscreen,
             // transfer directly to the selected-camera fullscreen state. Do
             // not restore the normal/small window first: doing so resizes all
@@ -910,13 +1239,23 @@ namespace V3SClient.UI.Views
             SidebarColumn.MaxWidth = double.PositiveInfinity;
             SidebarColumn.Width = new GridLength(0);
             LivePageHeader.Visibility = Visibility.Collapsed;
-            var shell = window.Content as ShellPage_v3;
+            var shell = GetShellPage(window);
             if (shell != null) shell.SetChromeVisible(false);
-            // Keep the normal Windows title bar and maximize to the working
-            // area. Changing WindowStyle/ResizeMode/Topmost before and after
-            // maximizing forces extra HWND resizes, which made both fullscreen
-            // buttons stutter even with an empty grid.
-            window.WindowState = WindowState.Maximized;
+            // A selected camera is easier to observe on one monitor. Keep the
+            // multi-monitor wall state in ShellWindow, but temporarily place
+            // this presentation on the primary display. Exiting restores the
+            // virtual desktop wall.
+            if (_tileUsesVirtualDesktop)
+            {
+                shellWindow.EnterPrimaryScreenPresentation();
+            }
+            else
+            {
+                if (shellWindow != null)
+                    shellWindow.EnterCurrentScreenFullscreen();
+                else
+                    window.WindowState = WindowState.Maximized;
+            }
         }
 
         private void ExitTileFullscreen()
@@ -946,18 +1285,29 @@ namespace V3SClient.UI.Views
             }
             if (window != null && _tileWindowStateSaved)
             {
-                var shell = window.Content as ShellPage_v3;
+                var shell = GetShellPage(window);
                 if (shell != null) shell.SetChromeVisible(true);
-                window.WindowState = _tileWindowState;
-                if (_tileWindowState == WindowState.Normal)
+                var shellWindow = window as ShellWindow_v3;
+                if (_tileUsesVirtualDesktop && shellWindow != null)
                 {
-                    window.Left = _tileWindowLeft;
-                    window.Top = _tileWindowTop;
-                    window.Width = _tileWindowWidth;
-                    window.Height = _tileWindowHeight;
+                    shellWindow.RestoreVirtualDesktopPresentation();
                 }
+                else
+                {
+                    window.WindowState = _tileWindowState;
+                    if (_tileWindowState == WindowState.Normal)
+                    {
+                        window.Left = _tileWindowLeft;
+                        window.Top = _tileWindowTop;
+                        window.Width = _tileWindowWidth;
+                        window.Height = _tileWindowHeight;
+                    }
+                }
+                window.ResizeMode = _tileResizeMode;
+                window.Topmost = _tileTopmost;
             }
             _tileWindowStateSaved = false;
+            _tileUsesVirtualDesktop = false;
             foreach (var tile in _tiles.Values)
             {
                 // Fullscreen temporarily collapses every non-selected tile.
@@ -1010,12 +1360,12 @@ namespace V3SClient.UI.Views
 
         private void RunAfterNativeLayout(Action action)
         {
-            // Native D3D11 video can receive its final HWND bounds after WPF
-            // has processed Render priority. ContextIdle is late enough for
-            // layout to settle but does not wait for the whole application to
-            // become idle (which is slow while many camera tiles update).
-            Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, new Action(() =>
-                Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, action)));
+            // Two render turns are enough for WPF to commit the final HWND
+            // bounds. ContextIdle can be delayed for seconds by active video
+            // rendering, which made fullscreen/resize feel like it was
+            // loading even though all decoder pipelines were already ready.
+            Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(() =>
+                Dispatcher.BeginInvoke(DispatcherPriority.Render, action)));
         }
 
         private void FullscreenButton_Click(object sender, RoutedEventArgs e)
@@ -1026,18 +1376,26 @@ namespace V3SClient.UI.Views
                 return;
             }
 
-            SetGridFullscreen(!_gridFullscreen);
+            // The original client treats fullscreen as a virtual-desktop
+            // wall: when Windows is in Extend mode, one camera wall spans
+            // every display instead of choosing a single target screen.
+            var shellWindow = Window.GetWindow(this) as ShellWindow_v3;
+            if (shellWindow != null)
+            {
+                shellWindow.ToggleVirtualDesktopMode();
+                QueueHeaderActionCentering();
+            }
         }
 
-        private void SetGridFullscreen(bool entering)
+        private void SetGridFullscreen(bool entering, FormsScreen targetScreen = null)
         {
             var window = Window.GetWindow(this);
             if (window == null) return;
-            if (entering == _gridFullscreen) return;
+            if (entering == _gridFullscreen && targetScreen == null) return;
 
-            RunGridGeometryTransition(new Action(() =>
+                RunGridGeometryTransition(new Action(() =>
             {
-                if (entering)
+                if (entering && !_gridFullscreen)
                 {
                     _gridWindowState = window.WindowState;
                     // WindowState alone is not enough.  When a maximized WPF
@@ -1055,7 +1413,7 @@ namespace V3SClient.UI.Views
                     _gridWindowStateSaved = true;
                 }
                 _gridFullscreen = entering;
-                var shell = window.Content as ShellPage_v3;
+                var shell = GetShellPage(window);
                 if (shell != null) shell.SetChromeVisible(!entering);
                 CameraSidebar.Visibility = entering ? Visibility.Collapsed : Visibility.Visible;
                 UpdateSidebarOpenButtons();
@@ -1066,6 +1424,19 @@ namespace V3SClient.UI.Views
                 // one native window resize.
                 if (entering)
                 {
+                    if (targetScreen != null)
+                    {
+                        // A maximized WPF window remains on its old monitor
+                        // until it has normal bounds on the target monitor.
+                        // Move it first, then maximize in the same native
+                        // layout transaction so D3D video surfaces do not
+                        // flash on the previous display.
+                        window.WindowState = WindowState.Normal;
+                        window.Left = targetScreen.WorkingArea.Left;
+                        window.Top = targetScreen.WorkingArea.Top;
+                        window.Width = targetScreen.WorkingArea.Width;
+                        window.Height = targetScreen.WorkingArea.Height;
+                    }
                     window.WindowState = WindowState.Maximized;
                 }
                 else
@@ -1086,7 +1457,7 @@ namespace V3SClient.UI.Views
                 }
                 if (!entering) _gridWindowStateSaved = false;
                 UpdateFullscreenControls();
-            }));
+                }), suspendVideoSurfaces: true);
         }
 
         private void UpdateFullscreenControls()
@@ -1095,10 +1466,6 @@ namespace V3SClient.UI.Views
             var icon = _gridFullscreen
                 ? MahApps.Metro.IconPacks.PackIconMaterialKind.FullscreenExit
                 : MahApps.Metro.IconPacks.PackIconMaterialKind.Fullscreen;
-            HeaderFullscreenButton.ToolTip = tooltip;
-            HeaderFullscreenIcon.Kind = icon;
-            LiveToolbarFullscreenButton.ToolTip = tooltip;
-            LiveToolbarFullscreenIcon.Kind = icon;
         }
 
         private void ToggleSidebar_Click(object sender, RoutedEventArgs e)
@@ -1111,7 +1478,7 @@ namespace V3SClient.UI.Views
                 SidebarColumn.MaxWidth = hide ? double.PositiveInfinity : 320;
                 SidebarColumn.Width = hide ? new GridLength(0) : new GridLength(0.20, GridUnitType.Star);
                 UpdateSidebarOpenButtons();
-            }));
+            }), suspendVideoSurfaces: false);
         }
 
         private void UpdateSidebarOpenButtons()

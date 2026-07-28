@@ -2,7 +2,10 @@ using System;
 using System.Configuration;
 using System.IO;
 using System.ComponentModel;
+using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Interop;
+using System.Windows.Input;
 using V3SClient.UI.Views;
 using V3SClient.viewModels;
 using V3SClient.libs;
@@ -11,9 +14,48 @@ namespace V3SClient.window
 {
     public partial class ShellWindow_v3 : Window
     {
+        // ShellView is hosted inside the rounded outer Border, therefore it
+        // cannot be obtained through Window.Content by child pages.
+        public ShellPage_v3 ShellPage { get { return ShellView; } }
         private readonly ShellViewModel_v3 _viewModel;
         private static bool _gstreamerInitialized;
         private bool _logoutRequested;
+        private const uint SwpNoZOrder = 0x0004;
+        private const uint SwpNoActivate = 0x0010;
+        private const uint SwpFrameChanged = 0x0020;
+        private const uint SwpNoSize = 0x0001;
+        private const uint SwpNoMove = 0x0002;
+        private static readonly IntPtr HwndTop = IntPtr.Zero;
+        private static readonly IntPtr HwndTopmost = new IntPtr(-1);
+        private static readonly IntPtr HwndNoTopmost = new IntPtr(-2);
+        private const int GwlStyle = -16;
+        private const int GwlExStyle = -20;
+        private const int WsCaption = 0x00C00000;
+        private const int WsThickFrame = 0x00040000;
+        private const int WsBorder = 0x00800000;
+        private const int WsDlgFrame = 0x00400000;
+        private const int WsExClientEdge = 0x00000200;
+        private const int WsExWindowEdge = 0x00000100;
+        private bool _isVirtualDesktopMode;
+        private Rect _normalWindowBounds;
+        private const int WmNcHitTest = 0x0084;
+        private const int HtLeft = 10, HtRight = 11, HtTop = 12, HtTopLeft = 13, HtTopRight = 14, HtBottom = 15, HtBottomLeft = 16, HtBottomRight = 17;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct NativeRect { public int Left, Top, Right, Bottom; }
+        public bool IsVirtualDesktopMode { get { return _isVirtualDesktopMode; } }
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter,
+            int x, int y, int width, int height, uint flags);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+        [DllImport("user32.dll")]
+        private static extern bool GetWindowRect(IntPtr hWnd, out NativeRect rect);
 
         public ShellWindow_v3()
         {
@@ -27,6 +69,7 @@ namespace V3SClient.window
             _viewModel = new ShellViewModel_v3();
             DataContext = _viewModel;
             ShellView.DataContext = _viewModel;
+            SourceInitialized += ShellWindow_SourceInitialized;
             Closed += (s, e) =>
             {
                 _viewModel.Dispose();
@@ -58,14 +101,19 @@ namespace V3SClient.window
 
         public void LogoutAndReturnToLogin()
         {
+            if (_logoutRequested)
+                return;
+
             _logoutRequested = true;
             Close();
-            Dispatcher.BeginInvoke(new Action(() =>
+            Application.Current.Dispatcher.BeginInvoke(new Action(() =>
             {
                 var login = new LoginWindow_v3();
+                Application.Current.MainWindow = login;
                 if (login.ShowDialog() == true)
                 {
                     var next = new ShellWindow_v3();
+                    Application.Current.MainWindow = next;
                     next.Show();
                 }
                 else Application.Current.Shutdown();
@@ -79,11 +127,28 @@ namespace V3SClient.window
 
             var bundledRuntimeRoot = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "x64");
             var configuredRuntimeRoot = ConfigurationManager.AppSettings["GStreamerRoot_v3"];
-            var runtimeRoot = !string.IsNullOrWhiteSpace(configuredRuntimeRoot) &&
-                              Directory.Exists(Path.Combine(configuredRuntimeRoot, "bin")) &&
-                              Directory.Exists(Path.Combine(configuredRuntimeRoot, "lib", "gstreamer-1.0"))
+            var installedRuntimeRoot = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                "gstreamer", "1.0", "msvc_x86_64");
+
+            // The copied x64 folder in bin\Debug is not a distributable
+            // GStreamer runtime (it only contains headers/pkgconfig after the
+            // merge).  It must never replace a complete installed runtime,
+            // otherwise Parse.Launch cannot find rtspsrc.
+            var runtimeRoot = IsCompleteGStreamerRuntime(configuredRuntimeRoot)
                 ? configuredRuntimeRoot
-                : bundledRuntimeRoot;
+                : IsCompleteGStreamerRuntime(installedRuntimeRoot)
+                    ? installedRuntimeRoot
+                    : IsCompleteGStreamerRuntime(bundledRuntimeRoot)
+                        ? bundledRuntimeRoot
+                        : null;
+
+            if (string.IsNullOrWhiteSpace(runtimeRoot))
+            {
+                libs.LoggerManager.LogError(
+                    "GStreamer runtime is incomplete: the RTSP plugin (gstrtsp.dll) was not found.", null);
+                return;
+            }
             var runtimeBin = Path.Combine(runtimeRoot, "bin");
             var pluginPath = Path.Combine(runtimeRoot, "lib", "gstreamer-1.0");
             var gioModulePath = Path.Combine(runtimeRoot, "lib", "gio", "modules");
@@ -102,6 +167,174 @@ namespace V3SClient.window
             Gst.Application.Init();
             libs.LoggerManager.LogInfo("Live View _v3 GStreamer runtime: " + runtimeRoot);
             _gstreamerInitialized = true;
+        }
+        private void ShellWindow_SourceInitialized(object sender, EventArgs e)
+        {
+            HwndSource.FromHwnd(new WindowInteropHelper(this).Handle)?.AddHook(WindowResizeHook);
+        }
+        private IntPtr WindowResizeHook(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            if (message != WmNcHitTest || _isVirtualDesktopMode || ResizeMode == ResizeMode.NoResize || !GetWindowRect(hwnd, out var bounds))
+                return IntPtr.Zero;
+            var point = lParam.ToInt64();
+            var x = unchecked((short)(point & 0xffff));
+            var y = unchecked((short)((point >> 16) & 0xffff));
+            const int edge = 8;
+            var left = x < bounds.Left + edge; var right = x >= bounds.Right - edge;
+            var top = y < bounds.Top + edge; var bottom = y >= bounds.Bottom - edge;
+            int hit = top ? (left ? HtTopLeft : right ? HtTopRight : HtTop) : bottom ? (left ? HtBottomLeft : right ? HtBottomRight : HtBottom) : left ? HtLeft : right ? HtRight : 0;
+            if (hit == 0) return IntPtr.Zero;
+            handled = true;
+            return new IntPtr(hit);
+        }
+
+        public void ToggleVirtualDesktopMode()
+        {
+            if (_isVirtualDesktopMode)
+            {
+                WindowState = WindowState.Normal;
+                Left = _normalWindowBounds.Left;
+                Top = _normalWindowBounds.Top;
+                Width = _normalWindowBounds.Width;
+                Height = _normalWindowBounds.Height;
+                SetWindowPos(new WindowInteropHelper(this).Handle, HwndNoTopmost,
+                    0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate | SwpFrameChanged);
+                _isVirtualDesktopMode = false;
+                return;
+            }
+
+            var bounds = WindowState == WindowState.Normal
+                ? new Rect(Left, Top, ActualWidth, ActualHeight)
+                : RestoreBounds;
+            if (bounds.Width > 0 && bounds.Height > 0)
+                _normalWindowBounds = bounds;
+
+            WindowState = WindowState.Normal;
+            WindowStyle = WindowStyle.None;
+            var virtualScreen = System.Windows.Forms.SystemInformation.VirtualScreen;
+            // Set the WPF geometry as well as the native HWND geometry. The
+            // shell's layout pass otherwise restores its old single-monitor
+            // Width/Height immediately after SetWindowPos.
+            Left = virtualScreen.Left;
+            Top = virtualScreen.Top;
+            Width = virtualScreen.Width;
+            Height = virtualScreen.Height;
+            UpdateLayout();
+            var handle = new WindowInteropHelper(this).Handle;
+            RemoveNativeWindowFrame(handle);
+            // A virtual desktop must span monitors, but it must not become a
+            // global topmost window.  Topmost also promotes child Popup HWNDs
+            // (camera IDs) above unrelated foreground applications.
+            SetWindowPos(handle, HwndNoTopmost, virtualScreen.Left, virtualScreen.Top,
+                virtualScreen.Width, virtualScreen.Height,
+                SwpNoActivate | SwpFrameChanged);
+            _isVirtualDesktopMode = true;
+            LoggerManager.LogInfo(string.Format(
+                "Live View virtual desktop enabled: {0},{1} {2}x{3}.",
+                virtualScreen.Left, virtualScreen.Top, virtualScreen.Width, virtualScreen.Height));
+        }
+
+        /// <summary>
+        /// Expands the current window over its current monitor, including the
+        /// taskbar area, without promoting it to a global topmost window.
+        /// LivePage restores the previous bounds when tile fullscreen ends.
+        /// </summary>
+        public void EnterCurrentScreenFullscreen()
+        {
+            if (_isVirtualDesktopMode)
+                return;
+
+            var handle = new WindowInteropHelper(this).Handle;
+            var screen = System.Windows.Forms.Screen.FromHandle(handle);
+            var bounds = screen.Bounds;
+            WindowState = WindowState.Normal;
+            Left = bounds.Left;
+            Top = bounds.Top;
+            Width = bounds.Width;
+            Height = bounds.Height;
+            UpdateLayout();
+            SetWindowPos(handle, HwndTop, bounds.Left, bounds.Top, bounds.Width, bounds.Height,
+                SwpFrameChanged);
+        }
+
+        /// <summary>
+        /// Keeps virtual-desktop mode enabled for later restoration, while a
+        /// single selected camera occupies only the user's primary monitor.
+        /// </summary>
+        public void EnterPrimaryScreenPresentation()
+        {
+            if (!_isVirtualDesktopMode)
+            {
+                EnterCurrentScreenFullscreen();
+                return;
+            }
+
+            var bounds = System.Windows.Forms.Screen.PrimaryScreen.Bounds;
+            var handle = new WindowInteropHelper(this).Handle;
+            WindowState = WindowState.Normal;
+            Left = bounds.Left;
+            Top = bounds.Top;
+            Width = bounds.Width;
+            Height = bounds.Height;
+            UpdateLayout();
+            SetWindowPos(handle, HwndTop, bounds.Left, bounds.Top, bounds.Width, bounds.Height,
+                SwpFrameChanged);
+        }
+
+        /// <summary>Restores the two/multi-monitor wall after a single-camera view.</summary>
+        public void RestoreVirtualDesktopPresentation()
+        {
+            if (!_isVirtualDesktopMode)
+                return;
+
+            var bounds = System.Windows.Forms.SystemInformation.VirtualScreen;
+            var handle = new WindowInteropHelper(this).Handle;
+            WindowState = WindowState.Normal;
+            Left = bounds.Left;
+            Top = bounds.Top;
+            Width = bounds.Width;
+            Height = bounds.Height;
+            UpdateLayout();
+            SetWindowPos(handle, HwndNoTopmost, bounds.Left, bounds.Top, bounds.Width, bounds.Height,
+                SwpFrameChanged);
+        }
+
+        /// <summary>
+        /// Mirrors the original MainWindow title-bar behavior: a drag from
+        /// virtual-desktop mode first restores the normal bounds, then lets
+        /// Windows move the window naturally.
+        /// </summary>
+        public void BeginMoveFromHeader()
+        {
+            if (_isVirtualDesktopMode)
+                ToggleVirtualDesktopMode();
+
+            try
+            {
+                DragMove();
+            }
+            catch (InvalidOperationException)
+            {
+                // A button press can be cancelled while the shell is changing
+                // geometry. There is nothing to move in that case.
+            }
+        }
+
+        private static void RemoveNativeWindowFrame(IntPtr handle)
+        {
+            var style = GetWindowLong(handle, GwlStyle);
+            style &= ~(WsCaption | WsThickFrame | WsBorder | WsDlgFrame);
+            SetWindowLong(handle, GwlStyle, style);
+            var exStyle = GetWindowLong(handle, GwlExStyle);
+            exStyle &= ~(WsExClientEdge | WsExWindowEdge);
+            SetWindowLong(handle, GwlExStyle, exStyle);
+        }
+
+        private static bool IsCompleteGStreamerRuntime(string runtimeRoot)
+        {
+            if (string.IsNullOrWhiteSpace(runtimeRoot)) return false;
+            return File.Exists(Path.Combine(runtimeRoot, "bin", "gstreamer-1.0-0.dll")) &&
+                   File.Exists(Path.Combine(runtimeRoot, "lib", "gstreamer-1.0", "gstrtsp.dll"));
         }
     }
 }

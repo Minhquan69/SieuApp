@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,6 +21,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Media.Media3D;
 using System.Windows.Navigation;
+using System.Windows.Interop;
 using System.Windows.Shapes;
 
 using System.Windows.Threading;
@@ -70,6 +72,30 @@ namespace V3SClient
         System.Windows.Threading.DispatcherTimer _timerSendGPSBuffer;
 
         private System.Threading.Timer _midnightResetTimer;
+
+        private const uint SwpNoZOrder = 0x0004;
+        private const uint SwpNoActivate = 0x0010;
+        private const uint SwpFrameChanged = 0x0020;
+        private const int GwlStyle = -16;
+        private const int GwlExStyle = -20;
+        private const int WsCaption = 0x00C00000;
+        private const int WsThickFrame = 0x00040000;
+        private const int WsBorder = 0x00800000;
+        private const int WsDlgFrame = 0x00400000;
+        private const int WsExClientEdge = 0x00000200;
+        private const int WsExWindowEdge = 0x00000100;
+        private bool _isVirtualDesktopMode;
+        private Rect _normalWindowBounds = new Rect(100, 100, 1500, 1000);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter,
+            int x, int y, int width, int height, uint flags);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
 
         private InternalRuntimeInterop _internalRuntimeInterop;
         public MainWindow()
@@ -130,18 +156,19 @@ namespace V3SClient
             //    "GST_DEBUG",
             //    "3,rtspsrc:6,rtspconnection:6,rtp*:5"
             //);
-            System.Threading.Tasks.Task.Run(() =>
+            // Gst.Application.Init must complete before any live tile builds a
+            // pipeline.  Starting it on a background task created a race: a
+            // camera selected immediately after startup could reach
+            // Gst.Parse.Launch while plugin discovery was still incomplete.
+            try
             {
-                try
-                {
-                    Gst.Application.Init();
-                    LoggerManager.LogDebug("GStreamer initialized successfully.");
-                }
-                catch (Exception ex)
-                {
-                    LoggerManager.LogException(ex, "Lỗi khi khởi tạo GStreamer");
-                }
-            });
+                Gst.Application.Init();
+                LoggerManager.LogDebug("GStreamer initialized successfully.");
+            }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Lỗi khi khởi tạo GStreamer");
+            }
 
             LoggerManager.LogDebug("Khởi tạo môi trường hoàn tất.");
           
@@ -365,14 +392,55 @@ namespace V3SClient
 
         private void btn_MaximizeWindow_Click(object sender, RoutedEventArgs e)
         {
-            if (this.WindowState == WindowState.Maximized)
-            {
-                this.WindowState = WindowState.Normal;
-                this.WindowStartupLocation = WindowStartupLocation.CenterOwner;
-            }
-            else
-                this.WindowState = WindowState.Maximized;
+            ToggleVirtualDesktopMode();
+        }
 
+        public void ToggleVirtualDesktopMode()
+        {
+            if (_isVirtualDesktopMode) RestoreNormalWindowBounds();
+            else ApplyVirtualDesktopBounds();
+        }
+
+        private void ApplyVirtualDesktopBounds()
+        {
+            if (!_isVirtualDesktopMode)
+            {
+                var bounds = WindowState == WindowState.Normal
+                    ? new Rect(Left, Top, ActualWidth, ActualHeight)
+                    : RestoreBounds;
+                if (bounds.Width > 0 && bounds.Height > 0) _normalWindowBounds = bounds;
+            }
+
+            WindowState = WindowState.Normal;
+            WindowStyle = WindowStyle.None;
+            var virtualScreen = System.Windows.Forms.SystemInformation.VirtualScreen;
+            var handle = new WindowInteropHelper(this).Handle;
+            RemoveNativeWindowFrame(handle);
+            SetWindowPos(handle, IntPtr.Zero, virtualScreen.Left, virtualScreen.Top,
+                virtualScreen.Width, virtualScreen.Height, SwpNoZOrder | SwpNoActivate | SwpFrameChanged);
+            _isVirtualDesktopMode = true;
+            btn_MaximizeWindow.ToolTip = "Khôi phục cửa sổ";
+        }
+
+        private static void RemoveNativeWindowFrame(IntPtr handle)
+        {
+            var style = GetWindowLong(handle, GwlStyle);
+            style &= ~(WsCaption | WsThickFrame | WsBorder | WsDlgFrame);
+            SetWindowLong(handle, GwlStyle, style);
+            var exStyle = GetWindowLong(handle, GwlExStyle);
+            exStyle &= ~(WsExClientEdge | WsExWindowEdge);
+            SetWindowLong(handle, GwlExStyle, exStyle);
+        }
+
+        private void RestoreNormalWindowBounds()
+        {
+            WindowState = WindowState.Normal;
+            Left = _normalWindowBounds.Left;
+            Top = _normalWindowBounds.Top;
+            Width = _normalWindowBounds.Width;
+            Height = _normalWindowBounds.Height;
+            _isVirtualDesktopMode = false;
+            btn_MaximizeWindow.ToolTip = "Mở rộng toàn bộ màn hình";
         }
 
         private void btn_MinimizeWindow_Click(object sender, RoutedEventArgs e)

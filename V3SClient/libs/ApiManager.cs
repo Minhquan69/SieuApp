@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Net;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -151,6 +152,71 @@ namespace V3SClient.libs
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _backendToken);
         }
 
+        /// <summary>
+        /// Removes every credential discovered for the current user.  Keeping
+        /// endpoint tokens after returning to the login screen made a later
+        /// session continue to use the previous user's authorization.
+        /// </summary>
+        public void ClearAuthentication()
+        {
+            _backendToken = null;
+            _storageToken = null;
+            _assetsToken = null;
+            _reportToken = null;
+            _endpointRegistry.Clear();
+            _httpClient.DefaultRequestHeaders.Clear();
+        }
+
+        private const int AuthenticationRequestAttempts = 3;
+
+        private async Task<HttpResponseMessage> SendWithTransientRetryAsync(
+            Func<CancellationToken, Task<HttpResponseMessage>> operation,
+            CancellationToken cancellationToken,
+            string operationName)
+        {
+            Exception lastException = null;
+            for (var attempt = 1; attempt <= AuthenticationRequestAttempts; attempt++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                try
+                {
+                    using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+                    {
+                        timeout.CancelAfter(TimeSpan.FromSeconds(12));
+                        var response = await operation(timeout.Token).ConfigureAwait(false);
+                        if (!IsTransientStatus(response.StatusCode) || attempt == AuthenticationRequestAttempts)
+                            return response;
+
+                        response.Dispose();
+                        LoggerManager.LogWarn(operationName + " temporarily failed; retry " + attempt + "/" + AuthenticationRequestAttempts + ".");
+                    }
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                    lastException = new TimeoutException(operationName + " timed out.");
+                }
+                catch (HttpRequestException ex)
+                {
+                    lastException = ex;
+                }
+
+                if (attempt < AuthenticationRequestAttempts)
+                {
+                    LoggerManager.LogWarn(operationName + " connection failed; retry " + attempt + "/" + AuthenticationRequestAttempts + ".");
+                    await Task.Delay(TimeSpan.FromMilliseconds(700 * attempt), cancellationToken).ConfigureAwait(false);
+                }
+            }
+
+            throw new HttpRequestException(operationName + " could not connect after retry.", lastException);
+        }
+
+        private static bool IsTransientStatus(HttpStatusCode statusCode)
+        {
+            return statusCode == HttpStatusCode.RequestTimeout ||
+                   statusCode == (HttpStatusCode)429 ||
+                   (int)statusCode >= 500;
+        }
+
         public async Task<ApiManager.PlaybackSearchResult> GetPlaybackInfoAsync(string camId, System.DateTime start, System.DateTime end)
         {
             try
@@ -192,13 +258,18 @@ namespace V3SClient.libs
             {
                 var credentials = new { username = username, password = password };
                 var json = JsonConvert.SerializeObject(credentials);
-                var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-                var response = await _httpClient.PostAsync($"{_baseUrl}/api/auth/login", content);
+                var response = await SendWithTransientRetryAsync(async cancellationToken =>
+                {
+                    using (var content = new StringContent(json, Encoding.UTF8, "application/json"))
+                        return await _httpClient.PostAsync($"{_baseUrl}/api/auth/login", content, cancellationToken).ConfigureAwait(false);
+                }, CancellationToken.None, "Login");
                 if (response.IsSuccessStatusCode)
                 {
                     var resultJson = await response.Content.ReadAsStringAsync();
                     var result = JsonConvert.DeserializeObject<LoginResponse>(resultJson);
+
+                    if (result == null || string.IsNullOrWhiteSpace(result.access_token))
+                        return new LoginResult(false, null, "Máy chủ không trả về phiên đăng nhập hợp lệ.");
 
                     SetBackendToken(result.access_token);
 
@@ -214,7 +285,8 @@ namespace V3SClient.libs
             catch (Exception ex)
             {
                 LoggerManager.LogException(ex, $"Lỗi nghiêm trọng khi gọi LoginAsync cho {username}");
-                return new LoginResult(false, null, ex.Message);
+                ClearAuthentication();
+                return new LoginResult(false, null, "Không thể kết nối tới máy chủ sau nhiều lần thử. Vui lòng kiểm tra Internet hoặc DNS và thử lại.");
             }
         }
 
@@ -246,7 +318,8 @@ namespace V3SClient.libs
             //LoggerManager.LogDebug($"Gọi API lấy profiles được gán cho user: {_baseUrl}/api/v1/client-profiles/me/authorized");
             try
             {
-                var response = await _httpClient.GetAsync($"{_baseUrl}/api/v1/client-profiles/me/authorized", cancellationToken);
+                var response = await SendWithTransientRetryAsync(
+                    retryToken => _httpClient.GetAsync($"{_baseUrl}/api/v1/client-profiles/me/authorized", retryToken), cancellationToken, "Load authorized profiles");
                 if (response.IsSuccessStatusCode)
                 {
                     var resultJson = await response.Content.ReadAsStringAsync();
@@ -273,7 +346,8 @@ namespace V3SClient.libs
         {
             try
             {
-                var response = await _httpClient.GetAsync($"{_baseUrl}/api/user/profiles", cancellationToken);
+                var response = await SendWithTransientRetryAsync(
+                    retryToken => _httpClient.GetAsync($"{_baseUrl}/api/user/profiles", retryToken), cancellationToken, "Load profiles");
                 if (!response.IsSuccessStatusCode) return new List<ClientProfile>();
                 var json = await response.Content.ReadAsStringAsync();
                 var list = JsonConvert.DeserializeObject<List<ClientProfile>>(json);
@@ -364,7 +438,8 @@ namespace V3SClient.libs
 
             try
             {
-                var response = await _httpClient.GetAsync(url, cancellationToken);
+                var response = await SendWithTransientRetryAsync(
+                    retryToken => _httpClient.GetAsync(url, retryToken), cancellationToken, "Load cameras");
                 if (response.IsSuccessStatusCode)
                 {
                     var resultJson = await response.Content.ReadAsStringAsync();
@@ -387,7 +462,8 @@ namespace V3SClient.libs
             LoggerManager.LogDebug($"Gọi API lấy thông tin User hiện tại: {_baseUrl}/api/v1/auth/me");
             try
             {
-                var response = await _httpClient.GetAsync($"{_baseUrl}/api/v1/auth/me", cancellationToken);
+                var response = await SendWithTransientRetryAsync(
+                    retryToken => _httpClient.GetAsync($"{_baseUrl}/api/v1/auth/me", retryToken), cancellationToken, "Load current user");
                 if (response.IsSuccessStatusCode)
                 {
                     var resultJson = await response.Content.ReadAsStringAsync();

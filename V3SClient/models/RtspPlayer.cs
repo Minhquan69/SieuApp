@@ -1087,7 +1087,7 @@ namespace V3SClient.models
                                 var isInRoi = RoiInfoShow && !string.IsNullOrEmpty(item.RoiDwellSecondsInfo);
                                 localSolidBrush.Color = item.IsBlackList ? _redColorBrush :
                                     isInRoi ? GetRoiColor(item.RoiId) : _greenColorBrush;
-                                d2dRenderTarget.DrawRectangle(item.BoundingBox, localSolidBrush, 3.0f);
+                                d2dRenderTarget.DrawRectangle(item.BoundingBox, localSolidBrush, 2.5f);
                             }
 
                             // Pass 2: labels always stay above all boxes.

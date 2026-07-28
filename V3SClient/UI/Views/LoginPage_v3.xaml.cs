@@ -27,6 +27,9 @@ namespace V3SClient.UI.Views
         private void LoginPage_v3_Loaded(object sender, RoutedEventArgs e)
         {
             ScheduleProfileLayout();
+            UpdatePlatformCaption(this);
+            UpdateApplicationMarketingText(this);
+            NormalizeMarketingPanelBackground(this);
             var cachedLogin = DataContext as LoginViewModel_v3;
             if (cachedLogin != null && string.IsNullOrEmpty(PasswordInput.Password) && !string.IsNullOrEmpty(cachedLogin.Password))
                 PasswordInput.Password = cachedLogin.Password;
@@ -47,6 +50,60 @@ namespace V3SClient.UI.Views
             remember.Checked += (s, a) => { if (DataContext is LoginViewModel_v3 vm) vm.IsRememberMe = true; };
             remember.Unchecked += (s, a) => { if (DataContext is LoginViewModel_v3 vm) vm.IsRememberMe = false; };
             parent.Children.Insert(index + 1, remember);
+        }
+
+        private static void UpdateApplicationMarketingText(DependencyObject root)
+        {
+            if (root == null) return;
+
+            var text = root as TextBlock;
+            if (text != null && !string.IsNullOrWhiteSpace(text.Text) &&
+                text.Text.IndexOf("web", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                // This is the desktop client, not the web portal.  Keep the
+                // wording consistent even when the XAML was created from an
+                // earlier web-oriented template.
+                text.Text = text.FontSize >= 24
+                    ? "Giám sát video chuyên nghiệp\n" +
+                      "mạnh mẽ và linh hoạt\n" +
+                      "trên ứng dụng VMS."
+                    : "◉  Ứng dụng VMS";
+                return;
+            }
+
+            var count = VisualTreeHelper.GetChildrenCount(root);
+            for (var index = 0; index < count; index++)
+                UpdateApplicationMarketingText(VisualTreeHelper.GetChild(root, index));
+        }
+
+        private static void NormalizeMarketingPanelBackground(DependencyObject root)
+        {
+            if (root == null) return;
+            var border = root as Border;
+            // Keep two distinct login panels, but make the marketing panel a
+            // single stable colour instead of a gradient that appears to
+            // shift independently while the window is resized.
+            if (border != null && border.Background is LinearGradientBrush)
+                border.Background = new SolidColorBrush(Color.FromRgb(11, 36, 65));
+
+            var count = VisualTreeHelper.GetChildrenCount(root);
+            for (var index = 0; index < count; index++)
+                NormalizeMarketingPanelBackground(VisualTreeHelper.GetChild(root, index));
+        }
+
+        private static void UpdatePlatformCaption(DependencyObject root)
+        {
+            if (root == null) return;
+            var text = root as TextBlock;
+            if (text != null && !string.IsNullOrWhiteSpace(text.Text) &&
+                text.Text.IndexOf("Nền tảng VMS", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                text.Text = "◉  Nền tảng giám sát video";
+                return;
+            }
+            var count = VisualTreeHelper.GetChildrenCount(root);
+            for (var index = 0; index < count; index++)
+                UpdatePlatformCaption(VisualTreeHelper.GetChild(root, index));
         }
         private void LoginPage_v3_DataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
         {

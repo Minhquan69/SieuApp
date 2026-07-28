@@ -145,7 +145,10 @@ namespace V3SClient.viewModels
         public int ActiveCameraCount { get { return Slots.Count(slot => slot.Camera != null); } }
         public string StatusMessage { get; private set; }
         public LiveLayoutMode_v3 Layout { get { return _layout; } }
-        public int CustomSlotCount { get { return _customSlotCount; } set { _customSlotCount = Math.Max(1, Math.Min(100, value)); OnPropertyChanged(); } }
+        // A custom layout can contain every camera in the active profile.
+        // Do not create extra empty tiles beyond the number of real cameras:
+        // they waste layout space and previously caused a 100-cell blank grid.
+        public int CustomSlotCount { get { return _customSlotCount; } set { _customSlotCount = Math.Max(1, Math.Min(Math.Max(1, CameraCount), value)); OnPropertyChanged(); } }
         public string SearchText { get { return _searchText; } set { if (_searchText == value) return; _searchText = value; OnPropertyChanged(); ApplySearch(); } }
         public bool AiOnly { get { return _aiOnly; } set { if (_aiOnly == value) return; _aiOnly = value; OnPropertyChanged(); ApplySearch(); } }
 

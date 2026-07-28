@@ -4,76 +4,44 @@
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:converters="clr-namespace:V3SClient.UI.Converters"
+      xmlns:Icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
       xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
       mc:Ignorable="d" Title="Vị trí trực tuyến" Background="#1A1A1A"
       SizeChanged="VLivePosition_SizeChanged">
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" />
-            <ColumnDefinition x:Name="SidebarColumn" Width="350" />
+            <ColumnDefinition x:Name="SidebarColumn" Width="0.20*" MinWidth="210" MaxWidth="320" />
         </Grid.ColumnDefinitions>
         <wv2:WebView2 x:Name="mapWebView" Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
-        <Border x:Name="CameraSidebar" Grid.Column="1" Background="#202329" BorderBrush="#343942" BorderThickness="1,0,0,0" Padding="16">
-            <DockPanel>
-                <Grid DockPanel.Dock="Top" Margin="0,0,0,14">
-                    <StackPanel>
-                        <TextBlock Text="DANH SÁCH CAMERA" Foreground="#F4F6F8" FontSize="15" FontWeight="SemiBold" />
-                        <TextBlock Text="E-map" Foreground="#9BA3AF" FontSize="11" Margin="0,3,0,0" />
+        <Border x:Name="CameraSidebar" Grid.Column="1" Background="{StaticResource VmsSidebarBrush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1,0,0,0">
+            <Grid>
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <Grid Margin="12,8,12,5">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal">
+                        <Icon:PackIconMaterial Kind="VideoOutline" Foreground="{StaticResource VmsPrimaryBrush_v3}" Width="16" Height="16" VerticalAlignment="Center" Margin="0,0,7,0"/>
+                        <TextBlock Text="Danh sách camera" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center"/>
                     </StackPanel>
-                    <Button Content="‹" Width="28" Height="28" HorizontalAlignment="Right" Click="ToggleSidebar_Click"
-                            Background="#30353D" Foreground="#DDE2E8" BorderThickness="0" FontSize="20" ToolTip="Thu gọn" />
+                    <Button Grid.Column="1" Click="ToggleFov_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="6,4" Margin="0,0,5,0" ToolTip="Hiển thị / ẩn hướng nhìn camera"><Icon:PackIconMaterial x:Name="FovVisibilityIcon" Kind="EyeOutline" Width="14" Height="14"/></Button>
+                    <Button Grid.Column="2" Click="ToggleSidebar_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="6,4" ToolTip="Đóng danh sách camera"><Icon:PackIconMaterial Kind="ChevronRight" Width="14" Height="14"/></Button>
                 </Grid>
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel>
-                        <Grid Margin="0,0,0,12">
-                            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
-                            <Border Grid.Column="0" Background="#2A3038" CornerRadius="6" Margin="0,0,5,0" Padding="8">
-                                <StackPanel><TextBlock Text="CAMERA" Foreground="#9BA3AF" FontSize="10"/><TextBlock Text="{Binding Sidebar.CameraCount, Mode=OneWay}" Foreground="#F4F6F8" FontSize="18" FontWeight="SemiBold"/></StackPanel>
-                            </Border>
-                            <Border Grid.Column="1" Background="#2A3038" CornerRadius="6" Margin="3,0" Padding="8">
-                                <StackPanel><TextBlock Text="TRỰC TUYẾN" Foreground="#9BA3AF" FontSize="10"/><TextBlock Text="{Binding Sidebar.OnlineCameraCount, Mode=OneWay}" Foreground="#55D68A" FontSize="18" FontWeight="SemiBold"/></StackPanel>
-                            </Border>
-                            <Border Grid.Column="2" Background="#2A3038" CornerRadius="6" Margin="5,0,0,0" Padding="8">
-                                <StackPanel><TextBlock Text="NHÓM" Foreground="#9BA3AF" FontSize="10"/><TextBlock Text="{Binding Sidebar.GroupCount, Mode=OneWay}" Foreground="#F4F6F8" FontSize="18" FontWeight="SemiBold"/></StackPanel>
-                            </Border>
-                        </Grid>
-                        <TextBox Text="{Binding Sidebar.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Height="34" Padding="10,7" Background="#2A3038" Foreground="#F4F6F8" BorderBrush="#454C57" BorderThickness="1" ToolTip="Tìm camera hoặc nhóm" />
-                        <StackPanel Orientation="Horizontal" Margin="0,10,0,12">
-                            <Button Content="Tất cả" Click="SidebarAllFilter_Click" Padding="12,5" Margin="0,0,6,0" Background="#3B82F6" Foreground="White" BorderThickness="0" />
-                            <Button Content="AI" Click="SidebarAiFilter_Click" Padding="12,5" Background="#30353D" Foreground="#DDE2E8" BorderThickness="0" />
-                            <Button Content="Mở hết" Click="SidebarExpandAll_Click" Padding="8,5" Margin="12,0,0,0" Background="Transparent" Foreground="#9CC4FF" BorderThickness="0" />
-                            <Button Content="Đóng" Click="SidebarCollapseAll_Click" Padding="6,5" Background="Transparent" Foreground="#9CC4FF" BorderThickness="0" />
-                        </StackPanel>
-                        <ItemsControl ItemsSource="{Binding Sidebar.CameraGroups}">
-                            <ItemsControl.ItemTemplate><DataTemplate>
-                                <Expander IsExpanded="{Binding IsExpanded, Mode=TwoWay}" Foreground="#F4F6F8" Margin="0,0,0,5">
-                                    <Expander.Header><StackPanel Orientation="Horizontal"><TextBlock Text="{Binding Name}" FontWeight="SemiBold"/><TextBlock Text="{Binding CameraCount, StringFormat=  ({0})}" Foreground="#9BA3AF" Margin="5,0,0,0"/></StackPanel></Expander.Header>
-                                    <ItemsControl ItemsSource="{Binding Cameras}">
-                                        <ItemsControl.ItemTemplate><DataTemplate>
-                                            <Grid Margin="0,2" Background="#292E36">
-                                                <Grid.ColumnDefinitions><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                                <Ellipse Grid.Column="0" Width="7" Height="7" VerticalAlignment="Center" Fill="#77808C" Margin="0,0,5,0" />
-                                                <StackPanel Grid.Column="1" Margin="5,7,4,7">
-                                                    <TextBlock Text="{Binding DisplayName}" Foreground="#F4F6F8" TextTrimming="CharacterEllipsis" />
-                                                    <TextBlock Text="{Binding Status}" Foreground="#9BA3AF" FontSize="10" />
-                                                </StackPanel>
-                                                <TextBlock Grid.Column="2" Text="AI" Foreground="#8AB4FF" FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center" Margin="3">
-                                                    <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsAiCamera}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
-                                                </TextBlock>
-                                                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <Button Content="⌖" Tag="{Binding}" Click="SidebarCamera_Click" Width="25" Background="Transparent" Foreground="#B9C8DA" BorderThickness="0" ToolTip="Tập trung trên bản đồ" />
-                                                    <Button Content="Live" Tag="{Binding}" Click="SidebarLive_Click" Padding="5,3" Background="#2563EB" Foreground="White" BorderThickness="0" />
-                                                </StackPanel>
-                                            </Grid>
-                                        </DataTemplate></ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </Expander>
-                            </DataTemplate></ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
+                <UniformGrid Grid.Row="1" Columns="3" Height="46" Margin="10,0,10,6">
+                    <Border Background="{StaticResource VmsSurface2Brush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" CornerRadius="5" Margin="2,1" Padding="3,2"><StackPanel><TextBlock Text="CAMERA" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="9" HorizontalAlignment="Center"/><TextBlock Text="{Binding Sidebar.CameraCount}" Foreground="{StaticResource VmsPrimaryBrush_v3}" FontSize="15" HorizontalAlignment="Center" FontWeight="SemiBold"/></StackPanel></Border>
+                    <Border Background="{StaticResource VmsSurface2Brush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" CornerRadius="5" Margin="2,1" Padding="3,2"><StackPanel><TextBlock Text="TRỰC TUYẾN" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="8" HorizontalAlignment="Center"/><TextBlock Text="{Binding Sidebar.OnlineCameraCount}" Foreground="{StaticResource VmsSuccessBrush_v3}" FontSize="15" HorizontalAlignment="Center" FontWeight="SemiBold"/></StackPanel></Border>
+                    <Border Background="{StaticResource VmsSurface2Brush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" CornerRadius="5" Margin="2,1" Padding="3,2"><StackPanel><TextBlock Text="NHÓM" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="9" HorizontalAlignment="Center"/><TextBlock Text="{Binding Sidebar.GroupCount}" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontSize="15" HorizontalAlignment="Center" FontWeight="SemiBold"/></StackPanel></Border>
+                </UniformGrid>
+                <Border Grid.Row="2" Margin="10,0,10,5" Height="31" Background="{StaticResource VmsSurface2Brush_v3}" BorderBrush="{StaticResource VmsFocusBrush_v3}" BorderThickness="1" CornerRadius="6">
+                    <Grid><Icon:PackIconMaterial Kind="Magnify" Width="15" Height="15" Margin="10,0,0,0" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" VerticalAlignment="Center"/><TextBox Text="{Binding Sidebar.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="30,0,6,0" Background="Transparent" BorderThickness="0" Padding="0" VerticalContentAlignment="Center" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" CaretBrush="White" ToolTip="Tìm camera"/></Grid>
+                </Border>
+                <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="12,0,10,4"><Button Content="Tất cả" Click="SidebarAllFilter_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="6,2" Margin="0,0,5,0" FontSize="10"/><Button Click="SidebarAiFilter_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="6,2" FontSize="10"><StackPanel Orientation="Horizontal"><Icon:PackIconMaterial Kind="RobotOutline" Width="10" Height="10" Margin="0,0,3,0"/><TextBlock Text="AI"/></StackPanel></Button></StackPanel>
+                <Grid Grid.Row="4" Margin="12,0,10,3"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="CAMERA" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" FontSize="10"/><TextBlock Grid.Column="1" Text="{Binding Sidebar.CameraCount}" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="10"/></Grid>
+                <ScrollViewer Grid.Row="5" VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer.Resources><Style TargetType="ScrollBar"><Setter Property="Width" Value="6"/><Setter Property="Background" Value="Transparent"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ScrollBar"><Grid Width="6" Background="Transparent"><Track x:Name="PART_Track" IsDirectionReversed="true"><Track.Thumb><Thumb Width="4" Background="{StaticResource VmsBorderStrongBrush_v3}"/></Track.Thumb><Track.DecreaseRepeatButton><RepeatButton Command="{x:Static ScrollBar.PageUpCommand}" Opacity="0"/></Track.DecreaseRepeatButton><Track.IncreaseRepeatButton><RepeatButton Command="{x:Static ScrollBar.PageDownCommand}" Opacity="0"/></Track.IncreaseRepeatButton></Track></Grid></ControlTemplate></Setter.Value></Setter></Style></ScrollViewer.Resources>
+                    <ItemsControl ItemsSource="{Binding Sidebar.CameraGroups}" Margin="6,0,6,6"><ItemsControl.ItemTemplate><DataTemplate><Expander Header="{Binding Name}" IsExpanded="{Binding IsExpanded, Mode=TwoWay}" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" Margin="6,1,2,2" FontSize="11" FontWeight="SemiBold"><ItemsControl ItemsSource="{Binding Cameras}" Margin="10,0,0,0"><ItemsControl.ItemTemplate><DataTemplate><Border Tag="{Binding}" Padding="7,3" Margin="0,1" CornerRadius="5" Background="Transparent" Cursor="Hand" MouseLeftButtonDown="SidebarCameraRow_Click"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><Icon:PackIconMaterial Kind="CameraOutline" Width="14" Height="14" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="{StaticResource VmsPrimaryBrush_v3}"/><TextBlock Grid.Column="1" Text="{Binding DisplayName}" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" TextTrimming="CharacterEllipsis" FontSize="11" VerticalAlignment="Center"/><Button Grid.Column="2" Tag="{Binding}" Click="SidebarLive_Click" Width="25" Height="24" Padding="0" Background="Transparent" Foreground="{StaticResource VmsPrimaryBrush_v3}" BorderThickness="0" ToolTip="Mở camera trực tiếp"><Icon:PackIconMaterial Kind="CameraOutline" Width="14" Height="14"/></Button></Grid></Border></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></Expander></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
                 </ScrollViewer>
-            </DockPanel>
+            </Grid>
         </Border>
-        <Button x:Name="SidebarOpenButton" Grid.Column="0" Content="›" Width="32" Height="48" HorizontalAlignment="Right" VerticalAlignment="Center" Click="ToggleSidebar_Click" Visibility="Collapsed" Background="#202329" Foreground="White" BorderThickness="0" FontSize="24" ToolTip="Mở danh sách camera" />
+        <Button x:Name="SidebarOpenButton" Grid.Column="0" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,10,8,0" Click="ToggleSidebar_Click" Visibility="Collapsed" Panel.ZIndex="500" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="7,4" ToolTip="Mở danh sách camera"><Icon:PackIconMaterial Kind="ChevronLeft" Width="14" Height="14"/></Button>
     </Grid>
 </Page>

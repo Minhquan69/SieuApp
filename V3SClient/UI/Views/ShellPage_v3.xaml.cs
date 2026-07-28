@@ -43,16 +43,39 @@ namespace V3SClient.UI.Views
 
         private async void OnSwitchClientRequested(object sender, System.EventArgs e)
         {
-            var picker = new ClientSwitchWindow_v3(GlobalUserInfo.Instance.AuthorizedProfiles) { Owner = Window.GetWindow(this) };
-            if (picker.ShowDialog() != true || picker.SelectedProfile == null) return;
+            ShellHeader.IsEnabled = false;
             try
             {
-                  await new ClientSessionService().SwitchClientAsync(picker.SelectedProfile, CancellationToken.None);
-                  ResetActiveModuleAfterClientSwitch();
-                  _viewModel.RefreshSessionDisplay();
-                  NavigateToSelectedModule();
+                // The profile cache can be stale after a user's permissions
+                // change. Always refresh it before presenting the selector.
+                var session = new ClientSessionService();
+                var profiles = await session.LoadAuthorizedClientsAsync(CancellationToken.None);
+                if (profiles == null || profiles.Count == 0)
+                {
+                    MessageBox.Show("Tài khoản hiện tại chưa được gán client nào.", "Đổi client", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                var picker = new ClientSwitchWindow_v3(profiles) { Owner = Window.GetWindow(this) };
+                if (picker.ShowDialog() != true || picker.SelectedProfile == null) return;
+                try
+            {
+                    await session.SwitchClientAsync(picker.SelectedProfile, CancellationToken.None);
+                    ResetActiveModuleAfterClientSwitch();
+                    _viewModel.RefreshSessionDisplay();
+                    NavigateToSelectedModule();
+                }
+                catch (System.Exception ex) { MessageBox.Show(ex.Message, "Đổi client", MessageBoxButton.OK, MessageBoxImage.Warning); }
             }
-            catch (System.Exception ex) { MessageBox.Show(ex.Message, "Đổi client", MessageBoxButton.OK, MessageBoxImage.Warning); }
+            catch (System.Exception ex)
+            {
+                LoggerManager.LogException(ex, "Không thể tải danh sách client để chuyển phiên.");
+                MessageBox.Show("Không thể tải danh sách client. Vui lòng thử lại.", "Đổi client", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            finally
+            {
+                ShellHeader.IsEnabled = true;
+            }
         }
 
         private void ResetActiveModuleAfterClientSwitch()
@@ -68,10 +91,12 @@ namespace V3SClient.UI.Views
 
         private void OnLogoutRequested(object sender, System.EventArgs e)
         {
-            if (MessageBox.Show("Bạn có muốn đăng xuất không?", "Đăng xuất", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
             var shell = Window.GetWindow(this) as ShellWindow_v3;
+            if (!VmsConfirmDialog_v3.ConfirmLogout(shell ?? Window.GetWindow(this))) return;
+            ShellHeader.IsEnabled = false;
             new ClientSessionService().ClearSession();
             if (shell != null) shell.LogoutAndReturnToLogin();
+            else ShellHeader.IsEnabled = true;
         }
 
         public void SetChromeVisible(bool visible)
