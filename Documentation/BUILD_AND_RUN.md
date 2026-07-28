@@ -1,8 +1,17 @@
 # Build and Run
 
+For the short setup path, see the repository [README](../README.md). Use `scripts\Restore-And-Build.ps1` to restore packages and build from a Developer PowerShell or a normal PowerShell session.
+
+## Clean-machine setup
+
+1. Install Visual Studio 2022 (or Build Tools 2022) with **.NET desktop development**, MSBuild, and the **.NET Framework 4.8 SDK/Targeting Pack**.
+2. Clone the repository and switch to `VMS-Application`.
+3. Run `./scripts/Restore-And-Build.ps1`. The script uses Visual Studio MSBuild to restore the PackageReference dependencies and build `V3S.sln` for x64.
+4. If restore fails, confirm the machine can reach nuget.org and that the .NET Framework targeting pack is installed. Do not use `dotnet build` as a substitute for this legacy .NET Framework WPF solution.
+
 ## GStreamer for Live View `_v3`
 
-- Active configured root: `C:\Program Files\gstreamer\1.0\msvc_x86_64` (`App.config` key `GStreamerRoot_v3`).
+- Active configured root: use the value of `GStreamerRoot_v3` in `V3SClient/App.config`. It must point to the installed GStreamer MSVC x86_64 runtime (for example `C:\Program Files\gstreamer\1.0\msvc_x86_64`).
 - Required plugins: `whepsrc`, `webrtcbin`, H264/H265 RTP depayloaders, D3D11 decoders, and `d3d11videosink`.
 - If the configured installation is missing, `ShellWindow_v3` falls back to the packaged `x64` runtime next to `V3SClient.exe`.
 - Active Live View `_v3` uses GStreamer as the player and MediaMTX as the WHEP relay. The frontend stream proxy, backend, and MediaMTX must be running.
