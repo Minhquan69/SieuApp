@@ -90,7 +90,7 @@
                 </StackPanel>
             </Border>
 
-            <Popup x:Name="CameraBadgePopup" Placement="Relative" PlacementTarget="{Binding ElementName=TileBorder}" AllowsTransparency="True" IsHitTestVisible="False" IsOpen="False" StaysOpen="True">
+            <Popup x:Name="CameraBadgePopup" Placement="Custom" PlacementTarget="{Binding ElementName=TileBorder}" AllowsTransparency="True" IsHitTestVisible="False" IsOpen="False" StaysOpen="True">
             <Border x:Name="CameraBadge" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0" Padding="7,4" Background="{StaticResource VmsElevatedBrush_v3}" BorderBrush="{StaticResource VmsBorderStrongBrush_v3}" BorderThickness="1" CornerRadius="3">
                 <StackPanel Orientation="Horizontal">
                     <Ellipse x:Name="StatusDot" Width="7" Height="7" Fill="{StaticResource VmsOfflineBrush_v3}" Margin="0,0,6,0" VerticalAlignment="Center"/>

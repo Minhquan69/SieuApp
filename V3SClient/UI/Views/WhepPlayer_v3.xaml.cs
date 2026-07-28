@@ -224,6 +224,41 @@ namespace V3SClient.UI.Views
         }
 
         /// <summary>
+        /// Forces WindowsFormsHost and its child HWND to consume the current
+        /// WPF arrange bounds. This is required after a borderless window is
+        /// moved between monitors or leaves fullscreen: the D3D sink can keep
+        /// painting the previous native rectangle even though WPF has already
+        /// arranged the tile in its new cell.
+        /// </summary>
+        public void SynchronizeNativeVideoHost()
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(new Action(SynchronizeNativeVideoHost),
+                    System.Windows.Threading.DispatcherPriority.Render);
+                return;
+            }
+            if (_videoPanel.IsDisposed) return;
+
+            try
+            {
+                VideoHost.InvalidateMeasure();
+                VideoHost.InvalidateArrange();
+                VideoHost.UpdateLayout();
+                _videoPanel.SuspendLayout();
+                _videoPanel.PerformLayout();
+                _cameraBadge.BringToFront();
+            }
+            catch (ObjectDisposedException) { }
+            catch (InvalidOperationException) { }
+            finally
+            {
+                if (!_videoPanel.IsDisposed)
+                    _videoPanel.ResumeLayout(true);
+            }
+        }
+
+        /// <summary>
         /// Keeps the native pipeline alive without allowing either its video
         /// surface or its WPF status layer to appear.  This is used while a
         /// fullscreen main stream warms up behind the already-playing sub

@@ -59,12 +59,6 @@ namespace V3SClient.window
         }
         private IntPtr WindowResizeHook(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
-            if (message == WmSizing && !_isVirtualDesktopMode && ResizeMode != ResizeMode.NoResize)
-            {
-                ConstrainResizeToLoginAspect(wParam.ToInt32(), lParam);
-                handled = true;
-                return new IntPtr(1);
-            }
             if (message != WmNcHitTest || _isVirtualDesktopMode || ResizeMode == ResizeMode.NoResize || !GetWindowRect(hwnd, out var bounds))
                 return IntPtr.Zero;
             var point = lParam.ToInt64();

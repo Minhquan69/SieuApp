@@ -308,6 +308,7 @@ namespace V3SClient.UI.Views
                         CameraGrid.Visibility = Visibility.Visible;
                         foreach (var tile in _tiles.Values)
                         {
+                            tile.SynchronizeNativeVideoSurfaces();
                             tile.SetVideoSurfaceVisible(tile.Slot == null ||
                                 tile.Slot.State != LiveConnectionState_v3.Error);
                             tile.ResumePopupPlacementAfterResize();
@@ -1154,7 +1155,7 @@ namespace V3SClient.UI.Views
                     if (cameraTile != null)
                     {
                         var selected = ReferenceEquals(cameraTile, tile);
-                        cameraTile.SetFullscreenVisibility(selected);
+                        cameraTile.HideForFullscreen();
                         cameraTile.SetFullscreenMode(selected);
                         cameraTile.HideTransientOverlays();
                         // A D3D sink retains its previous HWND rectangle for
@@ -1182,6 +1183,7 @@ namespace V3SClient.UI.Views
                         CameraGrid.InvalidateMeasure();
                         CameraGrid.InvalidateArrange();
                         CameraGrid.UpdateLayout();
+                        tile.SynchronizeNativeVideoSurfaces();
                         // Start the heavier main stream only after the WPF
                         // window and the already-playing grid stream have
                         // reached their final fullscreen bounds.
@@ -1314,7 +1316,7 @@ namespace V3SClient.UI.Views
                 // Restore both the native tile visibility and its overlays
                 // before rebuilding the grid, otherwise only the fullscreen
                 // camera remains visible after returning.
-                tile.SetFullscreenVisibility(false);
+                tile.RestoreAfterFullscreen();
                 tile.SetFullscreenMode(false);
                 Panel.SetZIndex(tile, 0);
             }
@@ -1350,6 +1352,7 @@ namespace V3SClient.UI.Views
                 CameraGrid.Visibility = Visibility.Visible;
                 foreach (var tile in _tiles.Values)
                 {
+                    tile.SynchronizeNativeVideoSurfaces();
                     tile.SetVideoSurfaceVisible(tile.Slot == null ||
                         tile.Slot.State != LiveConnectionState_v3.Error);
                     tile.Opacity = 1;

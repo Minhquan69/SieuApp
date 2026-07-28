@@ -50,8 +50,10 @@ namespace V3SClient.UI.Views
         private int _mainSwitchScheduledGeneration = -1;
         private CameraStreamInfo _pendingMainStream;
         private bool _positioningBadge;
+        private bool _badgeRelocationQueued;
         private bool _popupPlacementSuspended;
         private int _badgeGeneration;
+        private bool _badgeOpenQueued;
         private Window _ownerWindow;
         private IDisposable _metadataSubscription;
         // Player.Camera may be cleared while its native host is arranging.
@@ -64,6 +66,8 @@ namespace V3SClient.UI.Views
             InitializeComponent();
             // Popup namescopes cannot reliably resolve ElementName bindings
             // across the HwndHost boundary; bind the target explicitly.
+            CameraBadgePopup.PlacementTarget = TileBorder;
+            CameraBadgePopup.CustomPopupPlacementCallback = PlaceCameraBadgeInsideTile;
             // Match the web tile controls: compact square actions and a
             // clearly destructive red disconnect action.
             ConnectButton.Width = DisconnectButton.Width = 28;
@@ -116,26 +120,52 @@ namespace V3SClient.UI.Views
             if (_disposed || _popupPlacementSuspended || _ownerWindow == null ||
                 Slot == null || Slot.Camera == null || !TileBorder.IsVisible ||
                 Slot.State == LiveConnectionState_v3.Empty) return;
+            if (_badgeOpenQueued) return;
+
             var generation = _badgeGeneration;
+            _badgeOpenQueued = true;
             Dispatcher.BeginInvoke(new Action(() =>
             {
-                if (_disposed || _popupPlacementSuspended || generation != _badgeGeneration || _ownerWindow == null ||
-                    Slot == null || Slot.Camera == null || !TileBorder.IsVisible ||
-                    Slot.State == LiveConnectionState_v3.Empty)
-                    return;
-                if (string.IsNullOrWhiteSpace(CameraName.Text))
-                    CameraName.Text = Slot.DisplayName;
-                if (string.IsNullOrWhiteSpace(CameraName.Text)) return;
-                StatusDot.Visibility = Visibility.Visible;
-                CameraBadge.Visibility = Visibility.Visible;
-                CameraBadgePopup.Visibility = Visibility.Visible;
-                CameraBadgePopup.IsOpen = true;
-                PositionCameraBadgePopup();
+                _badgeOpenQueued = false;
+                OpenCameraBadgeNow(generation);
             }), DispatcherPriority.Render);
+        }
+
+        /// <summary>
+        /// Opens an ID badge only while its owner is the foreground iVista
+        /// window.  A generation token prevents a queued layout callback from
+        /// reopening the native Popup after Alt+Tab or a grid transition.
+        /// </summary>
+        private void OpenCameraBadgeNow(int generation)
+        {
+            if (_disposed || _popupPlacementSuspended || generation != _badgeGeneration ||
+                _ownerWindow == null || !_ownerWindow.IsActive || Slot == null ||
+                Slot.Camera == null || !TileBorder.IsVisible ||
+                Slot.State == LiveConnectionState_v3.Empty)
+                return;
+
+            if (string.IsNullOrWhiteSpace(CameraName.Text))
+                CameraName.Text = Slot.DisplayName;
+            if (string.IsNullOrWhiteSpace(CameraName.Text)) return;
+
+            // Keep this overlay in the live grid layer, anchored to the tile
+            // itself. It is deliberately not painted into the video frame.
+            if (!ReferenceEquals(CameraBadgePopup.PlacementTarget, TileBorder))
+                CameraBadgePopup.PlacementTarget = TileBorder;
+            ConstrainCameraBadgeToTile();
+            StatusDot.Visibility = Visibility.Visible;
+            CameraBadge.Visibility = Visibility.Visible;
+            CameraBadgePopup.Visibility = Visibility.Visible;
+            CameraBadgePopup.IsOpen = true;
+            PositionCameraBadgePopup();
         }
 
         private void HideCameraBadge(bool clearText)
         {
+            // Cancel any queued Render callback. Popup is an independent HWND
+            // and must never be allowed to reappear above another program.
+            _badgeGeneration++;
+            _badgeOpenQueued = false;
             CameraBadgePopup.IsOpen = false;
             CameraBadgePopup.Visibility = Visibility.Collapsed;
             CameraBadge.Visibility = Visibility.Collapsed;
@@ -161,10 +191,25 @@ namespace V3SClient.UI.Views
         {
             if (_popupPlacementSuspended)
                 return;
-            if (CameraBadgePopup.IsOpen)
-                PositionCameraBadgePopup();
-            if (ActionPopup.IsOpen)
-                PositionActionPopup();
+            // A WPF Popup is a separate HWND. Placement="Relative" avoids
+            // DPI errors across monitors, but it does not always receive a
+            // native move notification while a borderless owner is dragged.
+            // Coalesce move events into one render update and force the popup
+            // placement to be recalculated from this tile's current HWND.
+            if (_badgeRelocationQueued)
+                return;
+
+            _badgeRelocationQueued = true;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                _badgeRelocationQueued = false;
+                if (_disposed || _popupPlacementSuspended || _ownerWindow == null || !_ownerWindow.IsActive)
+                    return;
+                if (CameraBadgePopup.IsOpen)
+                    PositionCameraBadgePopup(true);
+                if (ActionPopup.IsOpen)
+                    PositionActionPopup();
+            }), DispatcherPriority.Render);
         }
 
         private void OwnerWindow_Deactivated(object sender, EventArgs e)
@@ -191,7 +236,10 @@ namespace V3SClient.UI.Views
         private void OwnerWindow_Activated(object sender, EventArgs e)
         {
             if (_disposed || Slot == null || Slot.Camera == null) return;
-            OpenCameraBadgeIfActive();
+            var generation = _badgeGeneration;
+            // Activation already causes a layout pass; open in that same pass
+            // instead of queuing a second Render cycle for every grid tile.
+            Dispatcher.BeginInvoke(new Action(() => OpenCameraBadgeNow(generation)), DispatcherPriority.Render);
             if (_fullscreenMode)
             {
                 // Fullscreen is deliberately scoped to the application window.
@@ -252,20 +300,22 @@ namespace V3SClient.UI.Views
             UpdateMetadataSubscription();
         }
 
-        public void SetFullscreenVisibility(bool visible)
+        /// <summary>Closes every native overlay before this tile is hidden or expanded.</summary>
+        public void HideForFullscreen()
         {
-            if (visible)
-            {
-                HideCameraBadge(false);
-                return;
-            }
-
             // Popup controls are separate native windows because the video
-            // renderer uses WindowsFormsHost. Collapsing the tile alone does
-            // not close them, so explicitly close overlays for hidden tiles.
+            // renderer uses WindowsFormsHost. Collapsing or expanding a tile
+            // alone does not close them, so do so explicitly.
             ActionPopup.IsOpen = false;
             HideCameraBadge(false);
-            if (!visible) OpenCameraBadgeIfActive();
+        }
+
+        /// <summary>Restores the ID only after the normal camera grid is back.</summary>
+        public void RestoreAfterFullscreen()
+        {
+            ActionPopup.IsOpen = false;
+            HideCameraBadge(false);
+            OpenCameraBadgeIfActive();
         }
 
         public void SetFullscreenMode(bool active)
@@ -295,7 +345,7 @@ namespace V3SClient.UI.Views
                 // recreate every badge Popup. Reposition open overlays in
                 // place; this keeps IDs stable when a new camera is added.
                 if (CameraBadgePopup.IsOpen) PositionCameraBadgePopup();
-                else OpenCameraBadgeIfActive();
+                else OpenCameraBadgeNow(_badgeGeneration);
                 if (ActionPopup.IsOpen) PositionActionPopup();
             }));
         }
@@ -318,7 +368,10 @@ namespace V3SClient.UI.Views
         {
             if (_disposed) return;
             _popupPlacementSuspended = false;
-            OpenCameraBadgeIfActive();
+            // The caller has already completed CameraGrid.UpdateLayout().
+            // Reopen synchronously so IDs move with the sidebar, not seconds
+            // later behind video rendering work.
+            OpenCameraBadgeNow(_badgeGeneration);
             if (_actionsPinned || _fullscreenMode) ShowActions();
         }
 
@@ -337,6 +390,14 @@ namespace V3SClient.UI.Views
                 MainPlayer.SetPresentationVisible(visible);
             else
                 Player.SetVideoSurfaceVisible(visible);
+        }
+
+        /// <summary>Synchronizes both possible native hosts to this tile's final bounds.</summary>
+        public void SynchronizeNativeVideoSurfaces()
+        {
+            if (_disposed) return;
+            Player.SynchronizeNativeVideoHost();
+            MainPlayer.SynchronizeNativeVideoHost();
         }
 
         /// <summary>
@@ -697,22 +758,43 @@ namespace V3SClient.UI.Views
             Dispatcher.BeginInvoke(new Action(PositionActionPopup), DispatcherPriority.Loaded);
         }
 
-        private void PositionCameraBadgePopup()
+        private void ConstrainCameraBadgeToTile()
+        {
+            var tileWidth = Math.Max(0d, TileBorder.ActualWidth);
+            if (tileWidth <= 0d) return;
+
+            const double horizontalInset = 6d;
+            const double badgeChromeWidth = 30d;
+            var badgeMaxWidth = Math.Max(1d, tileWidth - horizontalInset);
+            var nameMaxWidth = Math.Max(0d, badgeMaxWidth - badgeChromeWidth);
+            if (Math.Abs(CameraBadge.MaxWidth - badgeMaxWidth) > 0.1)
+                CameraBadge.MaxWidth = badgeMaxWidth;
+            if (Math.Abs(CameraName.MaxWidth - nameMaxWidth) > 0.1)
+                CameraName.MaxWidth = nameMaxWidth;
+            if (Math.Abs(CameraNameInline.MaxWidth - nameMaxWidth) > 0.1)
+                CameraNameInline.MaxWidth = nameMaxWidth;
+        }
+
+        private CustomPopupPlacement[] PlaceCameraBadgeInsideTile(Size popupSize, Size targetSize, Point offset)
+        {
+            // Never let the native Popup placement engine flip this badge to
+            // another monitor. The only candidate is a point inside its own
+            // tile, clamped by the target's actual arranged size.
+            var x = Math.Max(2d, Math.Min(7d, targetSize.Width - popupSize.Width - 2d));
+            var y = Math.Max(2d, Math.Min(7d, targetSize.Height - popupSize.Height - 2d));
+            return new[] { new CustomPopupPlacement(new Point(x, y), PopupPrimaryAxis.None) };
+        }
+
+        private void PositionCameraBadgePopup(bool forceReposition = false)
         {
             if (_positioningBadge || !CameraBadgePopup.IsOpen || !IsLoaded || !TileBorder.IsVisible) return;
             try
             {
                 _positioningBadge = true;
-                // Relative placement stays in the tile's own visual/DPI
-                // coordinate space. AbsolutePoint uses a virtual-desktop
-                // device coordinate and shifts badges on a second monitor
-                // when Windows uses different monitor scaling.
-                if (Math.Abs(CameraBadgePopup.HorizontalOffset - 7d) > 0.1 ||
-                    Math.Abs(CameraBadgePopup.VerticalOffset - 7d) > 0.1)
-                {
-                    CameraBadgePopup.HorizontalOffset = 7d;
-                    CameraBadgePopup.VerticalOffset = 7d;
-                }
+                ConstrainCameraBadgeToTile();
+                CameraBadge.UpdateLayout();
+                if (forceReposition)
+                    CameraBadgePopup.HorizontalOffset = CameraBadgePopup.HorizontalOffset == 0d ? 0.01d : 0d;
             }
             catch (InvalidOperationException) { }
             finally
@@ -755,7 +837,7 @@ namespace V3SClient.UI.Views
             // covers normal WPF content.  Move this tile's popup in the same
             // layout pass rather than hiding every ID until the grid settles.
             if (!_popupPlacementSuspended && CameraBadgePopup.IsOpen)
-                Dispatcher.BeginInvoke(new Action(PositionCameraBadgePopup), DispatcherPriority.Render);
+                Dispatcher.BeginInvoke(new Action(() => PositionCameraBadgePopup()), DispatcherPriority.Render);
         }
 
         private void UpdateErrorLayoutForTileSize()

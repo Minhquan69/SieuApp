@@ -38,6 +38,9 @@ namespace V3SClient.window
         private const int WsExWindowEdge = 0x00000100;
         private bool _isVirtualDesktopMode;
         private Rect _normalWindowBounds;
+        private int _normalNativeStyle;
+        private int _normalNativeExStyle;
+        private bool _nativeFrameStyleSaved;
         private const int WmNcHitTest = 0x0084;
         private const int HtLeft = 10, HtRight = 11, HtTop = 12, HtTopLeft = 13, HtTopRight = 14, HtBottom = 15, HtBottomLeft = 16, HtBottomRight = 17;
 
@@ -197,9 +200,17 @@ namespace V3SClient.window
                 Top = _normalWindowBounds.Top;
                 Width = _normalWindowBounds.Width;
                 Height = _normalWindowBounds.Height;
-                SetWindowPos(new WindowInteropHelper(this).Handle, HwndNoTopmost,
-                    0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate | SwpFrameChanged);
+                // A virtual wall strips the native thick frame. Restore the
+                // WPF resize contract before notifying Windows that the frame
+                // changed, otherwise the borderless shell can get stuck in a
+                // non-resizable state after leaving fullscreen.
                 _isVirtualDesktopMode = false;
+                ResizeMode = ResizeMode.CanResize;
+                var restoreHandle = new WindowInteropHelper(this).Handle;
+                RestoreNativeWindowFrame(restoreHandle);
+                SetWindowPos(restoreHandle, HwndNoTopmost,
+                    0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate | SwpFrameChanged);
+                UpdateLayout();
                 return;
             }
 
@@ -221,6 +232,7 @@ namespace V3SClient.window
             Height = virtualScreen.Height;
             UpdateLayout();
             var handle = new WindowInteropHelper(this).Handle;
+            SaveNativeWindowFrame(handle);
             RemoveNativeWindowFrame(handle);
             // A virtual desktop must span monitors, but it must not become a
             // global topmost window.  Topmost also promotes child Popup HWNDs
@@ -328,6 +340,22 @@ namespace V3SClient.window
             var exStyle = GetWindowLong(handle, GwlExStyle);
             exStyle &= ~(WsExClientEdge | WsExWindowEdge);
             SetWindowLong(handle, GwlExStyle, exStyle);
+        }
+
+        private void SaveNativeWindowFrame(IntPtr handle)
+        {
+            if (_nativeFrameStyleSaved || handle == IntPtr.Zero) return;
+            _normalNativeStyle = GetWindowLong(handle, GwlStyle);
+            _normalNativeExStyle = GetWindowLong(handle, GwlExStyle);
+            _nativeFrameStyleSaved = true;
+        }
+
+        private void RestoreNativeWindowFrame(IntPtr handle)
+        {
+            if (!_nativeFrameStyleSaved || handle == IntPtr.Zero) return;
+            SetWindowLong(handle, GwlStyle, _normalNativeStyle);
+            SetWindowLong(handle, GwlExStyle, _normalNativeExStyle);
+            _nativeFrameStyleSaved = false;
         }
 
         private static bool IsCompleteGStreamerRuntime(string runtimeRoot)
