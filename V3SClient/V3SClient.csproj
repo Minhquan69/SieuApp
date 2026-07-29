@@ -136,6 +136,7 @@
     <Compile Include="libs\WebViewEnvHelper.cs" />
     <Compile Include="models\NamingSegment.cs" />
     <Compile Include="models\CapturedSnapshot.cs" />
+    <Compile Include="models\GstBusMessagePump.cs" />
     <Compile Include="models\PlateFolderItem.cs" />
     <Compile Include="models\PlateImageItem.cs" />
     <Compile Include="models\ProcessingJobStatusItem.cs" />

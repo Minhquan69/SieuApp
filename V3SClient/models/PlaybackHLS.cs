@@ -625,8 +625,7 @@ namespace V3SClient.models
             bool ret = this.CreatePipeline();
             if (!ret) return false;
 
-            player.Bus.EnableSyncMessageEmission();
-            player.Bus.SyncMessage += Monitor;
+            StartBusMessagePump();
 
             // Playback intentionally does not consume AI/SEI metadata.  It must
             // remain a video-only pipeline so its stability is independent of
@@ -988,12 +987,12 @@ namespace V3SClient.models
             StopHlsAiMetadataLoader();
             _hlsAiProxy?.Dispose();
             _hlsAiProxy = null;
+            StopBusMessagePump();
             if (player != null)
             {
                 player.SetState(State.Paused);
                 player.SetState(State.Ready);
                 player.SetState(State.Null);
-                player.Bus.DisableSyncMessageEmission();
                 var children = player.Children;
                 foreach (Element child in children)
                     if (child != null)

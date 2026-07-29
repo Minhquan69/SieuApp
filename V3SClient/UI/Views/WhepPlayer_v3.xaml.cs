@@ -80,6 +80,8 @@ namespace V3SClient.UI.Views
         private static readonly SemaphoreSlim PipelineConstructionGate = new SemaphoreSlim(1, 1);
         private CancellationTokenSource _cancellation;
         private Pipeline _pipeline;
+        private readonly ConcurrentDictionary<Pipeline, GstBusMessagePump> _busMessagePumps =
+            new ConcurrentDictionary<Pipeline, GstBusMessagePump>();
         private Element _aiOverlayElement;
         private Pipeline _aiOverlayPipeline;
         private Camera _camera;
@@ -539,8 +541,7 @@ namespace V3SClient.UI.Views
 
                 var source = pipeline.GetByName("videoSource");
                 source["location"] = rtspUrl;
-                pipeline.Bus.EnableSyncMessageEmission();
-                pipeline.Bus.SyncMessage += OnSyncMessage;
+                AttachBusMessagePump(pipeline);
                 if (pipeline.SetState(State.Playing) == StateChangeReturn.Failure)
                     throw new InvalidOperationException("GStreamer could not start the direct RTSP playback pipeline.");
 
@@ -938,12 +939,71 @@ namespace V3SClient.UI.Views
             DisposePipelineInstance(pipeline);
         }
 
+        private void AttachBusMessagePump(Pipeline pipeline)
+        {
+            var messagePump = new GstBusMessagePump(pipeline.Bus);
+            var syncEmissionEnabled = false;
+            var syncHandlerAttached = false;
+            try
+            {
+                messagePump.Bus.EnableSyncMessageEmission();
+                syncEmissionEnabled = true;
+                messagePump.Bus.SyncMessage += OnSyncMessage;
+                syncHandlerAttached = true;
+                if (!_busMessagePumps.TryAdd(pipeline, messagePump))
+                    throw new InvalidOperationException("A GStreamer bus pump is already registered for this pipeline.");
+            }
+            catch
+            {
+                if (syncHandlerAttached)
+                {
+                    try { messagePump.Bus.SyncMessage -= OnSyncMessage; }
+                    catch { }
+                }
+                if (syncEmissionEnabled)
+                {
+                    try { messagePump.Bus.DisableSyncMessageEmission(); }
+                    catch { }
+                }
+                messagePump.Dispose();
+                throw;
+            }
+        }
+
+        private GstBusMessagePump DetachBusMessagePump(Pipeline pipeline)
+        {
+            if (!_busMessagePumps.TryRemove(pipeline, out GstBusMessagePump messagePump))
+                return null;
+
+            try { messagePump.Bus.SyncMessage -= OnSyncMessage; }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Live View _v3 could not remove the GStreamer SyncMessage handler");
+            }
+
+            try { messagePump.Bus.DisableSyncMessageEmission(); }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Live View _v3 could not disable GStreamer SyncMessage emission");
+            }
+
+            return messagePump;
+        }
+
         private void DisposePipelineInstance(Pipeline pipeline)
         {
             if (pipeline == null) return;
+            var messagePump = DetachBusMessagePump(pipeline);
             try
             {
-                pipeline.Bus.SyncMessage -= OnSyncMessage;
+                // Stop the consumer before the pipeline is disposed. Any small
+                // number of messages posted during this transition are flushed
+                // when the pipeline reaches NULL.
+                try { messagePump?.Dispose(); }
+                catch (Exception ex)
+                {
+                    LoggerManager.LogException(ex, "Live View _v3 GStreamer bus pump cleanup failed");
+                }
                 pipeline.SetState(State.Null);
             }
             catch (Exception ex)

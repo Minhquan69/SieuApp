@@ -46,6 +46,7 @@ namespace V3SClient.models
         private Dictionary<string, System.DateTime> _aiLogCache = new Dictionary<string, System.DateTime>();
         private readonly TimeSpan _aiLogSuppressTime = TimeSpan.FromSeconds(5);
         private readonly object _pipelineLock = new object();
+        private GstBusMessagePump _busMessagePump;
         public Visibility ShowVideoSlider { get; set; } = Visibility.Collapsed;
         public bool RoiInfoShow { get; set; } = MetaAIResultStorage.Instance.RoiInfoShow;
         // The native overlay stays connected for the lifetime of the pipeline.
@@ -603,8 +604,6 @@ namespace V3SClient.models
             if (msg.Type == MessageType.Eos || msg.Type == MessageType.Error)
             {
                 EOFnError(msg);
-                msg.Dispose();
-                sargs.Message.Dispose();
                 return;
             }
             if (ShowVideoSlider== Visibility.Visible && msg.Src ==player && msg.Type == MessageType.StateChanged)
@@ -622,16 +621,12 @@ namespace V3SClient.models
                     }
                 }
                
-                msg.Dispose();
-                sargs.Message.Dispose();
                 return;
             }
             // Video Overlay processing
 
             if (!Gst.Video.Global.IsVideoOverlayPrepareWindowHandleMessage(msg))
             {
-                sargs.Message.Dispose();
-                msg.Dispose();
                 return;
             }
 
@@ -666,10 +661,6 @@ namespace V3SClient.models
 
 
 
-            sargs.Message.Dispose();
-            msg.Dispose();
-            src.Dispose();
-
         }
 
         // Live View keeps its existing fill behavior. Playback overrides this so
@@ -692,7 +683,63 @@ namespace V3SClient.models
                     ReConnect();
                     break;
             }
-            message.Dispose();
+        }
+
+        protected void StartBusMessagePump()
+        {
+            StopBusMessagePump();
+
+            var messagePump = new GstBusMessagePump(player.Bus);
+            var syncEmissionEnabled = false;
+            var syncHandlerAttached = false;
+            try
+            {
+                messagePump.Bus.EnableSyncMessageEmission();
+                syncEmissionEnabled = true;
+                messagePump.Bus.SyncMessage += Monitor;
+                syncHandlerAttached = true;
+                _busMessagePump = messagePump;
+            }
+            catch
+            {
+                if (syncHandlerAttached)
+                {
+                    try { messagePump.Bus.SyncMessage -= Monitor; }
+                    catch { }
+                }
+                if (syncEmissionEnabled)
+                {
+                    try { messagePump.Bus.DisableSyncMessageEmission(); }
+                    catch { }
+                }
+                messagePump.Dispose();
+                throw;
+            }
+        }
+
+        protected void StopBusMessagePump()
+        {
+            var messagePump = Interlocked.Exchange(ref _busMessagePump, null);
+            if (messagePump == null)
+                return;
+
+            try { messagePump.Bus.SyncMessage -= Monitor; }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Không thể gỡ GStreamer SyncMessage handler");
+            }
+
+            try { messagePump.Bus.DisableSyncMessageEmission(); }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Không thể tắt GStreamer SyncMessage emission");
+            }
+
+            try { messagePump.Dispose(); }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Không thể dừng GStreamer bus message pump");
+            }
         }
 
 
@@ -706,8 +753,7 @@ namespace V3SClient.models
             bool ret = this.CreatePipeline();
             if (!ret) return false;
 
-            player.Bus.EnableSyncMessageEmission();
-            player.Bus.SyncMessage += Monitor;
+            StartBusMessagePump();
 
             this.videoOverlay.Connect("draw", Draw);
 
@@ -1267,6 +1313,7 @@ namespace V3SClient.models
         {
             lock (_pipelineLock)
             {
+                StopBusMessagePump();
                 if (player != null)
                 {
                     try
@@ -1282,10 +1329,6 @@ namespace V3SClient.models
                             }
                             catch { }
                         }
-
-                        // 2. Unhook bus signals before stopping
-                        player.Bus.DisableSyncMessageEmission();
-                        player.Bus.SyncMessage -= Monitor;
 
                         if (_timer != null)
                         {
