@@ -104,12 +104,20 @@ namespace V3SClient.viewModels
         private bool _isConnecting;
         private bool _isConnected;
         private bool _hasConnectionError;
+        private bool? _isOnline;
         public bool IsSelected { get { return _isSelected; } set { _isSelected = value; OnChanged(); } }
         public string StateText { get { return _stateText; } set { _stateText = value; OnChanged(); } }
         public bool IsConnecting { get { return _isConnecting; } set { _isConnecting = value; OnChanged(); } }
         public bool IsConnected { get { return _isConnected; } set { _isConnected = value; OnChanged(); } }
         public bool HasConnectionError { get { return _hasConnectionError; } set { _hasConnectionError = value; OnChanged(); } }
-        public LiveCameraItemViewModel_v3(Camera camera) { Camera = camera; StateText = "Available"; }
+        /// <summary>Latest state returned by /devices/status/batch.</summary>
+        public bool? IsOnline { get { return _isOnline; } set { _isOnline = value; OnChanged(); } }
+        public LiveCameraItemViewModel_v3(Camera camera)
+        {
+            Camera = camera;
+            _isOnline = camera == null ? (bool?)null : camera.is_online;
+            StateText = _isOnline == true ? "Online" : _isOnline == false ? "Offline" : "Unknown";
+        }
         public event PropertyChangedEventHandler PropertyChanged;
         private void OnChanged([CallerMemberName] string name = null) { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name)); }
     }
@@ -140,6 +148,7 @@ namespace V3SClient.viewModels
         public ObservableCollection<LiveCameraGroupViewModel_v3> CameraGroups { get; private set; }
         public ObservableCollection<LiveSlotViewModel_v3> Slots { get; private set; }
         public int CameraCount { get { return _allCameras.Count; } }
+        public int OnlineCameraCount { get { return _allCameras.Count(camera => camera != null && camera.is_online == true); } }
         public int AiCameraCount { get { return _allCameras.Count(camera => string.Equals(camera.type, "ai_processed", StringComparison.OrdinalIgnoreCase) || (camera.Streams != null && camera.Streams.Any(stream => stream.IsAiMode == true))); } }
         public int GroupCount { get { return _sourceGroups.Count; } }
         public int ActiveCameraCount { get { return Slots.Count(slot => slot.Camera != null); } }
@@ -327,7 +336,10 @@ namespace V3SClient.viewModels
             {
                 var slot = Slots.FirstOrDefault(candidate => SameCamera(candidate.Camera, item.Camera));
                 item.IsSelected = slot != null;
-                item.StateText = slot == null ? "Available" : slot.StatusText;
+                item.IsOnline = item.Camera == null ? (bool?)null : item.Camera.is_online;
+                item.StateText = slot == null
+                    ? item.IsOnline == true ? "Online" : item.IsOnline == false ? "Offline" : "Unknown"
+                    : slot.StatusText;
                 item.IsConnected = slot != null && slot.State == LiveConnectionState_v3.Connected;
                 item.IsConnecting = slot != null &&
                     (slot.State == LiveConnectionState_v3.Connecting ||
@@ -336,6 +348,42 @@ namespace V3SClient.viewModels
                     (slot.State == LiveConnectionState_v3.Error ||
                      slot.State == LiveConnectionState_v3.Retrying);
             }
+        }
+
+        /// <summary>
+        /// Applies the authoritative device-status batch response to the
+        /// shared Camera instances and to the sidebar item view models.
+        /// Cameras absent from a response keep their last/unknown state so a
+        /// temporary API error never marks an entire site offline.
+        /// </summary>
+        public void ApplyDeviceStatuses(IEnumerable<ApiManager.DeviceStatusResponse> statuses)
+        {
+            var lookup = (statuses ?? Enumerable.Empty<ApiManager.DeviceStatusResponse>())
+                .Where(status => status != null && !string.IsNullOrWhiteSpace(status.DeviceId))
+                .GroupBy(status => status.DeviceId.Trim(), StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => ToOnlineValue(group.Last()), StringComparer.OrdinalIgnoreCase);
+
+            if (lookup.Count == 0)
+                return;
+
+            foreach (var camera in _allCameras)
+            {
+                if (camera == null || string.IsNullOrWhiteSpace(camera.camID)) continue;
+                bool online;
+                if (!lookup.TryGetValue(camera.camID.Trim(), out online)) continue;
+                camera.is_online = online;
+                camera.Status = online ? "online" : "offline";
+            }
+
+            RefreshCameraIndicators();
+            OnPropertyChanged(nameof(OnlineCameraCount));
+        }
+
+        private static bool ToOnlineValue(ApiManager.DeviceStatusResponse status)
+        {
+            if (status.IsOnline.HasValue) return status.IsOnline.Value;
+            var value = (status.Status ?? string.Empty).Trim();
+            return string.Equals(value, "online", StringComparison.OrdinalIgnoreCase) || value == "1";
         }
 
         private static bool CameraMatches(Camera camera, string query)

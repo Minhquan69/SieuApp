@@ -67,7 +67,11 @@ namespace V3SClient.UI.Views
             public float Height;
         }
 
-        private readonly System.Windows.Forms.Panel _videoPanel = new System.Windows.Forms.Panel { Dock = System.Windows.Forms.DockStyle.Fill };
+        private readonly System.Windows.Forms.Panel _videoPanel = new System.Windows.Forms.Panel
+        {
+            Dock = System.Windows.Forms.DockStyle.Fill,
+            BackColor = System.Drawing.Color.Black
+        };
         private readonly System.Windows.Forms.Label _cameraBadge = new System.Windows.Forms.Label();
         // Gst.Parse.Launch creates D3D11 decoder/sink resources in native
         // plugins. The per-player gate protects one tile, but does not make

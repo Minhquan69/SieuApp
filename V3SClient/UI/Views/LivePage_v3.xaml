@@ -154,18 +154,24 @@
             <Border x:Name="CameraSidebar" Grid.Column="1" Background="{StaticResource VmsSidebarBrush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1,0,0,0">
                 <Grid>
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                    <Grid Margin="12,8,12,5">
+                    <!-- Keep a reserved second line for the AI counter.  With
+                         an Auto-height header it could be covered by the
+                         statistics row while the window was narrow. -->
+                    <Grid Margin="12,8,12,5" Height="59" ClipToBounds="True">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <StackPanel Orientation="Horizontal">
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                        <StackPanel Grid.Row="0" Orientation="Horizontal" ClipToBounds="True">
                             <Icon:PackIconMaterial Kind="VideoOutline" Foreground="{StaticResource VmsPrimaryBrush_v3}" Width="16" Height="16" VerticalAlignment="Center" Margin="0,0,7,0"/>
                             <TextBlock Text="Danh sách camera" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center"/>
-                            <Border Background="{StaticResource VmsPrimarySoftBrush_v3}" BorderBrush="{StaticResource VmsPrimaryBorderBrush_v3}" BorderThickness="1" CornerRadius="5" Margin="9,0,0,0" Padding="6,3" MinWidth="48"><StackPanel Orientation="Horizontal" HorizontalAlignment="Center"><Icon:PackIconMaterial Kind="RobotOutline" Width="12" Height="12" Foreground="{StaticResource VmsPrimaryBrush_v3}" VerticalAlignment="Center" Margin="0,0,4,0"/><TextBlock Foreground="{StaticResource VmsPrimaryBrush_v3}" FontSize="10" FontWeight="SemiBold"><Run Text="AI "/><Run Text="{Binding AiCameraCount, Mode=OneWay}"/></TextBlock></StackPanel></Border>
                         </StackPanel>
-                        <Button Grid.Column="1" Click="ToggleSidebar_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="6,4" ToolTip="Đóng danh sách camera"><Icon:PackIconMaterial Kind="ChevronRight" Width="14" Height="14"/></Button>
+                        <!-- At the sidebar minimum width this counter must
+                             not compete with the close button. -->
+                        <Border Grid.Row="1" Background="{StaticResource VmsPrimarySoftBrush_v3}" BorderBrush="{StaticResource VmsPrimaryBorderBrush_v3}" BorderThickness="1" CornerRadius="5" Margin="0,5,0,0" Padding="6,3" MinWidth="58" HorizontalAlignment="Left"><StackPanel Orientation="Horizontal" HorizontalAlignment="Center"><Icon:PackIconMaterial Kind="RobotOutline" Width="12" Height="12" Foreground="{StaticResource VmsPrimaryBrush_v3}" VerticalAlignment="Center" Margin="0,0,4,0"/><TextBlock Foreground="{StaticResource VmsPrimaryBrush_v3}" FontSize="10" FontWeight="SemiBold"><Run Text="AI "/><Run Text="{Binding AiCameraCount, Mode=OneWay}"/></TextBlock></StackPanel></Border>
+                        <Button Grid.Row="0" Grid.Column="1" Grid.RowSpan="2" Click="ToggleSidebar_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="6,4" ToolTip="Đóng danh sách camera"><Icon:PackIconMaterial Kind="ChevronRight" Width="14" Height="14"/></Button>
                     </Grid>
                     <UniformGrid Grid.Row="1" Columns="3" Height="46" Margin="10,0,10,6">
                         <Border Background="{StaticResource VmsSurface2Brush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" CornerRadius="5" Margin="2,1" Padding="3,2"><StackPanel><TextBlock Text="CAMERA" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="9" HorizontalAlignment="Center"/><TextBlock Text="{Binding CameraCount}" Foreground="{StaticResource VmsPrimaryBrush_v3}" FontSize="15" HorizontalAlignment="Center" FontWeight="SemiBold"/></StackPanel></Border>
-                        <Border Background="{StaticResource VmsSurface2Brush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" CornerRadius="5" Margin="2,1" Padding="3,2"><StackPanel><TextBlock Text="TRỰC TUYẾN" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="8" HorizontalAlignment="Center"/><TextBlock Text="{Binding ActiveCameraCount}" Foreground="{StaticResource VmsSuccessBrush_v3}" FontSize="15" HorizontalAlignment="Center" FontWeight="SemiBold"/></StackPanel></Border>
+                        <Border Background="{StaticResource VmsSurface2Brush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" CornerRadius="5" Margin="2,1" Padding="3,2"><StackPanel><TextBlock Text="TRỰC TUYẾN" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="8" HorizontalAlignment="Center"/><TextBlock Text="{Binding OnlineCameraCount}" Foreground="{StaticResource VmsSuccessBrush_v3}" FontSize="15" HorizontalAlignment="Center" FontWeight="SemiBold"/></StackPanel></Border>
                         <Border Background="{StaticResource VmsSurface2Brush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" CornerRadius="5" Margin="2,1" Padding="3,2"><StackPanel><TextBlock Text="NHÓM" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="9" HorizontalAlignment="Center"/><TextBlock Text="{Binding GroupCount}" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontSize="15" HorizontalAlignment="Center" FontWeight="SemiBold"/></StackPanel></Border>
                     </UniformGrid>
                     <Border Grid.Row="2" Margin="10,0,10,5" Height="31" Background="{StaticResource VmsSurface2Brush_v3}" BorderBrush="{StaticResource VmsFocusBrush_v3}" BorderThickness="1" CornerRadius="6" Panel.ZIndex="20">
@@ -237,7 +243,17 @@
                                                         </Border.Style>
                                                         <Grid>
                                                             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                                            <Icon:PackIconMaterial Kind="CameraOutline" Width="12" Height="12" Margin="0,0,5,0" VerticalAlignment="Center" Foreground="{StaticResource VmsTextTertiaryBrush_v3}"/>
+                                                            <Icon:PackIconMaterial Kind="CameraOutline" Width="12" Height="12" Margin="0,0,5,0" VerticalAlignment="Center">
+                                                                <Icon:PackIconMaterial.Style>
+                                                                    <Style TargetType="Icon:PackIconMaterial">
+                                                                        <Setter Property="Foreground" Value="{StaticResource VmsTextTertiaryBrush_v3}"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding IsOnline}" Value="True"><Setter Property="Foreground" Value="{StaticResource VmsSuccessBrush_v3}"/></DataTrigger>
+                                                                            <DataTrigger Binding="{Binding IsOnline}" Value="False"><Setter Property="Foreground" Value="{StaticResource VmsErrorBrush_v3}"/></DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </Icon:PackIconMaterial.Style>
+                                                            </Icon:PackIconMaterial>
                                                             <TextBlock Grid.Column="1" Text="{Binding DisplayName}" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" TextTrimming="CharacterEllipsis" FontSize="11"/>
                                                             <Icon:PackIconMaterial Grid.Column="2" Kind="Check" Foreground="{StaticResource VmsSuccessBrush_v3}" Width="14" Height="14" Margin="5,0,0,0">
                                                                 <Icon:PackIconMaterial.Style><Style TargetType="Icon:PackIconMaterial"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsSelected}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Icon:PackIconMaterial.Style>

@@ -38,16 +38,22 @@ namespace V3SClient
                     // The isolated migrated executable always uses the migrated login flow.
                     // The legacy login remains available in the preserved source but is not
                     // selected by this deliverable.
-                    Window loginWindow = new LoginWindow_v3();
+                    var loginWindow = new LoginWindow_v3();
                     bool? dialogResult = loginWindow.ShowDialog(); // Chờ kết quả đăng nhập
 
                     if (dialogResult == true)
                     {
+                        // Do not reset the user back to a default-size shell
+                        // after sign-in. Preserve both normal geometry and
+                        // the all-monitor fullscreen mode from login.
+                        var loginBounds = loginWindow.WindowBoundsForNextShell;
+                        var loginWasVirtualDesktop = loginWindow.IsVirtualDesktopMode;
                         GlobalSystem.Instance.Init();
                         MetaAIResultStorage.Instance.ToString();
                         // Đăng nhập thành công, mở MainWindow
                         // Keep the migrated shell as the only startup shell for this copy.
-                        Window mainWindow = new ShellWindow_v3();
+                        var mainWindow = new ShellWindow_v3();
+                        mainWindow.ApplyStartupWindowPlacement(loginBounds, loginWasVirtualDesktop);
                         MainWindow = mainWindow;
                         mainWindow.Show();
                     }

@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using System.Linq;
+using System.IO;
 
 namespace V3SClient.libs
 {
@@ -43,10 +44,17 @@ namespace V3SClient.libs
         public static ApiManager Instance => _instance.Value;
 
         private HttpClient _httpClient;
+        // Isolated from login headers and main-backend connection pooling.
+        private readonly HttpClient _deviceStatusHttpClient;
 
         // Backend Domain (The Center Server entry point)
         private string _baseUrl = "http://localhost:8100";
         private string _streamApiUrl = "http://localhost:3000/streams";
+        private string _deviceStatusApiUrl;
+        // This gateway key is deliberately separate from _backendToken.
+        // _backendToken is replaced by the interactive-login JWT, whereas the
+        // status gateway always expects its own X-API-Key.
+        private string _deviceStatusApiKey;
         private string _metadataWsUrl;
         private string _backendToken;
 
@@ -68,6 +76,7 @@ namespace V3SClient.libs
        
         public string BaseUrl => _baseUrl;
         public string StreamApiUrl => _streamApiUrl;
+        public string DeviceStatusApiUrl => _deviceStatusApiUrl;
         public string MetadataWsUrl => _metadataWsUrl;
         public string NetworkMode => _networkMode;
         public string StorageUrl => _storageUrl;
@@ -81,12 +90,94 @@ namespace V3SClient.libs
         public string MapUrl => _mapUrl;
      
         private const string ConfigFile = "server_config.json";
+        private const string BackendTokenEnvironmentVariable = "IVISTA_BACKEND_TOKEN";
+        private const string DeviceStatusApiUrlEnvironmentVariable = "IVISTA_DEVICE_STATUS_API_URL";
+        private const string DeviceStatusApiKeyEnvironmentVariable = "IVISTA_DEVICE_STATUS_API_KEY";
 
         private ApiManager()
         {
             _httpClient = new HttpClient();
             _httpClient.Timeout = TimeSpan.FromSeconds(30);
+            var statusHandler = new HttpClientHandler { UseProxy = false };
+            _deviceStatusHttpClient = new HttpClient(statusHandler);
+            _deviceStatusHttpClient.Timeout = TimeSpan.FromSeconds(12);
             LoadConfig();
+            LoadDeviceStatusLocalConfig();
+            LoadBackendTokenFromEnvironment();
+            LoadDeviceStatusApiUrlFromEnvironment();
+            LoadDeviceStatusApiKeyFromEnvironment();
+        }
+
+        /// <summary>
+        /// Optional deployment token.  It is intentionally read from the
+        /// per-user/process environment rather than app.config or source, so
+        /// it is not committed with the client project or copied into builds.
+        /// A normal interactive login still replaces it for that session.
+        /// </summary>
+        private void LoadBackendTokenFromEnvironment()
+        {
+            var token = Environment.GetEnvironmentVariable(BackendTokenEnvironmentVariable, EnvironmentVariableTarget.Process);
+            if (string.IsNullOrWhiteSpace(token))
+                token = Environment.GetEnvironmentVariable(BackendTokenEnvironmentVariable, EnvironmentVariableTarget.User);
+            if (!string.IsNullOrWhiteSpace(token))
+                SetBackendToken(token.Trim());
+        }
+
+        private void LoadDeviceStatusApiUrlFromEnvironment()
+        {
+            if (!string.IsNullOrWhiteSpace(_deviceStatusApiUrl))
+                return;
+            var url = Environment.GetEnvironmentVariable(DeviceStatusApiUrlEnvironmentVariable, EnvironmentVariableTarget.Process);
+            if (string.IsNullOrWhiteSpace(url))
+                url = Environment.GetEnvironmentVariable(DeviceStatusApiUrlEnvironmentVariable, EnvironmentVariableTarget.User);
+            _deviceStatusApiUrl = string.IsNullOrWhiteSpace(url) ? null : url.Trim().TrimEnd('/');
+        }
+
+        private void LoadDeviceStatusApiKeyFromEnvironment()
+        {
+            if (!string.IsNullOrWhiteSpace(_deviceStatusApiKey))
+                return;
+            var key = Environment.GetEnvironmentVariable(DeviceStatusApiKeyEnvironmentVariable, EnvironmentVariableTarget.Process);
+            if (string.IsNullOrWhiteSpace(key))
+                key = Environment.GetEnvironmentVariable(DeviceStatusApiKeyEnvironmentVariable, EnvironmentVariableTarget.User);
+
+            // Compatibility with the original deployment setting.  Keep this
+            // value in a separate field so SetBackendToken(loginJwt) cannot
+            // replace it after the user signs in.
+            if (string.IsNullOrWhiteSpace(key))
+                key = Environment.GetEnvironmentVariable(BackendTokenEnvironmentVariable, EnvironmentVariableTarget.Process);
+            if (string.IsNullOrWhiteSpace(key))
+                key = Environment.GetEnvironmentVariable(BackendTokenEnvironmentVariable, EnvironmentVariableTarget.User);
+
+            _deviceStatusApiKey = string.IsNullOrWhiteSpace(key) ? null : key.Trim();
+        }
+
+        /// <summary>
+        /// Reads the deployment-only status gateway configuration.  This file
+        /// is explicitly gitignored and copied beside the executable only for
+        /// local builds, so its API key never enters source control.
+        /// </summary>
+        private void LoadDeviceStatusLocalConfig()
+        {
+            try
+            {
+                var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "device_status.local.json");
+                if (!File.Exists(path))
+                    return;
+
+                var config = JsonConvert.DeserializeObject<DeviceStatusLocalConfig>(File.ReadAllText(path));
+                if (config == null)
+                    return;
+
+                if (!string.IsNullOrWhiteSpace(config.ApiUrl))
+                    _deviceStatusApiUrl = config.ApiUrl.Trim().TrimEnd('/');
+                if (!string.IsNullOrWhiteSpace(config.ApiKey))
+                    _deviceStatusApiKey = config.ApiKey.Trim();
+            }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Cannot load device_status.local.json");
+            }
         }
 
         public void LoadConfig()
@@ -1692,16 +1783,37 @@ namespace V3SClient.libs
 
         public async Task<List<DeviceStatusResponse>> GetDeviceStatusBatchAsync(List<string> deviceIds, CancellationToken cancellationToken = default)
         {
+            if (deviceIds == null || deviceIds.Count == 0)
+                return new List<DeviceStatusResponse>();
+
             try
             {
                 var body = new { device_ids = deviceIds };
-                var content = new StringContent(JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json");
-                var response = await _httpClient.PostAsync($"{_baseUrl}/api/v1/devices/status/batch", content, cancellationToken);
-                
-                if (response.IsSuccessStatusCode)
+                var endpointRoot = string.IsNullOrWhiteSpace(_deviceStatusApiUrl) ? _baseUrl : _deviceStatusApiUrl;
+                using (var request = new HttpRequestMessage(HttpMethod.Post, $"{endpointRoot}/api/v1/devices/status/batch"))
                 {
-                    var resultJson = await response.Content.ReadAsStringAsync();
-                    return JsonConvert.DeserializeObject<List<DeviceStatusResponse>>(resultJson);
+                    // This nginx gateway closes pooled keep-alive sockets.
+                    // curl works because it opens a fresh connection; do the
+                    // same for status polling instead of reusing a stale one.
+                    request.Headers.ConnectionClose = true;
+                    request.Content = new StringContent(JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json");
+                    // Never use the login JWT here: this endpoint requires
+                    // the deployment X-API-Key and login replaces
+                    // _backendToken at runtime.
+                    if (!string.IsNullOrWhiteSpace(_deviceStatusApiKey))
+                        request.Headers.TryAddWithoutValidation("X-API-Key", _deviceStatusApiKey);
+                    // Do not use _httpClient: it owns the interactive-login
+                    // Bearer header and may retain a stale gateway socket.
+                    var response = await _deviceStatusHttpClient.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken);
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var resultJson = await response.Content.ReadAsStringAsync();
+                        var result = JsonConvert.DeserializeObject<List<DeviceStatusResponse>>(resultJson) ?? new List<DeviceStatusResponse>();
+                        LoggerManager.LogInfo($"Device status batch succeeded: {result.Count}/{deviceIds.Count} records.");
+                        return result;
+                    }
+                    LoggerManager.LogWarn($"Device status batch returned {(int)response.StatusCode} from {endpointRoot}.");
                 }
                 return new List<DeviceStatusResponse>();
             }
@@ -1734,6 +1846,15 @@ namespace V3SClient.libs
             public string Status { get; set; }
             [JsonProperty("is_online")]
             public bool? IsOnline { get; set; }
+        }
+
+        private class DeviceStatusLocalConfig
+        {
+            [JsonProperty("api_url")]
+            public string ApiUrl { get; set; }
+
+            [JsonProperty("api_key")]
+            public string ApiKey { get; set; }
         }
     }
 }

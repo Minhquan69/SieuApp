@@ -41,12 +41,47 @@ namespace V3SClient.window
         private int _normalNativeStyle;
         private int _normalNativeExStyle;
         private bool _nativeFrameStyleSaved;
+        private bool _startInVirtualDesktopMode;
         private const int WmNcHitTest = 0x0084;
         private const int HtLeft = 10, HtRight = 11, HtTop = 12, HtTopLeft = 13, HtTopRight = 14, HtBottom = 15, HtBottomLeft = 16, HtBottomRight = 17;
 
         [StructLayout(LayoutKind.Sequential)]
         private struct NativeRect { public int Left, Top, Right, Bottom; }
         public bool IsVirtualDesktopMode { get { return _isVirtualDesktopMode; } }
+
+        /// <summary>
+        /// Carries window geometry and multi-monitor fullscreen state across
+        /// the login-to-shell transition. Fullscreen is applied after Loaded,
+        /// when the native shell handle is ready.
+        /// </summary>
+        public void ApplyStartupWindowPlacement(Rect normalBounds, bool virtualDesktopMode)
+        {
+            if (normalBounds.Width > 0 && normalBounds.Height > 0)
+            {
+                _normalWindowBounds = normalBounds;
+                Left = normalBounds.Left;
+                Top = normalBounds.Top;
+                Width = Math.Max(MinWidth, normalBounds.Width);
+                Height = Math.Max(MinHeight, normalBounds.Height);
+            }
+
+            _startInVirtualDesktopMode = virtualDesktopMode;
+            if (_startInVirtualDesktopMode)
+                Loaded += ApplyStartupVirtualDesktopMode;
+        }
+
+        private void ApplyStartupVirtualDesktopMode(object sender, RoutedEventArgs e)
+        {
+            Loaded -= ApplyStartupVirtualDesktopMode;
+            if (!_startInVirtualDesktopMode || _isVirtualDesktopMode)
+                return;
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (!_isVirtualDesktopMode)
+                    ToggleVirtualDesktopMode();
+            }), System.Windows.Threading.DispatcherPriority.Loaded);
+        }
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter,

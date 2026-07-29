@@ -52,6 +52,8 @@ namespace V3SClient.UI.Views
         private int _geometryTransitionVersion;
         private readonly TranslateTransform _headerActionTransform = new TranslateTransform();
         private readonly DispatcherTimer _resizeSettledTimer;
+        private readonly DispatcherTimer _deviceStatusRefreshTimer;
+        private int _deviceStatusRefreshInProgress;
         private readonly Stopwatch _resizeStopwatch = new Stopwatch();
         private bool _resizeOverlaysSuspended;
         private bool _geometryTransitionInProgress;
@@ -71,6 +73,11 @@ namespace V3SClient.UI.Views
             // SizeChanged events raised by WindowsFormsHost/D3D surfaces.
             _resizeSettledTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(85) };
             _resizeSettledTimer.Tick += ResizeSettledTimer_Tick;
+            // The status gateway is authoritative, but polling it too often
+            // creates needless requests when large camera lists are open.
+            // Refresh immediately on page load/Connect all, then every 30 s.
+            _deviceStatusRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+            _deviceStatusRefreshTimer.Tick += DeviceStatusRefreshTimer_Tick;
             // The action icons are centred against the complete header at all
             // window sizes, not against the space left between side controls.
             HeaderActionPanel.RenderTransform = _headerActionTransform;
@@ -110,7 +117,7 @@ namespace V3SClient.UI.Views
             return window == null ? null : window.Content as ShellPage_v3;
         }
 
-        private void OnLoaded(object sender, RoutedEventArgs e)
+        private async void OnLoaded(object sender, RoutedEventArgs e)
         {
             CameraStatus.Text = string.Format("{0} cameras · {1} groups · {2}/{3} active", _viewModel.CameraCount, _viewModel.GroupCount, _viewModel.ActiveCameraCount, _viewModel.Slots.Count);
             EmptyState.Visibility = _viewModel.CameraCount == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -120,6 +127,55 @@ namespace V3SClient.UI.Views
             NormalizeCameraSidebarLayout();
             BuildGrid();
             QueueHeaderActionCentering();
+            await RefreshDeviceStatusesAsync();
+            if (!_disposed) _deviceStatusRefreshTimer.Start();
+        }
+
+        private async void DeviceStatusRefreshTimer_Tick(object sender, EventArgs e)
+        {
+            await RefreshDeviceStatusesAsync();
+        }
+
+        private async Task<bool> RefreshDeviceStatusesAsync()
+        {
+            if (_disposed || Interlocked.Exchange(ref _deviceStatusRefreshInProgress, 1) != 0)
+                return false;
+
+            try
+            {
+                var deviceIds = _viewModel.CameraGroups
+                    .SelectMany(group => group.Cameras ?? Enumerable.Empty<Camera>())
+                    .Where(camera => camera != null && !string.IsNullOrWhiteSpace(camera.camID))
+                    .Select(camera => camera.camID.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                if (deviceIds.Count == 0) return false;
+
+                var statuses = await ApiManager.Instance.GetDeviceStatusBatchAsync(deviceIds, _lifetime.Token);
+                if (_disposed || statuses == null || statuses.Count == 0) return false;
+
+                _viewModel.ApplyDeviceStatuses(statuses);
+                UpdateStatus();
+                UpdateOnlineCameraStatusLabel();
+                return true;
+            }
+            catch (OperationCanceledException) { return false; }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Live View _v3 device-status refresh failed");
+                return false;
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _deviceStatusRefreshInProgress, 0);
+            }
+        }
+
+        private void UpdateOnlineCameraStatusLabel()
+        {
+            CameraStatus.Text = string.Format("{0} cameras · {1} groups · {2} online · {3}/{4} active",
+                _viewModel.CameraCount, _viewModel.GroupCount, _viewModel.OnlineCameraCount,
+                _viewModel.ActiveCameraCount, _viewModel.Slots.Count);
         }
 
         private void LivePageHeader_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -633,6 +689,7 @@ namespace V3SClient.UI.Views
             {
                 var targets = (slots ?? Enumerable.Empty<LiveSlotViewModel_v3>())
                     .Where(slot => slot != null &&
+                        (slot.Camera == null || slot.Camera.is_online != false) &&
                         slot.State != LiveConnectionState_v3.Connected &&
                         slot.State != LiveConnectionState_v3.Connecting)
                     .Select(slot =>
@@ -1043,11 +1100,19 @@ namespace V3SClient.UI.Views
 
         private async void ConnectAll_Click(object sender, RoutedEventArgs e)
         {
-            var targets = _viewModel.Slots.Where(slot => slot.Camera != null).ToList();
             try
             {
+                // Fetch immediately before the bulk operation.  This avoids
+                // spending decoder/network slots on cameras the backend has
+                // already marked offline.
+                await RefreshDeviceStatusesAsync();
+                foreach (var offlineSlot in _viewModel.Slots.Where(slot => slot.Camera != null && slot.Camera.is_online == false))
+                {
+                    if (offlineSlot.State != LiveConnectionState_v3.Connected)
+                        offlineSlot.State = LiveConnectionState_v3.Offline;
+                }
                 var connectTasks = _tiles.Values
-                    .Where(tile => tile.Slot != null && tile.Slot.Camera != null)
+                    .Where(tile => tile.Slot != null && tile.Slot.Camera != null && tile.Slot.Camera.is_online != false)
                     .Select(tile => tile.ConnectAsync())
                     .ToArray();
                 await Task.WhenAll(connectTasks);
@@ -1534,6 +1599,8 @@ namespace V3SClient.UI.Views
             _lifetime.Dispose();
             _resizeSettledTimer.Stop();
             _resizeSettledTimer.Tick -= ResizeSettledTimer_Tick;
+            _deviceStatusRefreshTimer.Stop();
+            _deviceStatusRefreshTimer.Tick -= DeviceStatusRefreshTimer_Tick;
             LivePageHeader.SizeChanged -= LivePageHeader_SizeChanged;
             CameraGrid.SizeChanged -= CameraGrid_SizeChanged;
             SizeChanged -= LivePage_SizeChanged;

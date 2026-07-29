@@ -33,6 +33,26 @@ namespace V3SClient.window
         [StructLayout(LayoutKind.Sequential)]
         private struct NativeRect { public int Left, Top, Right, Bottom; }
 
+        /// <summary>
+        /// App.xaml uses this to open the VMS shell in the same display mode
+        /// after a successful sign-in.
+        /// </summary>
+        public bool IsVirtualDesktopMode { get { return _isVirtualDesktopMode; } }
+
+        public Rect WindowBoundsForNextShell
+        {
+            get
+            {
+                if (_isVirtualDesktopMode && _normalWindowBounds.Width > 0 && _normalWindowBounds.Height > 0)
+                    return _normalWindowBounds;
+
+                var bounds = WindowState == WindowState.Normal
+                    ? new Rect(Left, Top, ActualWidth, ActualHeight)
+                    : RestoreBounds;
+                return bounds.Width > 0 && bounds.Height > 0 ? bounds : new Rect(0, 0, Width, Height);
+            }
+        }
+
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter,
             int x, int y, int width, int height, uint flags);
