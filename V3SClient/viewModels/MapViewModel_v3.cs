@@ -24,10 +24,11 @@ namespace V3SClient.viewModels
         public string GroupName { get; }
         public bool IsAiCamera => _camera.HasAIStream;
         public bool HasLocation => _camera.Latitude.HasValue && _camera.Longitude.HasValue;
-        // Keep E-Map availability consistent with the current web map: all configured cameras are online.
-        public bool IsOnline => true;
+        // The shared Camera instance is updated by the device-status batch,
+        // so the map sidebar must reflect its real online state.
+        public bool IsOnline => _camera.is_online == true;
         public bool IsAlert => false;
-        public string Status => "online";
+        public string Status => IsOnline ? "online" : "offline";
 
         public void Refresh()
         {

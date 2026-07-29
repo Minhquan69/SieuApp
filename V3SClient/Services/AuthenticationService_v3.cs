@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using V3SClient.libs;
@@ -13,7 +14,8 @@ namespace V3SClient.Services
         public async Task<AuthenticationResult_v3> SignInAsync(string username, string password, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var login = await ApiManager.Instance.LoginAsync(username, password);
+            var stopwatch = Stopwatch.StartNew();
+            var login = await ApiManager.Instance.LoginAsync(username, password, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             if (!login.Success) return AuthenticationResult_v3.Failed(login.Message);
 
@@ -21,7 +23,10 @@ namespace V3SClient.Services
             user.UserId = login.UserId;
             user.UserName = username;
             user.SetLoginTime();
-            var me = await ApiManager.Instance.GetMeAsync(cancellationToken);
+            var meTask = ApiManager.Instance.GetMeAsync(cancellationToken);
+            var profilesTask = _sessionService.LoadAuthorizedClientsAsync(cancellationToken);
+            await Task.WhenAll(meTask, profilesTask);
+            var me = await meTask;
             cancellationToken.ThrowIfCancellationRequested();
             if (me != null)
             {
@@ -30,7 +35,8 @@ namespace V3SClient.Services
                 user.TenantId = me.TenantId;
                 user.IsSuperAdmin = me.IsSuperAdmin;
             }
-            var profiles = await _sessionService.LoadAuthorizedClientsAsync(cancellationToken);
+            var profiles = await profilesTask;
+            LoggerManager.LogInfo("Login v3 completed in " + stopwatch.ElapsedMilliseconds + " ms.");
             return AuthenticationResult_v3.Succeeded(profiles);
         }
 

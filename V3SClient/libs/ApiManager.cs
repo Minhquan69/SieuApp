@@ -44,6 +44,11 @@ namespace V3SClient.libs
         public static ApiManager Instance => _instance.Value;
 
         private HttpClient _httpClient;
+        // Login must be able to reach the Center Manager even when a stale
+        // Windows proxy setting makes the default HttpClient fail instantly.
+        // Keep this isolated so all existing API traffic preserves its
+        // current proxy behavior.
+        private readonly HttpClient _loginHttpClient;
         // Isolated from login headers and main-backend connection pooling.
         private readonly HttpClient _deviceStatusHttpClient;
 
@@ -98,6 +103,9 @@ namespace V3SClient.libs
         {
             _httpClient = new HttpClient();
             _httpClient.Timeout = TimeSpan.FromSeconds(30);
+            var loginHandler = new HttpClientHandler { UseProxy = false };
+            _loginHttpClient = new HttpClient(loginHandler);
+            _loginHttpClient.Timeout = TimeSpan.FromSeconds(12);
             var statusHandler = new HttpClientHandler { UseProxy = false };
             _deviceStatusHttpClient = new HttpClient(statusHandler);
             _deviceStatusHttpClient.Timeout = TimeSpan.FromSeconds(12);
@@ -263,19 +271,21 @@ namespace V3SClient.libs
         private async Task<HttpResponseMessage> SendWithTransientRetryAsync(
             Func<CancellationToken, Task<HttpResponseMessage>> operation,
             CancellationToken cancellationToken,
-            string operationName)
+            string operationName,
+            int maxAttempts = AuthenticationRequestAttempts,
+            int timeoutSeconds = 12)
         {
             Exception lastException = null;
-            for (var attempt = 1; attempt <= AuthenticationRequestAttempts; attempt++)
+            for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 try
                 {
                     using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
                     {
-                        timeout.CancelAfter(TimeSpan.FromSeconds(12));
+                        timeout.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
                         var response = await operation(timeout.Token).ConfigureAwait(false);
-                        if (!IsTransientStatus(response.StatusCode) || attempt == AuthenticationRequestAttempts)
+                        if (!IsTransientStatus(response.StatusCode) || attempt == maxAttempts)
                             return response;
 
                         response.Dispose();
@@ -291,10 +301,10 @@ namespace V3SClient.libs
                     lastException = ex;
                 }
 
-                if (attempt < AuthenticationRequestAttempts)
+                if (attempt < maxAttempts)
                 {
-                    LoggerManager.LogWarn(operationName + " connection failed; retry " + attempt + "/" + AuthenticationRequestAttempts + ".");
-                    await Task.Delay(TimeSpan.FromMilliseconds(700 * attempt), cancellationToken).ConfigureAwait(false);
+                    LoggerManager.LogWarn(operationName + " connection failed; retry " + attempt + "/" + maxAttempts + ".");
+                    await Task.Delay(TimeSpan.FromMilliseconds(350 * attempt), cancellationToken).ConfigureAwait(false);
                 }
             }
 
@@ -342,18 +352,24 @@ namespace V3SClient.libs
             }
         }
 
-        public async Task<LoginResult> LoginAsync(string username, string password)
+        public async Task<LoginResult> LoginAsync(string username, string password, CancellationToken cancellationToken)
         {
             LoggerManager.LogDebug($"Đang gọi API Đăng nhập cho user: {username} tại {_baseUrl}");
             try
             {
                 var credentials = new { username = username, password = password };
                 var json = JsonConvert.SerializeObject(credentials);
-                var response = await SendWithTransientRetryAsync(async cancellationToken =>
+                var response = await SendWithTransientRetryAsync(async requestToken =>
                 {
-                    using (var content = new StringContent(json, Encoding.UTF8, "application/json"))
-                        return await _httpClient.PostAsync($"{_baseUrl}/api/auth/login", content, cancellationToken).ConfigureAwait(false);
-                }, CancellationToken.None, "Login");
+                    // A fresh connection avoids reusing a gateway connection that
+                    // has already been closed while the login window was idle.
+                    using (var request = new HttpRequestMessage(HttpMethod.Post, $"{_baseUrl}/api/auth/login"))
+                    {
+                        request.Headers.ConnectionClose = true;
+                        request.Content = new StringContent(json, Encoding.UTF8, "application/json");
+                        return await _loginHttpClient.SendAsync(request, requestToken).ConfigureAwait(false);
+                    }
+                }, cancellationToken, "Login", maxAttempts: 2, timeoutSeconds: 3);
                 if (response.IsSuccessStatusCode)
                 {
                     var resultJson = await response.Content.ReadAsStringAsync();
@@ -364,8 +380,10 @@ namespace V3SClient.libs
 
                     SetBackendToken(result.access_token);
 
-                    // Auto-discover other service endpoints (Storage, Logs, etc.)
-                    await DiscoverEndpointsAsync();
+                    // Discovery is useful for Playback/Storage, but it must never
+                    // keep the user on the login screen. It completes in the
+                    // background before those pages are normally opened.
+                    StartEndpointDiscoveryInBackground();
                     LoggerManager.LogInfo($"Gửi yêu cầu đăng nhập thành công cho: {username}");
                     return new LoginResult(true, result.user_id, "Success");
                 }
@@ -410,7 +428,7 @@ namespace V3SClient.libs
             try
             {
                 var response = await SendWithTransientRetryAsync(
-                    retryToken => _httpClient.GetAsync($"{_baseUrl}/api/v1/client-profiles/me/authorized", retryToken), cancellationToken, "Load authorized profiles");
+                    retryToken => _httpClient.GetAsync($"{_baseUrl}/api/v1/client-profiles/me/authorized", retryToken), cancellationToken, "Load authorized profiles", maxAttempts: 1, timeoutSeconds: 3);
                 if (response.IsSuccessStatusCode)
                 {
                     var resultJson = await response.Content.ReadAsStringAsync();
@@ -438,7 +456,7 @@ namespace V3SClient.libs
             try
             {
                 var response = await SendWithTransientRetryAsync(
-                    retryToken => _httpClient.GetAsync($"{_baseUrl}/api/user/profiles", retryToken), cancellationToken, "Load profiles");
+                    retryToken => _httpClient.GetAsync($"{_baseUrl}/api/user/profiles", retryToken), cancellationToken, "Load profiles", maxAttempts: 1, timeoutSeconds: 4);
                 if (!response.IsSuccessStatusCode) return new List<ClientProfile>();
                 var json = await response.Content.ReadAsStringAsync();
                 var list = JsonConvert.DeserializeObject<List<ClientProfile>>(json);
@@ -554,7 +572,7 @@ namespace V3SClient.libs
             try
             {
                 var response = await SendWithTransientRetryAsync(
-                    retryToken => _httpClient.GetAsync($"{_baseUrl}/api/v1/auth/me", retryToken), cancellationToken, "Load current user");
+                    retryToken => _httpClient.GetAsync($"{_baseUrl}/api/v1/auth/me", retryToken), cancellationToken, "Load current user", maxAttempts: 1, timeoutSeconds: 3);
                 if (response.IsSuccessStatusCode)
                 {
                     var resultJson = await response.Content.ReadAsStringAsync();
@@ -1167,13 +1185,16 @@ namespace V3SClient.libs
             return (profile != null && !string.IsNullOrEmpty(profile.Token)) ? profile.Token : _backendToken;
         }
 
-        public async Task<bool> DiscoverEndpointsAsync()
+        public async Task<bool> DiscoverEndpointsAsync(CancellationToken cancellationToken = default(CancellationToken))
         {
             LoggerManager.LogDebug($"Bắt đầu khám phá Service Endpoints tại {_baseUrl}/api/system/endpoints");
             try
             {
-                // Call the unified discovery endpoint on Center Manager
-                var response = await _httpClient.GetAsync($"{_baseUrl}/api/system/endpoints");
+                // Endpoint discovery is optional and must not hold the login
+                // screen indefinitely when the discovery route is slow.
+                var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeout.CancelAfter(TimeSpan.FromSeconds(4));
+                var response = await _httpClient.GetAsync($"{_baseUrl}/api/system/endpoints", timeout.Token);
                 if (response.IsSuccessStatusCode)
                 {
                     var json = await response.Content.ReadAsStringAsync();
@@ -1235,6 +1256,16 @@ namespace V3SClient.libs
                 LoggerManager.LogException(ex, "Lỗi nghiêm trọng trong DiscoverEndpointsAsync");
             }
             return false;
+        }
+
+        private void StartEndpointDiscoveryInBackground()
+        {
+            Task.Run(async () =>
+            {
+                var discovered = await DiscoverEndpointsAsync(CancellationToken.None).ConfigureAwait(false);
+                if (!discovered)
+                    LoggerManager.LogWarn("Endpoint discovery was deferred after login and did not complete.");
+            });
         }
 
         /// <summary>

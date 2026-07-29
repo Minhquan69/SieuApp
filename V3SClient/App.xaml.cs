@@ -20,12 +20,11 @@ namespace V3SClient
     public partial class App : Application
     {
         private  Mutex _mutex;
-        private MemoryDiagnosticsLogger _memoryDiagnostics;
  
         public static bool IsRun { get; set; }
         protected override async void OnStartup(StartupEventArgs e)
         {
-            
+            RegisterGlobalExceptionLogging();
             string mutexName = "V3SClient_VMS";
             bool isCreatNew = false;
 
@@ -34,10 +33,6 @@ namespace V3SClient
                 _mutex = new Mutex(true, mutexName, out isCreatNew);
                 if (isCreatNew)
                 {
-                    // One file per application run, sampled every 15 seconds.
-                    // The logger is intentionally started before login so a
-                    // problematic start-up path is included in the evidence.
-                    _memoryDiagnostics = new MemoryDiagnosticsLogger(TimeSpan.FromSeconds(15));
                     GlobalClass.Init();
       
                     // The isolated migrated executable always uses the migrated login flow.
@@ -68,9 +63,6 @@ namespace V3SClient
                     }
                     // base.OnStartup(e);
                     IsRun = true;
-                    Dispatcher.UnhandledException += Dispatcher_UnhandledException;
-                    Dispatcher.UnhandledExceptionFilter += Dispatcher_UnhandledExceptionFilter;
-                   
                 }
                 else
                 {
@@ -80,35 +72,52 @@ namespace V3SClient
             }
             catch (SqlException ex)
             {
+                LoggerManager.LogException(ex, "Unhandled SQL exception during application startup");
                 MessageBox.Show("Không thể kết nối máy chủ.\n Vui lòng kiểm tra lại.","Lỗi",MessageBoxButton.OK,MessageBoxImage.Error);
                 Application.Current.Shutdown();
             }
             catch (Exception ex)
             {
+                LoggerManager.LogException(ex, "Unhandled exception during application startup");
                 MessageBox.Show(ex.Message + "\n\n" + ex.StackTrace + "\n\n" + "Ứng dụng đang thoát...", "Lỗi hệ thống");
                 Application.Current.Shutdown();
             }
 
         }
        
+        private void RegisterGlobalExceptionLogging()
+        {
+            var diagnosticDirectory = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "iVista VMS", "logs");
+            System.IO.Directory.CreateDirectory(diagnosticDirectory);
+
+            Dispatcher.UnhandledException += Dispatcher_UnhandledException;
+            Dispatcher.UnhandledExceptionFilter += Dispatcher_UnhandledExceptionFilter;
+            AppDomain.CurrentDomain.UnhandledException += (sender, args) =>
+            {
+                LoggerManager.LogError(
+                    "Unhandled AppDomain exception. IsTerminating: " + args.IsTerminating + "; Exception: " + args.ExceptionObject);
+            };
+            TaskScheduler.UnobservedTaskException += (sender, args) =>
+            {
+                LoggerManager.LogException(args.Exception, "Unobserved background task exception");
+            };
+        }
+
         private void Dispatcher_UnhandledExceptionFilter(object sender, System.Windows.Threading.DispatcherUnhandledExceptionFilterEventArgs e)
         {
+            LoggerManager.LogException(e.Exception, "Unhandled WPF dispatcher exception filter");
             e.RequestCatch = true;
         }
 
         private void Dispatcher_UnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
         {
-
+            LoggerManager.LogException(e.Exception, "Unhandled WPF dispatcher exception");
         }
 
         protected override void OnExit(ExitEventArgs e)
         {
-            if (_memoryDiagnostics != null)
-            {
-                _memoryDiagnostics.Dispose();
-                _memoryDiagnostics = null;
-            }
-
             if (_mutex != null)
             {
                 try { _mutex.ReleaseMutex(); }

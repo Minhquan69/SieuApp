@@ -662,25 +662,59 @@ namespace V3SClient.models
                 videoSource = ElementFactory.Make("souphttpsrc", "videoSource");
                 if (!string.IsNullOrEmpty(hlsUrl))
                     videoSource["location"] = hlsUrl;
+                videoSource["is-live"] = true;
+                videoSource["retries"] = -1;
                 videoSource["ssl-use-system-ca-file"] = true;
                 videoSource["ssl-strict"] = true;
 
+                // The playlist URL carries a token, but some deployments also
+                // require it on every media fragment requested by hlsdemux.
+                string playbackToken = ApiManager.Instance.GetEndpointToken("_playback");
+                if (!string.IsNullOrWhiteSpace(playbackToken))
+                {
+                    var headers = new Gst.Structure("extra-headers");
+                    headers.SetValue("X-Playback-Token", new GLib.Value(playbackToken));
+                    videoSource["extra-headers"] = headers;
+                }
+
                 Element hlsDemux = ElementFactory.Make("hlsdemux", "hlsDemux");
-                demux = ElementFactory.Make("parsebin", "tsDemux");
+                // An explicit container demux consumes the dynamic HLS output.
+                // decodebin directly after hlsdemux can leave fMP4 pads unlinked.
+                bool isFmp4 = !string.IsNullOrEmpty(hlsUrl) &&
+                    hlsUrl.IndexOf("playback=fmp4", StringComparison.OrdinalIgnoreCase) >= 0;
+                demux = ElementFactory.Make(isFmp4 ? "qtdemux" : "parsebin", "mediaDemux");
+
+                if (videoSource == null || hlsDemux == null || demux == null)
+                    throw new InvalidOperationException("GStreamer runtime is missing the HLS playback elements.");
 
                 player.Add(videoSource, hlsDemux, demux);
                 videoSource.Link(hlsDemux);
 
-                // 2. Dynamic HLS -> TS Link
+                // 2. Dynamic HLS -> container-demux link.
                 hlsDemux.PadAdded += (sender, args) =>
                 {
                     Pad hlsSrcPad = args.NewPad;
-                    Pad tsSinkPad = demux.GetStaticPad("sink");
-                    if (!tsSinkPad.IsLinked) hlsSrcPad.Link(tsSinkPad);
-                    tsSinkPad?.Dispose();
+                    Caps hlsCaps = hlsSrcPad.QueryCaps();
+                    LoggerManager.LogInfo("Playback HLS pad: " + (hlsCaps == null ? "unknown" : hlsCaps.ToString()));
+                    Pad decoderSinkPad = demux.GetStaticPad("sink");
+                    if (decoderSinkPad == null)
+                    {
+                        LoggerManager.LogError("Playback HLS link failed: media demux has no sink pad.");
+                        return;
+                    }
+
+                    if (!decoderSinkPad.IsLinked)
+                    {
+                        var linkResult = hlsSrcPad.Link(decoderSinkPad);
+                        LoggerManager.LogInfo("Playback HLS link result: " + linkResult);
+                        if (linkResult != PadLinkReturn.Ok)
+                            LoggerManager.LogError("Playback HLS link failed: " + linkResult);
+                    }
+                    hlsCaps?.Dispose();
+                    decoderSinkPad.Dispose();
                 };
 
-                // 3. Dynamic TS -> Video/Audio Link
+                // 3. Dynamic container -> Video/Audio link.
                 demux.PadAdded += (sender, args) =>
                 {
                     Pad newPad = args.NewPad;
@@ -691,14 +725,17 @@ namespace V3SClient.models
                         string capsName = caps.GetStructure(0).Name;
 
                         // --- VIDEO BRANCH ---
-                        if (capsName.StartsWith("video/x-h264", StringComparison.OrdinalIgnoreCase) ||
-                            capsName.StartsWith("video/x-h265", StringComparison.OrdinalIgnoreCase))
+                        if (capsName.StartsWith("video/", StringComparison.OrdinalIgnoreCase))
                         {
                             bool isH265 = capsName.StartsWith("video/x-h265", StringComparison.OrdinalIgnoreCase);
                             this.IsH264 = !isH265;
 
-                            string parseName = isH265 ? "h265parse" : "h264parse";
-                            string softwareDecoderName = isH265 ? "avdec_h265" : "avdec_h264";
+                            string parseName = capsName.StartsWith("video/x-raw", StringComparison.OrdinalIgnoreCase)
+                                ? "identity"
+                                : (isH265 ? "h265parse" : "h264parse");
+                            string softwareDecoderName = capsName.StartsWith("video/x-raw", StringComparison.OrdinalIgnoreCase)
+                                ? "identity"
+                                : (isH265 ? "avdec_h265" : "avdec_h264");
 
                             videoQueue = ElementFactory.Make("queue", "video-queue");
                             // Removed leaky=1 to prevent dropping HLS chunks
@@ -709,7 +746,20 @@ namespace V3SClient.models
                             // A D3D11 decoder can be installed but unusable on an
                             // older GPU/driver. libav is packaged with the setup and
                             // gives playback the same behaviour on every client PC.
-                            Element decoder = ElementFactory.Make(softwareDecoderName, "video-decoder");
+                            Element decoder = null;
+                            string decoderName = softwareDecoderName;
+                            if (!capsName.StartsWith("video/x-raw", StringComparison.OrdinalIgnoreCase) &&
+                                libs.Counter.HasNvidiaGPU)
+                            {
+                                decoderName = isH265 ? "d3d11h265dec" : "d3d11h264dec";
+                                decoder = ElementFactory.Make(decoderName, "video-decoder");
+                            }
+                            if (decoder == null)
+                            {
+                                decoderName = softwareDecoderName;
+                                decoder = ElementFactory.Make(decoderName, "video-decoder");
+                            }
+                            LoggerManager.LogInfo("Playback decoder selected: " + decoderName + " for " + capsName);
                             if (decoder == null)
                                 throw new InvalidOperationException(
                                     "Không tìm thấy bộ giải mã " + softwareDecoderName + ".");
@@ -725,7 +775,7 @@ namespace V3SClient.models
                                     "GStreamer runtime thiếu plugin phát lại video cần thiết.");
                             vSink["async"] = true;
                             vSink["sync"] = true;
-                            vSink["qos"] = true;
+                            vSink["qos"] = false;
                             // Match Live View and Map: playback fills the grid
                             // slot instead of leaving letterbox bands.
                             vSink["force-aspect-ratio"] = false;
@@ -748,7 +798,8 @@ namespace V3SClient.models
                             identity_src.Dispose();
 
                             Pad vQueueSinkPad = videoQueue.GetStaticPad("sink");
-                            newPad.Link(vQueueSinkPad);
+                            var videoLinkResult = newPad.Link(vQueueSinkPad);
+                            LoggerManager.LogInfo("Playback video link result: " + videoLinkResult + " (" + capsName + ")");
                             vQueueSinkPad.Dispose();
                         }
                         // --- AUDIO BRANCH ---
@@ -790,7 +841,8 @@ namespace V3SClient.models
                             Element.Link(aConvert, aResample, audioVolume, aSink);
 
                             Pad aQueueSinkPad = audioQueue.GetStaticPad("sink");
-                            newPad.Link(aQueueSinkPad);
+                            var audioLinkResult = newPad.Link(aQueueSinkPad);
+                            LoggerManager.LogInfo("Playback audio link result: " + audioLinkResult + " (" + capsName + ")");
                             aQueueSinkPad.Dispose();
                         }
                     }

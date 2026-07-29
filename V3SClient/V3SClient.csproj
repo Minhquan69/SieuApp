@@ -224,7 +224,6 @@
     <Compile Include="libs\ItemEditField.cs" />
     <Compile Include="libs\LocationData.cs" />
     <Compile Include="libs\LoggerManager.cs" />
-    <Compile Include="libs\MemoryDiagnosticsLogger.cs" />
     <Compile Include="libs\LoginResult.cs" />
     <Compile Include="libs\MediaHelper.cs" />
     <Compile Include="enums\MediaType.cs" />

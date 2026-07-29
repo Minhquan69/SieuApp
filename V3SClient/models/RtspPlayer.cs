@@ -684,9 +684,12 @@ namespace V3SClient.models
             switch (message.Type)
             {
                 case MessageType.Error:                    
-                    message.ParseError(out GLib.GException err, out string msg);                  
-                    PlayerSending?.Invoke(this, new PlayerInfo { Key = PlayerStatus.Stop, Value ="Error: "+msg });
-                    LoggerManager.LogError($"GStreamer Bus Error: {msg}");
+                    message.ParseError(out GLib.GException err, out string msg);
+                    var sourceName = message.Src == null ? "unknown" : message.Src.Name;
+                    var detail = string.IsNullOrWhiteSpace(msg) ? err?.Message : msg;
+                    PlayerSending?.Invoke(this, new PlayerInfo { Key = PlayerStatus.Stop, Value ="Error: "+detail });
+                    LoggerManager.LogError(
+                        $"GStreamer Bus Error. Source: {sourceName}; Detail: {detail}; Exception: {err}");
                     break;
                 case MessageType.Eos:
                     ReConnect();

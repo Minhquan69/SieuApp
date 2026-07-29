@@ -748,6 +748,140 @@ function isCameraChanged(oldCam, newCam) {
     );
 }
 
+// Keep labels hidden while the map is zoomed out to avoid visual clutter.
+// The condition is based on the actual visible map width, not a fixed zoom:
+// names appear only when the user is viewing an area no wider than 500 m.
+const CAMERA_LABEL_MAX_VIEW_WIDTH_METERS = 500;
+const CAMERA_LABEL_FALLBACK_ZOOM = 16;
+const CAMERA_LABEL_MAX_METERS_PER_PIXEL = 5;
+
+function getVisibleMapWidthMeters() {
+    if (!window.map) return Number.POSITIVE_INFINITY;
+    const bounds = window.map.getBounds();
+    const west = bounds.getSouthWest();
+    const east = bounds.getSouthEast();
+    const radians = Math.PI / 180;
+    const lat1 = west.lat * radians;
+    const lat2 = east.lat * radians;
+    const deltaLng = (east.lng - west.lng) * radians;
+    const haversine = Math.sin((lat2 - lat1) / 2) ** 2 +
+        Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2;
+    return 2 * 6371000 * Math.asin(Math.min(1, Math.sqrt(haversine)));
+}
+
+function shouldShowCameraLabels() {
+    const mapWidth = window.map && window.map.getContainer().clientWidth;
+    const metersPerPixel = mapWidth > 0 ? getVisibleMapWidthMeters() / mapWidth : Number.POSITIVE_INFINITY;
+    return metersPerPixel <= CAMERA_LABEL_MAX_METERS_PER_PIXEL ||
+        getVisibleMapWidthMeters() <= CAMERA_LABEL_MAX_VIEW_WIDTH_METERS ||
+        (window.map && window.map.getZoom() >= CAMERA_LABEL_FALLBACK_ZOOM);
+}
+
+let cameraLabelLayer = null;
+
+function ensureCameraLabelLayer() {
+    if (cameraLabelLayer || !window.map) return cameraLabelLayer;
+    cameraLabelLayer = document.createElement('div');
+    cameraLabelLayer.className = 'camera-label-layer';
+    window.map.getContainer().appendChild(cameraLabelLayer);
+    return cameraLabelLayer;
+}
+
+function updateCameraMarkerLabel(marker, name) {
+    const markerEl = marker.getElement();
+    const cameraId = markerEl.id.replace(/^cam-/, '');
+    const layer = ensureCameraLabelLayer();
+    if (!layer || !cameraId) return;
+
+    // Labels used to live inside each marker. A sibling marker could then
+    // paint its pin on top of the text. Keep labels in one overlay instead.
+    const oldLabel = markerEl.querySelector('.camera-marker-label');
+    if (oldLabel) oldLabel.remove();
+
+    let label = layer.querySelector('[data-camera-label="' + CSS.escape(cameraId) + '"]');
+    if (!label) {
+        label = document.createElement('div');
+        label.className = 'camera-marker-label';
+        label.dataset.cameraLabel = cameraId;
+        layer.appendChild(label);
+    }
+
+    label.textContent = name || 'Camera';
+    // Marker positions can still change while MapLibre renders this update.
+    // Keep the label hidden here; the layout pass enables it only after every
+    // marker has reached its final rendered position.
+    label.style.display = 'none';
+    label.style.zIndex = '10';
+    markerEl.classList.remove('zoom-label-visible');
+}
+
+function refreshCameraMarkerLabels() {
+    Object.keys(markers).forEach(id => {
+        const camera = cameraData[id];
+        if (camera) updateCameraMarkerLabel(markers[id], camera.name);
+    });
+    scheduleCameraLabelLayout();
+}
+
+let cameraLabelLayoutQueued = false;
+
+function rectanglesOverlap(first, second, padding) {
+    return first.left < second.right + padding &&
+        first.right > second.left - padding &&
+        first.top < second.bottom + padding &&
+        first.bottom > second.top - padding;
+}
+
+function scheduleCameraLabelLayout() {
+    if (cameraLabelLayoutQueued) return;
+    cameraLabelLayoutQueued = true;
+
+    const layoutAfterMapRender = () => requestAnimationFrame(() => {
+        cameraLabelLayoutQueued = false;
+        const show = shouldShowCameraLabels();
+        const occupied = [];
+        const ids = Object.keys(markers).sort((left, right) => {
+            const leftOnline = cameraData[left] && cameraData[left].isOnline ? 1 : 0;
+            const rightOnline = cameraData[right] && cameraData[right].isOnline ? 1 : 0;
+            return rightOnline - leftOnline || left.localeCompare(right);
+        });
+
+        ids.forEach(id => {
+            const markerEl = markers[id].getElement();
+            const layer = ensureCameraLabelLayer();
+            const label = layer && layer.querySelector('[data-camera-label="' + CSS.escape(id) + '"]');
+            if (!label) return;
+
+            const markerRect = markerEl.getBoundingClientRect();
+            const layerRect = layer.getBoundingClientRect();
+            label.style.left = (markerRect.left - layerRect.left + markerRect.width / 2) + 'px';
+            label.style.top = (markerRect.top - layerRect.top - 3) + 'px';
+            // The legacy in-marker label uses bottom:43px.  In the overlay
+            // that would combine with top and stretch into a tall rectangle.
+            label.style.bottom = 'auto';
+            label.style.transform = 'translate(-50%, -100%)';
+            label.style.display = show && markerEl.style.display !== 'none' ? 'block' : 'none';
+            if (!show || markerEl.style.display === 'none') return;
+
+            const rect = label.getBoundingClientRect();
+            if (occupied.some(other => rectanglesOverlap(rect, other, 5))) {
+                label.style.display = 'none';
+                return;
+            }
+            occupied.push(rect);
+        });
+    });
+
+    // All points/offsets are rendered first, then labels are measured. This
+    // prevents labels from colliding because of stale marker positions.
+    if (window.map) {
+        window.map.once('idle', layoutAfterMapRender);
+        window.map.triggerRepaint();
+    } else {
+        layoutAfterMapRender();
+    }
+}
+
 function updateCameras(camList) {
     const renderList = camList
         .filter(c => !c.isCluster)
@@ -770,6 +904,8 @@ function updateCameras(camList) {
             markers[id].remove();
             delete markers[id];
             delete cameraData[id];
+            const label = cameraLabelLayer && cameraLabelLayer.querySelector('[data-camera-label="' + CSS.escape(id) + '"]');
+            if (label) label.remove();
         }
     }
 
@@ -798,7 +934,7 @@ function updateCameras(camList) {
 
             const marker = new maplibregl.Marker({
                 anchor: 'bottom',
-                offset: [0, CAMERA_MARKER_TIP_OFFSET_Y],
+                offset: [Number(cam.offsetX) || 0, CAMERA_MARKER_TIP_OFFSET_Y + (Number(cam.offsetY) || 0)],
                 pitchAlignment: 'viewport',
                 rotationAlignment: 'viewport'
             })
@@ -810,6 +946,7 @@ function updateCameras(camList) {
             markerEl.id = 'cam-' + cam.camID;
             markerEl.classList.add('camera-marker-default');
             if (!cam.isOnline) markerEl.classList.add('offline');
+            updateCameraMarkerLabel(marker, cam.name);
 
             markerEl.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -849,10 +986,12 @@ function updateCameras(camList) {
         else {
             const marker = markers[cam.camID];
             marker.setLngLat(ll);
+            marker.setOffset([Number(cam.offsetX) || 0, CAMERA_MARKER_TIP_OFFSET_Y + (Number(cam.offsetY) || 0)]);
 
             const el = marker.getElement();
             el.classList.toggle('offline', !cam.isOnline);
             el.classList.toggle('tracking', trackingCamId === cam.camID);
+            updateCameraMarkerLabel(marker, cam.name);
 
             const popup = marker.getPopup();
             if (popup) {
@@ -881,6 +1020,7 @@ function updateCameras(camList) {
     rebuildSidebar();
     updateFOVSource();
     applyOverlapClusters(renderList);
+    scheduleCameraLabelLayout();
 
     // Cập nhật tracking nếu đang theo dõi
     if (trackingCamId) {
@@ -913,6 +1053,13 @@ function applyOverlapClusters(camList) {
     camList.forEach(cam => {
         const el = document.getElementById('cam-' + cam.camID);
         if (el) el.style.display = '';
+        const marker = markers[cam.camID];
+        if (marker) {
+            marker.setOffset([
+                Number(cam.offsetX) || 0,
+                CAMERA_MARKER_TIP_OFFSET_Y + (Number(cam.offsetY) || 0)
+            ]);
+        }
     });
 
     if (camList.length <= 1) return;
@@ -942,6 +1089,24 @@ function applyOverlapClusters(camList) {
         }
 
         if (group.length > 1) {
+            // When looking at 500 m or less, always spread nearby cameras
+            // around their shared point. This is local to the browser so it
+            // never relies on a delayed native map-data refresh.
+            if (getVisibleMapWidthMeters() <= CAMERA_LABEL_MAX_VIEW_WIDTH_METERS) {
+                const radius = 42 + Math.min(group.length * 2, 20);
+                group.forEach((entry, index) => {
+                    const angle = (Math.PI * 2 * index) / group.length - Math.PI / 2;
+                    const marker = markers[entry.cam.camID];
+                    const markerEl = marker && marker.getElement();
+                    if (marker) marker.setOffset([
+                        Math.cos(angle) * radius,
+                        CAMERA_MARKER_TIP_OFFSET_Y + Math.sin(angle) * radius
+                    ]);
+                    if (markerEl) markerEl.style.display = '';
+                });
+                continue;
+            }
+
             // Hide member markers
             group.forEach(g => {
                 const el = document.getElementById('cam-' + g.cam.camID);
@@ -955,10 +1120,11 @@ function applyOverlapClusters(camList) {
             const clusterId = 'overlap_' + group.map(g => g.cam.camID).sort().join('_');
             const el = document.createElement('div');
             const count = group.length;
+            const onlineCount = group.filter(g => g.cam.isOnline).length;
             const sizeClass = count >= 10 ? 'size-lg' : (count >= 5 ? 'size-md' : 'size-sm');
-            el.className = `overlap-cluster-marker ${sizeClass}`;
-            el.innerHTML = `<span>${count}</span>`;
-            el.title = `${count} cameras`;
+            el.className = `overlap-cluster-marker ${sizeClass}${onlineCount === 0 ? ' all-offline' : ''}`;
+            el.innerHTML = `<span>${count}</span><small>${onlineCount} online</small>`;
+            el.title = `${count} cameras, ${onlineCount} online. Click to zoom in; right-click for the list.`;
 
             const clusterMarker = new maplibregl.Marker({
                 element: el,
@@ -1102,9 +1268,13 @@ function updatePositions(positions) {
         if (!ll) continue;
 
         if (markers[id]) {
-            markers[id].setOffset([0, CAMERA_MARKER_TIP_OFFSET_Y]);
+            const camera = cameraData[id] || {};
+            markers[id].setOffset([
+                Number(camera.offsetX) || 0,
+                CAMERA_MARKER_TIP_OFFSET_Y + (Number(camera.offsetY) || 0)
+            ]);
             markers[id].setLngLat(ll);
-            if (cameraData[id]) { cameraData[id].lng = ll[0]; cameraData[id].lat = ll[1]; cameraData[id].offsetX = 0; cameraData[id].offsetY = CAMERA_MARKER_TIP_OFFSET_Y; }
+            if (cameraData[id]) { cameraData[id].lng = ll[0]; cameraData[id].lat = ll[1]; }
         }
     }
     if (trackingCamId && cameraData[trackingCamId]) {
@@ -1131,10 +1301,12 @@ function updatePositions(positions) {
 window.map.on('style.load', initPathLayers);
 
 window.map.on('zoom', () => {
+    refreshCameraMarkerLabels();
     if(window.notifyCSharp) {
         window.notifyCSharp('zoomChanged', window.map.getZoom());
     }
 });
+window.map.on('moveend', scheduleCameraLabelLayout);
 
 window.clearTrackingData = async function(camId) {
     const ok = await showConfirmDialog(

@@ -623,12 +623,12 @@ namespace V3SClient.ucs
 
         private async void WatchPlaybackStartup(models.RtspPlayer playerAtStart)
         {
-            await System.Threading.Tasks.Task.Delay(15000);
+            await System.Threading.Tasks.Task.Delay(10000);
             if (_disposed || !ReferenceEquals(Player, playerAtStart) || VideoDuration > 0)
                 return;
 
             LoggerManager.LogError(
-                "Playback startup timeout after 15 seconds for camera " +
+                "Playback startup timeout after 10 seconds for camera " +
                 (Camera?.camID ?? Camera_Name ?? string.Empty));
             ShowPlaybackFailure(
                 "Không thể phát video đã ghi",

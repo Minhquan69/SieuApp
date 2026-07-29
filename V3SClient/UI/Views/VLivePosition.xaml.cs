@@ -59,9 +59,16 @@ namespace V3SClient.UI.Views
                 cam_group_list.Where(group => group != null && group.Cameras.Count > 0)
                               .SelectMany(group => group.Cameras));
             Sidebar.Refresh(_rawGroupList, CameraList);
+            Sidebar.CameraStatesChanged += Sidebar_CameraStatesChanged;
 
             this.Loaded += LoadMapAsync;
             this.Unloaded += VLivePosition_Unloaded;
+        }
+
+        private void Sidebar_CameraStatesChanged(object sender, System.EventArgs e)
+        {
+            if (!_isMapLoaded) return;
+            Dispatcher.BeginInvoke(new System.Action(SendCamerasToMap));
         }
         private void InitFakeCameras()
         {
@@ -695,8 +702,9 @@ namespace V3SClient.UI.Views
 
             foreach (models.Camera cam in mappedCameras)
             {
-                // Match the current web map behavior: every configured camera is shown as online.
-                bool isOnline = true;
+                // Device-status polling updates this shared Camera instance.
+                // Do not mark every configured camera as online on the map.
+                bool isOnline = cam.is_online == true;
                 double heading = 0; double fov = 90;
 
                 if (cam.ExtraMetadata != null)
@@ -888,6 +896,7 @@ namespace V3SClient.UI.Views
             }
             _timer?.Stop();
             _demoTimer?.Stop();
+            Sidebar.CameraStatesChanged -= Sidebar_CameraStatesChanged;
             Sidebar.Dispose();
         }
     }

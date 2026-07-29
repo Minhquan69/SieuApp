@@ -191,8 +191,19 @@ namespace V3SClient.window
             var pluginPath = Path.Combine(runtimeRoot, "lib", "gstreamer-1.0");
             var gioModulePath = Path.Combine(runtimeRoot, "lib", "gio", "modules");
             var pluginScanner = Path.Combine(runtimeRoot, "libexec", "gstreamer-1.0", "gst-plugin-scanner.exe");
+            var diagnosticDirectory = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "iVista VMS", "logs");
+            var gstreamerLogPath = Path.Combine(diagnosticDirectory, "gstreamer.log");
             var currentPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
 
+            // The installed app runs from Program Files, where a standard user
+            // cannot reliably create relative log folders. Keep native playback
+            // diagnostics in LocalAppData alongside the managed application log.
+            Directory.CreateDirectory(diagnosticDirectory);
+            Environment.SetEnvironmentVariable("GST_DEBUG", "*:2,souphttpsrc:4,hlsdemux:4", EnvironmentVariableTarget.Process);
+            Environment.SetEnvironmentVariable("GST_DEBUG_NO_COLOR", "1", EnvironmentVariableTarget.Process);
+            Environment.SetEnvironmentVariable("GST_DEBUG_FILE", gstreamerLogPath, EnvironmentVariableTarget.Process);
             Environment.SetEnvironmentVariable("GST_PLUGIN_PATH", pluginPath, EnvironmentVariableTarget.Process);
             Environment.SetEnvironmentVariable("GST_PLUGIN_SYSTEM_PATH_1_0", pluginPath, EnvironmentVariableTarget.Process);
             Environment.SetEnvironmentVariable("GIO_MODULE_DIR", gioModulePath, EnvironmentVariableTarget.Process);
@@ -204,6 +215,7 @@ namespace V3SClient.window
 
             Gst.Application.Init();
             libs.LoggerManager.LogInfo("Live View _v3 GStreamer runtime: " + runtimeRoot);
+            libs.LoggerManager.LogInfo("GStreamer diagnostics: " + gstreamerLogPath);
             _gstreamerInitialized = true;
         }
         private void ShellWindow_SourceInitialized(object sender, EventArgs e)

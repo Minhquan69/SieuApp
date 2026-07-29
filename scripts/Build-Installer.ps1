@@ -60,6 +60,17 @@ Copy-Item (Join-Path $gstRoot 'bin') $gstStage -Recurse -Force
 $pluginStage = Join-Path $gstStage 'lib\gstreamer-1.0'
 New-Item -ItemType Directory -Force $pluginStage | Out-Null
 Copy-Item (Join-Path $gstRoot 'lib\gstreamer-1.0\*.dll') $pluginStage -Force
+
+# Playback reads HLS playlists through souphttpsrc.  Its GIO modules provide
+# the HTTP proxy/TLS backends and are not located in bin or the plugin folder.
+# Without them, Live View (RTSP) can still work while recorded Playback waits
+# forever for a playlist on a clean client machine.
+$gioModulesSource = Join-Path $gstRoot 'lib\gio\modules'
+if (Test-Path $gioModulesSource) {
+    $gioModulesStage = Join-Path $gstStage 'lib\gio\modules'
+    New-Item -ItemType Directory -Force $gioModulesStage | Out-Null
+    Copy-Item (Join-Path $gioModulesSource '*') $gioModulesStage -Force
+}
 if (Test-Path (Join-Path $gstRoot 'libexec')) {
     Copy-Item (Join-Path $gstRoot 'libexec') $gstStage -Recurse -Force
 }
