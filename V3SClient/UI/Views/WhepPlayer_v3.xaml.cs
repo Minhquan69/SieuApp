@@ -24,6 +24,89 @@ namespace V3SClient.UI.Views
     public enum WhepPlaybackState_v3 { Connecting, Playing, Stopped, Error }
     public enum WhepPlaybackErrorKind_v3 { None, MissingStream, Server, Connection, Decoder, NoVideoFrame, StreamEnded, Playback }
 
+    /// <summary>
+    /// One-layer native counterpart of the WPF camera-ID badge.  Drawing the
+    /// icon and title in one control avoids child-control z-order/vertical
+    /// alignment artefacts above the D3D sink.
+    /// </summary>
+    internal sealed class CameraIdBadgeControl_v3 : System.Windows.Forms.Control
+    {
+        private const int Radius = 3;
+        private string _cameraId = string.Empty;
+        private System.Drawing.Color _statusColor = System.Drawing.Color.FromArgb(100, 116, 139);
+
+        public CameraIdBadgeControl_v3()
+        {
+            DoubleBuffered = true;
+            BackColor = System.Drawing.Color.FromArgb(21, 47, 72); // VmsElevated
+            Font = new System.Drawing.Font("Segoe UI", 8.25F, System.Drawing.FontStyle.Bold);
+            Height = 24;
+            TabStop = false;
+        }
+
+        public void SetBadge(string cameraId, System.Drawing.Color statusColor)
+        {
+            _cameraId = cameraId ?? string.Empty;
+            _statusColor = statusColor;
+            var measured = System.Windows.Forms.TextRenderer.MeasureText(_cameraId, Font,
+                new System.Drawing.Size(int.MaxValue, Height),
+                System.Windows.Forms.TextFormatFlags.NoPadding | System.Windows.Forms.TextFormatFlags.SingleLine);
+            Width = Math.Max(48, 30 + measured.Width + 7);
+            Invalidate();
+        }
+
+        protected override void OnSizeChanged(EventArgs e)
+        {
+            base.OnSizeChanged(e);
+            if (Width < 2 || Height < 2) return;
+            using (var path = CreateRoundedPath(new System.Drawing.Rectangle(0, 0, Width - 1, Height - 1), Radius))
+                Region = new System.Drawing.Region(path);
+        }
+
+        protected override void OnPaint(System.Windows.Forms.PaintEventArgs e)
+        {
+            if (Width < 2 || Height < 2) return;
+            using (var path = CreateRoundedPath(new System.Drawing.Rectangle(0, 0, Width - 1, Height - 1), Radius))
+            using (var background = new System.Drawing.SolidBrush(BackColor))
+            using (var pen = new System.Drawing.Pen(System.Drawing.Color.FromArgb(42, 77, 112))) // VmsBorderStrong
+            using (var iconPen = new System.Drawing.Pen(_statusColor, 1.35F))
+            {
+                e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                e.Graphics.FillPath(background, path);
+                e.Graphics.DrawPath(pen, path);
+
+                // Compact camera outline, centred on the badge baseline.
+                var iconX = 7F;
+                var iconY = (Height - 9F) / 2F;
+                e.Graphics.DrawRectangle(iconPen, iconX, iconY, 11F, 8F);
+                e.Graphics.DrawLine(iconPen, iconX + 11F, iconY + 2F, iconX + 15F, iconY);
+                e.Graphics.DrawLine(iconPen, iconX + 15F, iconY, iconX + 15F, iconY + 8F);
+                e.Graphics.DrawLine(iconPen, iconX + 15F, iconY + 8F, iconX + 11F, iconY + 6F);
+
+                System.Windows.Forms.TextRenderer.DrawText(e.Graphics, _cameraId, Font,
+                    new System.Drawing.Rectangle(28, 0, Math.Max(1, Width - 33), Height),
+                    System.Drawing.Color.White,
+                    System.Windows.Forms.TextFormatFlags.Left |
+                    System.Windows.Forms.TextFormatFlags.VerticalCenter |
+                    System.Windows.Forms.TextFormatFlags.NoPadding |
+                    System.Windows.Forms.TextFormatFlags.EndEllipsis |
+                    System.Windows.Forms.TextFormatFlags.SingleLine);
+            }
+        }
+
+        private static System.Drawing.Drawing2D.GraphicsPath CreateRoundedPath(System.Drawing.Rectangle rectangle, int radius)
+        {
+            var diameter = radius * 2;
+            var path = new System.Drawing.Drawing2D.GraphicsPath();
+            path.AddArc(rectangle.Left, rectangle.Top, diameter, diameter, 180, 90);
+            path.AddArc(rectangle.Right - diameter, rectangle.Top, diameter, diameter, 270, 90);
+            path.AddArc(rectangle.Right - diameter, rectangle.Bottom - diameter, diameter, diameter, 0, 90);
+            path.AddArc(rectangle.Left, rectangle.Bottom - diameter, diameter, diameter, 90, 90);
+            path.CloseFigure();
+            return path;
+        }
+    }
+
     public sealed class WhepPlaybackStateChangedEventArgs_v3 : EventArgs
     {
         public WhepPlaybackStateChangedEventArgs_v3(WhepPlaybackState_v3 state, string message = null,
@@ -72,7 +155,17 @@ namespace V3SClient.UI.Views
             Dock = System.Windows.Forms.DockStyle.Fill,
             BackColor = System.Drawing.Color.Black
         };
-        private readonly System.Windows.Forms.Label _cameraBadge = new System.Windows.Forms.Label();
+        // Keep the D3D sink in its own child HWND.  Native controls added to
+        // _videoPanel can then sit above that child and are still clipped by
+        // the WindowsFormsHost bounds.  This avoids using a top-level WPF
+        // Popup for the camera badge (which could leak over another app).
+        private readonly System.Windows.Forms.Panel _videoSurface = new System.Windows.Forms.Panel
+        {
+            Dock = System.Windows.Forms.DockStyle.Fill,
+            BackColor = System.Drawing.Color.Black
+        };
+        private readonly CameraIdBadgeControl_v3 _cameraBadge = new CameraIdBadgeControl_v3();
+        private bool _nativeBoundsSyncQueued;
         // Gst.Parse.Launch creates D3D11 decoder/sink resources in native
         // plugins. The per-player gate protects one tile, but does not make
         // concurrent creation across a camera wall safe. Serialize only this
@@ -136,12 +229,8 @@ namespace V3SClient.UI.Views
         {
             InitializeComponent();
             VideoHost.Child = _videoPanel;
-            _cameraBadge.AutoSize = true;
-            _cameraBadge.BackColor = System.Drawing.Color.FromArgb(15, 45, 70);
-            _cameraBadge.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
-            _cameraBadge.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
-            _cameraBadge.ForeColor = System.Drawing.Color.FromArgb(33, 197, 93);
-            _cameraBadge.Padding = new System.Windows.Forms.Padding(6, 3, 6, 3);
+            _videoPanel.Controls.Add(_videoSurface);
+            _cameraBadge.BackColor = System.Drawing.Color.FromArgb(21, 47, 72);
             _cameraBadge.Location = new System.Drawing.Point(7, 7);
             _cameraBadge.Visible = false;
             _cameraBadge.TabStop = false;
@@ -152,7 +241,26 @@ namespace V3SClient.UI.Views
             _videoPanel.MouseEnter += (s, e) => VideoMouseEnter?.Invoke(this, EventArgs.Empty);
             _videoPanel.MouseMove += (s, e) => VideoMouseMove?.Invoke(this, EventArgs.Empty);
             _videoPanel.MouseLeave += (s, e) => VideoMouseLeave?.Invoke(this, EventArgs.Empty);
+            _videoSurface.MouseEnter += (s, e) => VideoMouseEnter?.Invoke(this, EventArgs.Empty);
+            _videoSurface.MouseMove += (s, e) => VideoMouseMove?.Invoke(this, EventArgs.Empty);
+            _videoSurface.MouseLeave += (s, e) => VideoMouseLeave?.Invoke(this, EventArgs.Empty);
+            // WindowsFormsHost may receive its final arrange after the parent grid
+            // has already changed rows/columns. Queue the native child resize at
+            // Render priority so d3d11videosink always renders inside this tile.
+            VideoHost.SizeChanged += (s, e) => QueueNativeVideoHostSynchronization();
+            SizeChanged += (s, e) => QueueNativeVideoHostSynchronization();
             Unloaded += (s, e) => Dispose();
+        }
+
+        private void QueueNativeVideoHostSynchronization()
+        {
+            if (_nativeBoundsSyncQueued || _videoPanel.IsDisposed) return;
+            _nativeBoundsSyncQueued = true;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                _nativeBoundsSyncQueued = false;
+                SynchronizeNativeVideoHost();
+            }), System.Windows.Threading.DispatcherPriority.Render);
         }
 
         public bool AiOverlayEnabled
@@ -250,7 +358,16 @@ namespace V3SClient.UI.Views
                 VideoHost.InvalidateArrange();
                 VideoHost.UpdateLayout();
                 _videoPanel.SuspendLayout();
+                _videoSurface.SuspendLayout();
+                // Do not rely solely on Dock layout here. During a fullscreen,
+                // monitor, or grid transition it can be one render pass behind
+                // WPF. Assigning the client rectangle explicitly prevents the
+                // native GStreamer child from retaining the previous tile size.
+                _videoSurface.Dock = System.Windows.Forms.DockStyle.None;
+                _videoSurface.Bounds = _videoPanel.ClientRectangle;
+                _videoSurface.Dock = System.Windows.Forms.DockStyle.Fill;
                 _videoPanel.PerformLayout();
+                _videoSurface.PerformLayout();
                 _cameraBadge.BringToFront();
             }
             catch (ObjectDisposedException) { }
@@ -259,6 +376,8 @@ namespace V3SClient.UI.Views
             {
                 if (!_videoPanel.IsDisposed)
                     _videoPanel.ResumeLayout(true);
+                if (!_videoSurface.IsDisposed)
+                    _videoSurface.ResumeLayout(true);
             }
         }
 
@@ -325,18 +444,18 @@ namespace V3SClient.UI.Views
             }
             try
             {
-            // WindowsFormsHost is an airspace island: WPF labels are painted
-            // behind it. Render the stable camera ID inside the native video
-            // surface rather than using a separate Popup HWND.
-            _cameraBadge.Text = string.IsNullOrWhiteSpace(cameraId) ? string.Empty : "●  " + cameraId;
-            _cameraBadge.ForeColor = error
-                ? System.Drawing.Color.FromArgb(255, 145, 145)
+            // This label is a sibling of the D3D sink HWND, not content drawn
+            // into GStreamer.  It stays inside the current tile and cannot
+            // be placed above another window or a neighbouring tile.
+            var statusColor = error
+                ? System.Drawing.Color.FromArgb(239, 68, 68)   // VmsError
                 : connected
-                ? System.Drawing.Color.FromArgb(33, 197, 93)
-                    : System.Drawing.Color.FromArgb(255, 193, 7);
-            // The D3D11 sink owns the panel's pixels and paints above child
-            // controls. LiveTile_v3 owns the visible, persistent Popup badge.
-            _cameraBadge.Visible = false;
+                    ? System.Drawing.Color.FromArgb(34, 197, 94) // VmsSuccess
+                    : System.Drawing.Color.FromArgb(245, 158, 11); // VmsWarning
+            _cameraBadge.SetBadge(cameraId, statusColor);
+            _cameraBadge.Visible = visible && !string.IsNullOrWhiteSpace(cameraId) && _videoPanel.Visible;
+            if (_cameraBadge.Visible)
+                _cameraBadge.BringToFront();
             }
             catch (ObjectDisposedException) { }
             catch (InvalidOperationException) { }
@@ -517,7 +636,10 @@ namespace V3SClient.UI.Views
                     "rtspsrc name=videoSource protocols=tcp latency=300 timeout=15000000 drop-on-latency=true " +
                     "videoSource. ! queue leaky=downstream max-size-buffers=8 ! application/x-rtp,media=video ! " +
                     videoChain + " ! d3d11convert ! queue leaky=downstream max-size-buffers=4 ! " +
-                    "d3d11overlay name=videoOverlay ! d3d11videosink async=false sync=false qos=false";
+                    // Camera-wall tiles intentionally fill their allocated grid
+                    // cell.  Do not letterbox the source aspect ratio: the user
+                    // expects every camera stream to use the entire tile.
+                    "d3d11overlay name=videoOverlay ! d3d11videosink force-aspect-ratio=false async=false sync=false qos=false";
                 pipeline = (Pipeline)Parse.Launch(pipelineText);
                 if (pipeline == null)
                     throw new InvalidOperationException("GStreamer returned an empty playback pipeline.");
@@ -974,9 +1096,9 @@ namespace V3SClient.UI.Views
 
         private IntPtr GetVideoWindowHandle()
         {
-            if (_videoPanel.IsDisposed) return IntPtr.Zero;
-            if (!_videoPanel.InvokeRequired) return _videoPanel.Handle;
-            return (IntPtr)_videoPanel.Invoke(new Func<IntPtr>(() => _videoPanel.Handle));
+            if (_videoSurface.IsDisposed) return IntPtr.Zero;
+            if (!_videoSurface.InvokeRequired) return _videoSurface.Handle;
+            return (IntPtr)_videoSurface.Invoke(new Func<IntPtr>(() => _videoSurface.Handle));
         }
 
         private async System.Threading.Tasks.Task<IntPtr> WaitForVisibleVideoHostAsync(CancellationToken cancellationToken)
@@ -987,7 +1109,7 @@ namespace V3SClient.UI.Views
                 await Dispatcher.InvokeAsync(new Action(() => { }),
                     System.Windows.Threading.DispatcherPriority.Render);
 
-                if (!_videoPanel.IsDisposed && _videoPanel.IsHandleCreated &&
+                if (!_videoSurface.IsDisposed && _videoSurface.IsHandleCreated &&
                     VideoHost.IsVisible && VideoHost.ActualWidth >= 2 && VideoHost.ActualHeight >= 2)
                 {
                     var handle = GetVideoWindowHandle();

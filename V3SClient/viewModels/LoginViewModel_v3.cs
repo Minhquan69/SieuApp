@@ -91,7 +91,7 @@ namespace V3SClient.viewModels
         {
             try
             {
-                var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "login.tmp");
+                var path = GetLoginCachePath();
                 if (!File.Exists(path)) return;
                 var values = File.ReadAllText(path).Split('|');
                 if (values.Length != 2) return;
@@ -105,11 +105,19 @@ namespace V3SClient.viewModels
         {
             try
             {
-                var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "login.tmp");
+                var path = GetLoginCachePath();
                 if (!IsRememberMe) { if (File.Exists(path)) File.Delete(path); return; }
                 File.WriteAllText(path, Convert.ToBase64String(Encoding.UTF8.GetBytes(Username ?? string.Empty)) + "|" + Convert.ToBase64String(Encoding.UTF8.GetBytes(Password ?? string.Empty)));
             }
             catch { }
+        }
+        private static string GetLoginCachePath()
+        {
+            var directory = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "iVista VMS");
+            Directory.CreateDirectory(directory);
+            return Path.Combine(directory, "login.tmp");
         }
         public void Dispose() { _lifetime.Cancel(); _lifetime.Dispose(); }
     }

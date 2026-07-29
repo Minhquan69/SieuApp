@@ -201,6 +201,12 @@ namespace V3SClient.ucs
             // Playback uses the same stable logical camera identifier as Live View.
             // The display name may change, while camID is the value selected by users.
             txtCameraName.Text = string.IsNullOrWhiteSpace(Camera.camID) ? Camera.name : Camera.camID;
+            // Match Live View badge semantics. Playback itself can be ready
+            // even without a segment, but an API-reported offline camera is
+            // still shown with the neutral offline camera icon.
+            CameraStatusDot.Stroke = Camera.is_online == false
+                ? new SolidColorBrush(Color.FromRgb(100, 116, 139))
+                : new SolidColorBrush(Color.FromRgb(34, 197, 94));
             _videoPanelHandle = VideoPanel.Handle;
 
             // GStreamer renders into a native WinForms panel.  Listen to that panel as
@@ -468,7 +474,13 @@ namespace V3SClient.ucs
             // byte-range/fMP4 responses that only the direct HLS path handles.
             if (_aiOverlayEnabled)
                 playbackPlayer.ConfigureHlsAiMetadata(_hlsAiSegments, GetPlaybackRealTimeAtVideoPosition);
-            Player.InitPipeline();
+            if (!Player.InitPipeline() || Player.player == null)
+            {
+                Player.Dispose();
+                Player = null;
+                throw new InvalidOperationException(
+                    "Không thể khởi tạo bộ giải mã video phát lại trên máy này.");
+            }
             Player.QueryPositionPlaying();
             _ = ConfigurePlaybackRoiColorsAsync(playbackPlayer);
           
@@ -551,6 +563,17 @@ namespace V3SClient.ucs
                     }));
                     break;
                 case PlayerStatus.Stop:
+                    if (!string.IsNullOrWhiteSpace(info.Value) &&
+                        info.Value.StartsWith("Error:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        LoggerManager.LogError(
+                            "Playback GStreamer error for " +
+                            (Camera?.camID ?? Camera_Name ?? string.Empty) + ": " + info.Value);
+                        ShowPlaybackFailure(
+                            "Không thể giải mã video phát lại",
+                            "Bộ giải mã trên máy không tương thích với luồng video này. Vui lòng thử lại.");
+                        break;
+                    }
                     // During HLS startup a temporary Stop can arrive before the
                     // first duration/state notification. Give the pipeline a short
                     // grace period; otherwise a valid camera is incorrectly marked
@@ -587,11 +610,63 @@ namespace V3SClient.ucs
                 Player.player.SetState(State.Playing);
                 _isPlaying = true;
                 UpdateSpeedDisplay();
+                WatchPlaybackStartup(Player);
             }
             catch (Exception ex)
             {
                 LoggerManager.LogException(ex, "Lá»—i ConnectedCamera");
+                ShowPlaybackFailure(
+                    "Không thể phát video đã ghi",
+                    "Không khởi tạo được bộ giải mã. Hãy bấm tìm kiếm hoặc thử lại.");
             }
+        }
+
+        private async void WatchPlaybackStartup(models.RtspPlayer playerAtStart)
+        {
+            await System.Threading.Tasks.Task.Delay(15000);
+            if (_disposed || !ReferenceEquals(Player, playerAtStart) || VideoDuration > 0)
+                return;
+
+            LoggerManager.LogError(
+                "Playback startup timeout after 15 seconds for camera " +
+                (Camera?.camID ?? Camera_Name ?? string.Empty));
+            ShowPlaybackFailure(
+                "Không thể phát video đã ghi",
+                "Không nhận được khung hình video. Vui lòng thử lại hoặc kiểm tra bộ giải mã trên máy.");
+        }
+
+        private void ShowPlaybackFailure(string status, string hint)
+        {
+            if (_disposed)
+                return;
+
+            Action show = () =>
+            {
+                if (_disposed)
+                    return;
+
+                if (PreparingPlaybackIcon != null)
+                {
+                    PreparingPlaybackIcon.Text = "\uEA39";
+                    PreparingPlaybackIcon.Foreground =
+                        new SolidColorBrush(Color.FromRgb(255, 82, 82));
+                }
+                if (PreparingPlaybackText != null)
+                    PreparingPlaybackText.Text = status;
+                if (PreparingPlaybackHint != null)
+                    PreparingPlaybackHint.Text = hint;
+
+                videoWindow.Visibility = Visibility.Hidden;
+                VideoPanel.Visible = false;
+                NoPlaybackDataOverlay.Visibility = Visibility.Collapsed;
+                PreparingPlaybackOverlay.Visibility = Visibility.Visible;
+                ShowConnectButton = Visibility.Visible;
+            };
+
+            if (Dispatcher.CheckAccess())
+                show();
+            else
+                Dispatcher.BeginInvoke(show);
         }
 
         private void ViewCameraPlayback_Loaded(object sender, RoutedEventArgs e)

@@ -2916,10 +2916,19 @@ namespace V3SClient.UI.Views
                     return;
                 }
 
-                var activeStart = _renderedPlaybackStart.Value;
-                var activeEnd = _renderedPlaybackEnd.Value;
-                _viewSearch.datetimeFrom.Value = activeStart;
-                _viewSearch.datetimeTo.Value = activeEnd;
+                // A quick-range click updates ViewSearch immediately.  Do not
+                // overwrite it with the range from the previous playback just
+                // because another camera is selected afterwards.  This was the
+                // source of the misleading state where (for example) "6h" stayed
+                // highlighted but the request still used the old interval.
+                var requestedRange = _viewSearch.GetSelectedTimeRange();
+                var requestedStart = requestedRange.Count > 0 ? requestedRange[0] : null;
+                var requestedEnd = requestedRange.Count > 1 ? requestedRange[1] : null;
+                var hasValidRequestedRange = requestedStart.HasValue &&
+                                             requestedEnd.HasValue &&
+                                             requestedEnd.Value > requestedStart.Value;
+                var activeStart = hasValidRequestedRange ? requestedStart.Value : _renderedPlaybackStart.Value;
+                var activeEnd = hasValidRequestedRange ? requestedEnd.Value : _renderedPlaybackEnd.Value;
                 Dispatcher.BeginInvoke(new Action(() => btnSearch_Click(this,
                     new List<System.DateTime?> { activeStart, activeEnd })), DispatcherPriority.Background);
             }

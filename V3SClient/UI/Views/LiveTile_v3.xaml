@@ -30,7 +30,10 @@
             <Setter Property="Foreground" Value="{StaticResource VmsTextInverseBrush_v3}"/>
         </Style>
     </UserControl.Resources>
-    <Border x:Name="TileBorder" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" Background="{StaticResource VmsSurfaceBrush_v3}" Margin="1" ClipToBounds="True" MouseEnter="TileBorder_MouseEnter" MouseLeave="TileBorder_MouseLeave" MouseLeftButtonUp="TileBorder_MouseLeftButtonUp">
+    <!-- A half-pixel border and gap render as a single, low-contrast divider
+         between adjacent camera cells instead of the previous thick double
+         grid line. -->
+    <Border x:Name="TileBorder" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="0.5" Background="{StaticResource VmsSurfaceBrush_v3}" Margin="0.5" ClipToBounds="True" MouseEnter="TileBorder_MouseEnter" MouseLeave="TileBorder_MouseLeave" MouseLeftButtonUp="TileBorder_MouseLeftButtonUp">
         <Grid>
             <local:WhepPlayer_v3 x:Name="Player" />
             <!-- The grid/sub pipeline remains alive while this second native
@@ -44,9 +47,11 @@
             <!-- Keep the camera ID inside the tile's WPF visual tree. The
                  previous Popup was a separate HWND and could remain visible
                  over another application after focus changed. -->
-            <Border x:Name="CameraBadgeInline" Panel.ZIndex="35" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="7" Padding="7,4" Background="{StaticResource VmsElevatedBrush_v3}" BorderBrush="{StaticResource VmsBorderStrongBrush_v3}" BorderThickness="1" CornerRadius="3" IsHitTestVisible="False" Visibility="Collapsed">
+            <Border x:Name="CameraBadgeInline" Panel.ZIndex="35" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="7" Padding="6,3" Background="{StaticResource VmsElevatedBrush_v3}" BorderBrush="{StaticResource VmsBorderStrongBrush_v3}" BorderThickness="1" CornerRadius="3" IsHitTestVisible="False" Visibility="Collapsed">
                 <StackPanel Orientation="Horizontal">
-                    <Ellipse x:Name="StatusDotInline" Width="7" Height="7" Fill="{StaticResource VmsOfflineBrush_v3}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                    <!-- Same camera outline geometry as the native badge used
+                         above a running D3D stream. -->
+                    <Path x:Name="StatusDotInline" Width="16" Height="12" Stretch="Uniform" Data="M 1,2 L 12,2 L 12,4 L 16,2 L 16,10 L 12,8 L 12,10 L 1,10 Z" Fill="Transparent" Stroke="{StaticResource VmsTextTertiaryBrush_v3}" StrokeThickness="1.35" StrokeLineJoin="Round" Margin="0,0,5,0" VerticalAlignment="Center"/>
                     <TextBlock x:Name="CameraNameInline" Foreground="{StaticResource VmsTextInverseBrush_v3}" FontWeight="SemiBold" FontSize="11" TextTrimming="CharacterEllipsis" MaxWidth="210"/>
                 </StackPanel>
             </Border>
@@ -81,6 +86,17 @@
                 </StackPanel>
             </Border>
 
+            <!-- This is intentionally distinct from ErrorOverlay: offline is
+                 reported by the device-status API; error means an online
+                 camera's stream could not be decoded/connected. -->
+            <Border x:Name="OfflineOverlay" Panel.ZIndex="30" Background="{StaticResource VmsSurfaceBrush_v3}" Visibility="Collapsed" Padding="8" IsHitTestVisible="False">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="280">
+                    <Icon:PackIconMaterial Kind="CameraOffOutline" Width="32" Height="32" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" HorizontalAlignment="Center"/>
+                    <TextBlock Text="Camera ngoại tuyến" FontWeight="SemiBold" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" HorizontalAlignment="Center" Margin="0,5,0,0"/>
+                    <TextBlock Text="Thiết bị đang không trực tuyến. Trạng thái sẽ tự cập nhật sau 30 giây." TextWrapping="Wrap" TextAlignment="Center" FontSize="11" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" Margin="0,4,0,0"/>
+                </StackPanel>
+            </Border>
+
             <Border x:Name="ErrorOverlay" Panel.ZIndex="30" Background="{StaticResource VmsSurfaceBrush_v3}" Visibility="Collapsed" Padding="8" IsHitTestVisible="True" ClipToBounds="True">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="280">
                     <Icon:PackIconMaterial Kind="AlertCircleOutline" Width="32" Height="32" Foreground="{StaticResource VmsErrorBrush_v3}" HorizontalAlignment="Center"/>
@@ -89,15 +105,6 @@
                     <Button Content="Thử lại" Click="Retry_Click" Style="{StaticResource PrimaryButtonStyle_v3}" Padding="12,4"/>
                 </StackPanel>
             </Border>
-
-            <Popup x:Name="CameraBadgePopup" Placement="Custom" PlacementTarget="{Binding ElementName=TileBorder}" AllowsTransparency="True" IsHitTestVisible="False" IsOpen="False" StaysOpen="True">
-            <Border x:Name="CameraBadge" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0" Padding="7,4" Background="{StaticResource VmsElevatedBrush_v3}" BorderBrush="{StaticResource VmsBorderStrongBrush_v3}" BorderThickness="1" CornerRadius="3">
-                <StackPanel Orientation="Horizontal">
-                    <Ellipse x:Name="StatusDot" Width="7" Height="7" Fill="{StaticResource VmsOfflineBrush_v3}" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                    <TextBlock x:Name="CameraName" Foreground="{StaticResource VmsTextInverseBrush_v3}" FontWeight="SemiBold" FontSize="11" TextTrimming="CharacterEllipsis" MaxWidth="210"/>
-                </StackPanel>
-            </Border>
-            </Popup>
 
             <Popup x:Name="ActionPopup" Placement="AbsolutePoint" AllowsTransparency="True" StaysOpen="True" PopupAnimation="Fade">
             <Border x:Name="ActionBar" Panel.ZIndex="30" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0" Padding="0" Background="Transparent" BorderThickness="0" Opacity="1" IsHitTestVisible="True" MouseEnter="ActionBar_MouseEnter" MouseLeave="ActionBar_MouseLeave">

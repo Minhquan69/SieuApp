@@ -908,6 +908,11 @@ namespace V3SClient.models
             }
         }
 
+        protected void NotifyPlayer(PlayerStatus status, string value)
+        {
+            PlayerSending?.Invoke(this, new PlayerInfo { Key = status, Value = value });
+        }
+
         private RawColor4 GetRoiColor(string roiId)
         {
             lock (_roiColorSync)

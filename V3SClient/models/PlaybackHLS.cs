@@ -39,6 +39,7 @@ namespace V3SClient.models
         private PlaybackHlsAiProxy _hlsAiProxy;
         private int _hlsAiParseScheduled;
         private long _lastRenderedAiTimestampMs;
+        private int _firstVideoFrameSignaled;
 
         /// <summary>Timeline information supplied by ViewCameraPlayback after it parses the HLS playlist.</summary>
         public sealed class HlsAiSegment
@@ -77,7 +78,10 @@ namespace V3SClient.models
 
         protected override bool ForceAspectRatio
         {
-            get { return true; }
+            // RtspPlayer applies this value again when the native video overlay
+            // receives its window handle. Playback must fill its grid tile just
+            // like Live View, so this cannot remain true.
+            get { return false; }
         }
 
         public PlaybackHLS(string hlsUrl, IntPtr windowHandle, bool is_h264,
@@ -573,6 +577,15 @@ namespace V3SClient.models
         private PadProbeReturn GetPlaybackFrameInfo(Pad pad, PadProbeInfo info)
         {
             var buffer = info.Buffer;
+            if (buffer != null && Interlocked.Exchange(ref _firstVideoFrameSignaled, 1) == 0)
+            {
+                long duration;
+                var durationSeconds = player != null &&
+                    player.QueryDuration(Gst.Format.Time, out duration) && duration > 0
+                        ? Math.Max(1L, duration / Gst.Constants.SECOND)
+                        : 1L;
+                NotifyPlayer(PlayerStatus.Duration, durationSeconds.ToString());
+            }
             if (buffer != null && buffer.Pts != Gst.Constants.CLOCK_TIME_NONE)
                 RenderHlsAiForVideoPosition(buffer.Pts / (double)Gst.Constants.SECOND);
 
@@ -685,7 +698,7 @@ namespace V3SClient.models
                             this.IsH264 = !isH265;
 
                             string parseName = isH265 ? "h265parse" : "h264parse";
-                            string decName = isH265 ? "d3d11h265dec" : "d3d11h264dec";
+                            string softwareDecoderName = isH265 ? "avdec_h265" : "avdec_h264";
 
                             videoQueue = ElementFactory.Make("queue", "video-queue");
                             // Removed leaky=1 to prevent dropping HLS chunks
@@ -693,17 +706,29 @@ namespace V3SClient.models
                             Element vParse = ElementFactory.Make(parseName, "video-parse");
                             identity = ElementFactory.Make("identity", "identity");
 
-                            Element decoder = ElementFactory.Make(decName, "video-decoder");
+                            // A D3D11 decoder can be installed but unusable on an
+                            // older GPU/driver. libav is packaged with the setup and
+                            // gives playback the same behaviour on every client PC.
+                            Element decoder = ElementFactory.Make(softwareDecoderName, "video-decoder");
+                            if (decoder == null)
+                                throw new InvalidOperationException(
+                                    "Không tìm thấy bộ giải mã " + softwareDecoderName + ".");
                             decoder["qos"] = false;
 
                             Element converter = ElementFactory.Make("d3d11convert", "video-converter");
                             videoOverlay = ElementFactory.Make("d3d11overlay", "videoOverlay");
 
                             Element vSink = ElementFactory.Make("d3d11videosink", "video-sink");
+                            if (videoQueue == null || vParse == null || identity == null ||
+                                converter == null || videoOverlay == null || vSink == null)
+                                throw new InvalidOperationException(
+                                    "GStreamer runtime thiếu plugin phát lại video cần thiết.");
                             vSink["async"] = true;
                             vSink["sync"] = true;
                             vSink["qos"] = true;
-                            vSink["force-aspect-ratio"] = true;
+                            // Match Live View and Map: playback fills the grid
+                            // slot instead of leaving letterbox bands.
+                            vSink["force-aspect-ratio"] = false;
 
                             player.Add(videoQueue, vParse, identity, decoder, converter, videoOverlay, vSink);
 

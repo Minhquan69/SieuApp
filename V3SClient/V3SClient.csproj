@@ -224,6 +224,7 @@
     <Compile Include="libs\ItemEditField.cs" />
     <Compile Include="libs\LocationData.cs" />
     <Compile Include="libs\LoggerManager.cs" />
+    <Compile Include="libs\MemoryDiagnosticsLogger.cs" />
     <Compile Include="libs\LoginResult.cs" />
     <Compile Include="libs\MediaHelper.cs" />
     <Compile Include="enums\MediaType.cs" />
@@ -444,6 +445,7 @@
     <Compile Include="viewModels\MapViewModel_v3.cs" />
     <Compile Include="UI\Views\WhepPlayer_v3.xaml.cs">
       <DependentUpon>WhepPlayer_v3.xaml</DependentUpon>
+      <SubType>Component</SubType>
     </Compile>
     <Compile Include="UI\Views\GstRtspPlayer_v3.xaml.cs">
       <DependentUpon>GstRtspPlayer_v3.xaml</DependentUpon>

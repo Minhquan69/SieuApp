@@ -433,3 +433,6 @@ FodyWeavers.xsd
 
 # Local verification/runtime output (executables, native dependencies, and logs)
 .verify-ai/
+# Local installer payloads and generated staging files.
+/installer/prerequisites/
+/installer/stage/

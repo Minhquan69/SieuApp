@@ -1,4 +1,6 @@
 using Microsoft.Web.WebView2.Core;
+using System;
+using System.IO;
 using System.Threading.Tasks;
 
 namespace V3SClient.libs
@@ -17,7 +19,12 @@ namespace V3SClient.libs
                 {
                     if (_sharedEnv == null)
                     {
-                        _sharedEnv = await CoreWebView2Environment.CreateAsync(null, "Cache");
+                        var userDataFolder = Path.Combine(
+                            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                            "iVista VMS",
+                            "WebView2");
+                        Directory.CreateDirectory(userDataFolder);
+                        _sharedEnv = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
                     }
                 }
                 finally

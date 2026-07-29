@@ -34,6 +34,15 @@ namespace V3SClient.UI.Pages
         private VMVideoStorage VideoStorage { get; set; } = new VMVideoStorage();
         public event EventHandler<List<DateTime?>> EventSeachClick;
         public event EventHandler<object> EventBtn2Click;
+
+        // The controls are hosted inside the playback page, while camera selection
+        // can also initiate a search.  Expose one canonical snapshot so a quick
+        // range that is visibly selected is never replaced by an older playback
+        // interval while that second path is running.
+        public List<DateTime?> GetSelectedTimeRange()
+        {
+            return new List<DateTime?> { datetimeFrom.Value, datetimeTo.Value };
+        }
         public ViewSearch( string txtBnt1_Text= "Tìm kiếm", string txtBnt2_Text = "Export", bool btn1Visible = true,bool btn2Visible=false)
         {
             InitializeComponent();
@@ -269,7 +278,7 @@ namespace V3SClient.UI.Pages
             switch (border.Tag)
             {
                 case "btn1":
-                    List<DateTime?> list = new List<DateTime?> { datetimeFrom.Value, datetimeTo.Value };
+                    List<DateTime?> list = GetSelectedTimeRange();
                     EventSeachClick?.Invoke(combVideoStorage.SelectedItem, list);
                     break;
                 case "btn2":

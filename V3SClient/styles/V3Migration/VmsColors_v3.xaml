@@ -8,9 +8,15 @@
     <Color x:Key="VmsSurface2Color_v3">#FF102437</Color>
     <Color x:Key="VmsSurface3Color_v3">#FF132C43</Color>
     <Color x:Key="VmsElevatedColor_v3">#FF152F48</Color>
-    <Color x:Key="VmsBorderSubtleColor_v3">#FF14283B</Color>
-    <Color x:Key="VmsBorderColor_v3">#FF1E3A56</Color>
-    <Color x:Key="VmsBorderStrongColor_v3">#FF2A4D70</Color>
+    <!-- Keep structural dividers present but deliberately subdued.  These
+         colours are shared by all V3 pages, so the hierarchy stays intact
+         without turning the UI into a heavy grid of blue lines. -->
+    <!-- Alpha is intentional: headers, sidebars, cards and page separators
+         all consume these shared brushes.  A translucent divider reads as a
+         soft boundary over each surface rather than a hard blue stroke. -->
+    <Color x:Key="VmsBorderSubtleColor_v3">#60102233</Color>
+    <Color x:Key="VmsBorderColor_v3">#8A1B3852</Color>
+    <Color x:Key="VmsBorderStrongColor_v3">#B0294A66</Color>
     <Color x:Key="VmsTextPrimaryColor_v3">#FFEAF2FF</Color>
     <Color x:Key="VmsTextSecondaryColor_v3">#FFA9BCD0</Color>
     <Color x:Key="VmsTextTertiaryColor_v3">#FF738AA3</Color>

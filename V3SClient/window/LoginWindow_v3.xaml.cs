@@ -61,6 +61,7 @@ namespace V3SClient.window
         public LoginWindow_v3()
         {
             InitializeComponent();
+            ApplyInitialWindowSize();
             _viewModel = new LoginViewModel_v3();
             _viewModel.AuthenticationCompleted += ViewModel_AuthenticationCompleted;
             _viewModel.LoginResetRequested += ViewModel_LoginResetRequested;
@@ -73,6 +74,23 @@ namespace V3SClient.window
             Closed += LoginWindow_v3_Closed;
             SourceInitialized += LoginWindow_SourceInitialized;
         }
+
+        // Start at a useful desktop size instead of a fixed 1280x760.  The
+        // resulting bounds are passed to ShellWindow_v3 after sign-in, so the
+        // application keeps the same 85% geometry from login into the VMS.
+        private void ApplyInitialWindowSize()
+        {
+            Rect workArea = SystemParameters.WorkArea;
+            double width = Math.Max(MinWidth, Math.Round(workArea.Width * 0.85));
+            double height = Math.Max(MinHeight, Math.Round(workArea.Height * 0.85));
+
+            Width = Math.Min(width, workArea.Width);
+            Height = Math.Min(height, workArea.Height);
+            Left = workArea.Left + (workArea.Width - Width) / 2;
+            Top = workArea.Top + (workArea.Height - Height) / 2;
+            _normalWindowBounds = new Rect(Left, Top, Width, Height);
+        }
+
         private void LoginWindow_SourceInitialized(object sender, EventArgs e)
         {
             HwndSource.FromHwnd(new WindowInteropHelper(this).Handle)?.AddHook(WindowResizeHook);

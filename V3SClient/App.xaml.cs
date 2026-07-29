@@ -20,12 +20,13 @@ namespace V3SClient
     public partial class App : Application
     {
         private  Mutex _mutex;
+        private MemoryDiagnosticsLogger _memoryDiagnostics;
  
         public static bool IsRun { get; set; }
         protected override async void OnStartup(StartupEventArgs e)
         {
             
-            string mutexName = "V3SClient";
+            string mutexName = "V3SClient_VMS";
             bool isCreatNew = false;
 
             try
@@ -33,6 +34,10 @@ namespace V3SClient
                 _mutex = new Mutex(true, mutexName, out isCreatNew);
                 if (isCreatNew)
                 {
+                    // One file per application run, sampled every 15 seconds.
+                    // The logger is intentionally started before login so a
+                    // problematic start-up path is included in the evidence.
+                    _memoryDiagnostics = new MemoryDiagnosticsLogger(TimeSpan.FromSeconds(15));
                     GlobalClass.Init();
       
                     // The isolated migrated executable always uses the migrated login flow.
@@ -94,6 +99,25 @@ namespace V3SClient
         private void Dispatcher_UnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
         {
 
+        }
+
+        protected override void OnExit(ExitEventArgs e)
+        {
+            if (_memoryDiagnostics != null)
+            {
+                _memoryDiagnostics.Dispose();
+                _memoryDiagnostics = null;
+            }
+
+            if (_mutex != null)
+            {
+                try { _mutex.ReleaseMutex(); }
+                catch (ApplicationException) { }
+                _mutex.Dispose();
+                _mutex = null;
+            }
+
+            base.OnExit(e);
         }
     }
 }

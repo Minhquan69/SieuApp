@@ -243,17 +243,17 @@
                                                         </Border.Style>
                                                         <Grid>
                                                             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                                            <Icon:PackIconMaterial Kind="CameraOutline" Width="12" Height="12" Margin="0,0,5,0" VerticalAlignment="Center">
-                                                                <Icon:PackIconMaterial.Style>
-                                                                    <Style TargetType="Icon:PackIconMaterial">
-                                                                        <Setter Property="Foreground" Value="{StaticResource VmsTextTertiaryBrush_v3}"/>
+                                                            <Ellipse Width="7" Height="7" Margin="0,0,7,0" VerticalAlignment="Center">
+                                                                <Ellipse.Style>
+                                                                    <Style TargetType="Ellipse">
+                                                                        <Setter Property="Fill" Value="{StaticResource VmsTextTertiaryBrush_v3}"/>
                                                                         <Style.Triggers>
-                                                                            <DataTrigger Binding="{Binding IsOnline}" Value="True"><Setter Property="Foreground" Value="{StaticResource VmsSuccessBrush_v3}"/></DataTrigger>
-                                                                            <DataTrigger Binding="{Binding IsOnline}" Value="False"><Setter Property="Foreground" Value="{StaticResource VmsErrorBrush_v3}"/></DataTrigger>
+                                                                            <DataTrigger Binding="{Binding IsOnline}" Value="True"><Setter Property="Fill" Value="{StaticResource VmsSuccessBrush_v3}"/></DataTrigger>
+                                                                            <DataTrigger Binding="{Binding IsOnline}" Value="False"><Setter Property="Fill" Value="{StaticResource VmsErrorBrush_v3}"/></DataTrigger>
                                                                         </Style.Triggers>
                                                                     </Style>
-                                                                </Icon:PackIconMaterial.Style>
-                                                            </Icon:PackIconMaterial>
+                                                                </Ellipse.Style>
+                                                            </Ellipse>
                                                             <TextBlock Grid.Column="1" Text="{Binding DisplayName}" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" TextTrimming="CharacterEllipsis" FontSize="11"/>
                                                             <Icon:PackIconMaterial Grid.Column="2" Kind="Check" Foreground="{StaticResource VmsSuccessBrush_v3}" Width="14" Height="14" Margin="5,0,0,0">
                                                                 <Icon:PackIconMaterial.Style><Style TargetType="Icon:PackIconMaterial"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsSelected}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Icon:PackIconMaterial.Style>

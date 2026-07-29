@@ -155,6 +155,16 @@ namespace V3SClient.UI.Views
                 if (_disposed || statuses == null || statuses.Count == 0) return false;
 
                 _viewModel.ApplyDeviceStatuses(statuses);
+                // If a previously playing device becomes offline, stop its
+                // pipeline immediately and show the explicit Offline overlay.
+                foreach (var slot in _viewModel.Slots.Where(slot => slot.Camera != null && slot.Camera.is_online == false).ToList())
+                {
+                    LiveTile_v3 tile;
+                    if (_tiles.TryGetValue(slot.SlotId, out tile))
+                        tile.Disconnect();
+                    else
+                        slot.State = LiveConnectionState_v3.Offline;
+                }
                 UpdateStatus();
                 UpdateOnlineCameraStatusLabel();
                 return true;

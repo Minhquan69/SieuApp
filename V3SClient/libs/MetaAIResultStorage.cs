@@ -36,17 +36,52 @@ namespace V3SClient.libs
 
         private MetaAIResultStorage()
         {
-            _dataFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Meta");
-            _configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "metaai_settings.json");
+            // Program Files is read-only for standard users. Runtime data must
+            // live in the current user's writable application-data directory.
+            var writableRoot = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "iVista VMS");
+            _dataFolder = Path.Combine(writableRoot, "Meta");
+            _configPath = Path.Combine(writableRoot, "metaai_settings.json");
             
-            if (!Directory.Exists(_dataFolder))
-                Directory.CreateDirectory(_dataFolder);
+            Directory.CreateDirectory(_dataFolder);
+            MigrateLegacyDataIfNeeded();
 
             LoadConfig();
             CleanupOldFiles();
             EnsureTodayFilePath();
             LoadData();
             StartAutoSave();
+        }
+
+        private void MigrateLegacyDataIfNeeded()
+        {
+            try
+            {
+                var legacyRoot = AppDomain.CurrentDomain.BaseDirectory;
+                var legacyConfig = Path.Combine(legacyRoot, "metaai_settings.json");
+                if (!File.Exists(_configPath) && File.Exists(legacyConfig))
+                    File.Copy(legacyConfig, _configPath, false);
+
+                var legacyDataFolder = Path.Combine(legacyRoot, "Meta");
+                if (!Directory.Exists(legacyDataFolder))
+                    return;
+
+                foreach (var legacyFile in Directory.GetFiles(legacyDataFolder, "*.json"))
+                {
+                    var destination = Path.Combine(_dataFolder, Path.GetFileName(legacyFile));
+                    if (!File.Exists(destination))
+                        File.Copy(legacyFile, destination, false);
+                }
+            }
+            catch (IOException ex)
+            {
+                Debug.WriteLine("Cannot migrate legacy AI metadata: " + ex.Message);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                Debug.WriteLine("Cannot access legacy AI metadata: " + ex.Message);
+            }
         }
 
         public void LoadConfig()

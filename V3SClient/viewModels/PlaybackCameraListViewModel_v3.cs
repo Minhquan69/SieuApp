@@ -33,6 +33,7 @@ namespace V3SClient.viewModels
             }
         }
         public bool IsAiCamera { get { return Camera != null && (Camera.HasAIStream || string.Equals(Camera.type, "ai_processed", StringComparison.OrdinalIgnoreCase) || (Camera.Streams != null && Camera.Streams.Any(stream => stream != null && stream.IsAiMode == true))); } }
+        public bool? IsOnline { get { return Camera == null ? (bool?)null : Camera.is_online; } }
         public bool IsRecording { get { return Camera != null && Camera.is_recording; } }
         public bool IsSelected { get { return _isSelected; } set { if (_isSelected == value) return; _isSelected = value; OnChanged(); } }
 
