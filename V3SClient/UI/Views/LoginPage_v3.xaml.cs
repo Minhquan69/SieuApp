@@ -20,36 +20,58 @@ namespace V3SClient.UI.Views
         {
             InitializeComponent();
             Loaded += LoginPage_v3_Loaded;
-            SizeChanged += (s, e) => ScheduleProfileLayout();
+            SizeChanged += (s, e) => { ScheduleProfileLayout(); UpdateResponsiveLoginLayout(); };
             DataContextChanged += LoginPage_v3_DataContextChanged;
             AddHandler(MouseLeftButtonUpEvent, new MouseButtonEventHandler(OnPageMouseUp), true);
         }
         private void LoginPage_v3_Loaded(object sender, RoutedEventArgs e)
         {
             ScheduleProfileLayout();
+            UpdateResponsiveLoginLayout();
             UpdatePlatformCaption(this);
             UpdateApplicationMarketingText(this);
             NormalizeMarketingPanelBackground(this);
             var cachedLogin = DataContext as LoginViewModel_v3;
             if (cachedLogin != null && string.IsNullOrEmpty(PasswordInput.Password) && !string.IsNullOrEmpty(cachedLogin.Password))
                 PasswordInput.Password = cachedLogin.Password;
+            UpdateLoginButtonState();
             var parent = VisualTreeHelper.GetParent(PasswordInput) as Panel;
             if (parent == null || _visiblePassword != null) return;
             var index = parent.Children.IndexOf(PasswordInput);
             var host = new Grid { Height = 48, Margin = PasswordInput.Margin };
-            PasswordInput.Margin = new Thickness(0); PasswordInput.Padding = new Thickness(14, 10, 42, 10);
-            _visiblePassword = new TextBox { Visibility = Visibility.Collapsed, Height = 48, Padding = new Thickness(14, 10, 42, 10), FontSize = 14, Background = PasswordInput.Background, BorderBrush = PasswordInput.BorderBrush, BorderThickness = PasswordInput.BorderThickness, Foreground = PasswordInput.Foreground };
+            PasswordInput.Margin = new Thickness(0); PasswordInput.Padding = new Thickness(48, 10, 42, 10);
+            _visiblePassword = new TextBox { Visibility = Visibility.Collapsed, Height = 48, Padding = new Thickness(48, 10, 42, 10), FontSize = 14, Background = PasswordInput.Background, BorderBrush = PasswordInput.BorderBrush, BorderThickness = PasswordInput.BorderThickness, Foreground = PasswordInput.Foreground };
             _visiblePassword.TextChanged += (s, a) => { if (_isPasswordVisible && DataContext is LoginViewModel_v3 vm) vm.Password = _visiblePassword.Text; };
             _passwordToggle = new Button { Content = CreateEyeIcon(false), Width = 38, Height = 34, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent, Foreground = new SolidColorBrush(Color.FromRgb(158, 180, 204)), BorderThickness = new Thickness(0), ToolTip = "Hiển thị mật khẩu" };
             _passwordToggle.Click += (s, a) => TogglePassword();
             // A WPF element can have only one logical parent: detach it before placing it in the host grid.
             parent.Children.RemoveAt(index);
-            host.Children.Add(PasswordInput); host.Children.Add(_visiblePassword); host.Children.Add(_passwordToggle);
+            host.Children.Add(PasswordInput); host.Children.Add(_visiblePassword);
+            host.Children.Add(new TextBlock
+            {
+                Text = "\uE72E", FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 19,
+                Foreground = new SolidColorBrush(Color.FromRgb(96, 202, 255)),
+                HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(15, 0, 0, 0), IsHitTestVisible = false
+            });
+            host.Children.Add(_passwordToggle);
             parent.Children.Insert(index, host);
             var remember = new CheckBox { Content = "Ghi nhớ đăng nhập", Foreground = new SolidColorBrush(Color.FromRgb(194, 211, 229)), Margin = new Thickness(0, 8, 0, 14), IsChecked = (DataContext as LoginViewModel_v3)?.IsRememberMe == true };
             remember.Checked += (s, a) => { if (DataContext is LoginViewModel_v3 vm) vm.IsRememberMe = true; };
             remember.Unchecked += (s, a) => { if (DataContext is LoginViewModel_v3 vm) vm.IsRememberMe = false; };
             parent.Children.Insert(index + 1, remember);
+        }
+
+        private void UpdateResponsiveLoginLayout()
+        {
+            if (LoginLayout == null || MarketingPanel == null || LoginCard == null) return;
+            var compact = ActualWidth > 0 && ActualWidth < 1100;
+            LoginLayout.Margin = compact ? new Thickness(32, 40, 32, 30) : new Thickness(126, 40, 76, 30);
+            MarketingPanel.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+            LoginLayout.ColumnDefinitions[0].Width = compact ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+            LoginLayout.ColumnDefinitions[1].Width = compact ? new GridLength(1, GridUnitType.Star) : new GridLength(650);
+            LoginCard.Width = compact ? Math.Max(360, Math.Min(600, ActualWidth - 64)) : 600;
+            LoginCard.HorizontalAlignment = compact ? HorizontalAlignment.Center : HorizontalAlignment.Right;
         }
 
         private static void UpdateApplicationMarketingText(DependencyObject root)
@@ -196,7 +218,7 @@ namespace V3SClient.UI.Views
         }
         private static UIElement CreateEyeIcon(bool crossedOut)
         {
-            var color = new SolidColorBrush(Color.FromRgb(158, 180, 204));
+            var color = new SolidColorBrush(Color.FromRgb(96, 202, 255));
             var icon = new Grid { Width = 18, Height = 18 };
             icon.Children.Add(new TextBlock { Text = "\uE890", FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 16, Foreground = color, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
             if (crossedOut) icon.Children.Add(new Line { X1 = 2, Y1 = 16, X2 = 16, Y2 = 2, Stroke = color, StrokeThickness = 1.8, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round });
@@ -207,7 +229,25 @@ namespace V3SClient.UI.Views
             var text = e.OriginalSource as TextBlock;
             if (text != null && text.Text == "↪ Đăng xuất" && DataContext is LoginViewModel_v3 vm && vm.LogoutCommand.CanExecute(null)) vm.LogoutCommand.Execute(null);
         }
-        private void PasswordInput_OnPasswordChanged(object sender, RoutedEventArgs e) { var viewModel = DataContext as LoginViewModel_v3; if (viewModel != null) viewModel.Password = PasswordInput.Password; }
+        private void UsernameInput_OnTextChanged(object sender, TextChangedEventArgs e) { UpdateLoginButtonState(); }
+        private void PasswordInput_OnPasswordChanged(object sender, RoutedEventArgs e)
+        {
+            var viewModel = DataContext as LoginViewModel_v3;
+            if (viewModel != null) viewModel.Password = PasswordInput.Password;
+            UpdateLoginButtonState();
+        }
+        private void UpdateLoginButtonState()
+        {
+            if (LoginSubmitButton == null || UsernameInput == null || PasswordInput == null) return;
+            var isReady = !string.IsNullOrWhiteSpace(UsernameInput.Text) && !string.IsNullOrWhiteSpace(PasswordInput.Password);
+            LoginSubmitButton.IsEnabled = isReady;
+            LoginSubmitButton.Background = new SolidColorBrush(isReady ? Color.FromRgb(37, 99, 235) : Color.FromRgb(16, 53, 93));
+        }
+        private void LoginSubmitButton_Click(object sender, RoutedEventArgs e)
+        {
+            var viewModel = DataContext as LoginViewModel_v3;
+            if (viewModel != null && viewModel.LoginCommand.CanExecute(null)) viewModel.LoginCommand.Execute(null);
+        }
         public void ClearPassword() { PasswordInput.Clear(); if (_visiblePassword != null) _visiblePassword.Clear(); _isPasswordVisible = false; if (_visiblePassword != null) _visiblePassword.Visibility = Visibility.Collapsed; PasswordInput.Visibility = Visibility.Visible; }
     }
 }

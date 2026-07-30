@@ -42,6 +42,10 @@ namespace V3SClient.UI.Views
         private GridLength _tileSidebarWidth;
         private bool _tileWindowStateSaved;
         private bool _gridFullscreen;
+        private bool _gridUsesVirtualDesktop;
+        private bool _cameraSidebarCollapsed;
+        private bool _allMuted;
+        private bool _allDisconnected;
         private WindowState _gridWindowState;
         private double _gridWindowLeft;
         private double _gridWindowTop;
@@ -53,7 +57,10 @@ namespace V3SClient.UI.Views
         private readonly TranslateTransform _headerActionTransform = new TranslateTransform();
         private readonly DispatcherTimer _resizeSettledTimer;
         private readonly DispatcherTimer _deviceStatusRefreshTimer;
+        private readonly DispatcherTimer _aiSummaryRefreshTimer;
+        private readonly DispatcherTimer _liveToastTimer;
         private int _deviceStatusRefreshInProgress;
+        private int _aiSummaryRefreshInProgress;
         private readonly Stopwatch _resizeStopwatch = new Stopwatch();
         private bool _resizeOverlaysSuspended;
         private bool _geometryTransitionInProgress;
@@ -65,6 +72,7 @@ namespace V3SClient.UI.Views
         private int _customLayoutRows;
         private int _customLayoutColumns;
         private List<CustomLayoutCell_v3> _customLayoutCells = new List<CustomLayoutCell_v3>();
+        private enum LiveToastKind { Info, Warning, Error }
 
         public LivePage_v3()
         {
@@ -78,12 +86,12 @@ namespace V3SClient.UI.Views
             // Refresh immediately on page load/Connect all, then every 30 s.
             _deviceStatusRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
             _deviceStatusRefreshTimer.Tick += DeviceStatusRefreshTimer_Tick;
+            _aiSummaryRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
+            _aiSummaryRefreshTimer.Tick += AiSummaryRefreshTimer_Tick;
+            _liveToastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+            _liveToastTimer.Tick += LiveToastTimer_Tick;
             // The action icons are centred against the complete header at all
             // window sizes, not against the space left between side controls.
-            HeaderActionPanel.RenderTransform = _headerActionTransform;
-            Grid.SetColumn(HeaderActionPanel, 0);
-            Grid.SetColumnSpan(HeaderActionPanel, 3);
-            Panel.SetZIndex(HeaderActionPanel, 10);
             LivePageHeader.SizeChanged += LivePageHeader_SizeChanged;
             CameraGrid.SizeChanged += CameraGrid_SizeChanged;
             SizeChanged += LivePage_SizeChanged;
@@ -102,7 +110,7 @@ namespace V3SClient.UI.Views
                 Visibility = Visibility.Collapsed
             };
             _removeErrorsHeaderButton.Click += RemoveErrors_Click;
-            HeaderActionPanel.Children.Insert(2, _removeErrorsHeaderButton);
+            HeaderUtilityPanel.Children.Insert(3, _removeErrorsHeaderButton);
             _viewModel = new LiveViewModel_v3();
             DataContext = _viewModel;
             Loaded += OnLoaded;
@@ -125,8 +133,12 @@ namespace V3SClient.UI.Views
             AiCameraFilterButton.IsEnabled = true;
             UpdateFilterButtonVisuals();
             NormalizeCameraSidebarLayout();
+            UpdateCameraSidebarPlacement();
+            UpdateSidebarOpenButtons();
             BuildGrid();
             QueueHeaderActionCentering();
+            await RefreshAiSummaryAsync();
+            if (!_disposed) _aiSummaryRefreshTimer.Start();
             await RefreshDeviceStatusesAsync();
             if (!_disposed) _deviceStatusRefreshTimer.Start();
         }
@@ -134,6 +146,11 @@ namespace V3SClient.UI.Views
         private async void DeviceStatusRefreshTimer_Tick(object sender, EventArgs e)
         {
             await RefreshDeviceStatusesAsync();
+        }
+
+        private async void AiSummaryRefreshTimer_Tick(object sender, EventArgs e)
+        {
+            await RefreshAiSummaryAsync();
         }
 
         private async Task<bool> RefreshDeviceStatusesAsync()
@@ -190,7 +207,29 @@ namespace V3SClient.UI.Views
 
         private void LivePageHeader_SizeChanged(object sender, SizeChangedEventArgs e)
         {
+            UpdateHeaderResponsiveLayout();
             ScheduleResizeSettle();
+        }
+
+        /// <summary>
+        /// Keeps the live-view controls inside the usable header area.  The
+        /// account/window controls occupy the right edge in the shell, so at
+        /// compact widths the title and quick layouts must yield their space
+        /// before the action buttons can collide with that area.
+        /// </summary>
+        private void UpdateHeaderResponsiveLayout()
+        {
+            if (LivePageHeader.ActualWidth <= 0)
+                return;
+
+            // The complete title block, three quick layouts, action group and
+            // shell account area need just over 1,000 px.  Below that size we
+            // keep the actionable controls only, rather than letting WPF
+            // squeeze and overlap them.
+            var isCompact = LivePageHeader.ActualWidth < 1080;
+            HeaderTitlePanel.Visibility = isCompact ? Visibility.Collapsed : Visibility.Visible;
+            HeaderLayoutQuickPanel.Visibility = isCompact ? Visibility.Collapsed : Visibility.Visible;
+
         }
 
         private void LivePage_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -461,11 +500,15 @@ namespace V3SClient.UI.Views
             var normal = (System.Windows.Media.Brush)FindResource("VmsSurface2Brush_v3");
             var selectedBorder = (System.Windows.Media.Brush)FindResource("VmsPrimaryBrush_v3");
             var normalBorder = (System.Windows.Media.Brush)FindResource("VmsBorderBrush_v3");
-            AllCameraFilterButton.Background = _viewModel.AiOnly ? normal : selected;
-            AllCameraFilterButton.BorderBrush = _viewModel.AiOnly ? normalBorder : selectedBorder;
+            var allSelected = !_viewModel.AiOnly && !_viewModel.OnlineOnly;
+            AllCameraFilterButton.Background = allSelected ? selected : normal;
+            AllCameraFilterButton.BorderBrush = allSelected ? selectedBorder : normalBorder;
+            OnlineCameraFilterButton.Background = _viewModel.OnlineOnly ? selected : normal;
+            OnlineCameraFilterButton.BorderBrush = _viewModel.OnlineOnly ? selectedBorder : normalBorder;
             AiCameraFilterButton.Background = _viewModel.AiOnly ? selected : normal;
             AiCameraFilterButton.BorderBrush = _viewModel.AiOnly ? selectedBorder : normalBorder;
             AllCameraFilterButton.IsEnabled = true;
+            OnlineCameraFilterButton.IsEnabled = true;
             AiCameraFilterButton.IsEnabled = true;
         }
 
@@ -508,6 +551,7 @@ namespace V3SClient.UI.Views
                     tile = new LiveTile_v3();
                     tile.RemoveRequested += Tile_RemoveRequested;
                     tile.FullscreenRequested += Tile_FullscreenRequested;
+                    tile.SnapshotRequested += Tile_SnapshotRequested;
                     tile.StateChanged += Tile_StateChanged;
                     tile.AllowDrop = true;
                     tile.PreviewMouseLeftButtonDown += Tile_PreviewMouseLeftButtonDown;
@@ -521,6 +565,7 @@ namespace V3SClient.UI.Views
                 // newly created or its slot instance genuinely changed.
                 if (tile.RequiresBind(slot))
                     tile.Bind(slot);
+                tile.SetMuted(_allMuted);
                 var customCell = hasMergedCustomLayout ? _customLayoutCells[visualIndex] : null;
                 var placement = customCell == null
                     ? GetPlacement(_viewModel.Layout, visualIndex, dimensions.Item2)
@@ -540,6 +585,7 @@ namespace V3SClient.UI.Views
                 CameraGrid.Children.Remove(stale);
                 stale.RemoveRequested -= Tile_RemoveRequested;
                 stale.FullscreenRequested -= Tile_FullscreenRequested;
+                stale.SnapshotRequested -= Tile_SnapshotRequested;
                 stale.StateChanged -= Tile_StateChanged;
                 stale.PreviewMouseLeftButtonDown -= Tile_PreviewMouseLeftButtonDown;
                 stale.PreviewMouseMove -= Tile_PreviewMouseMove;
@@ -732,12 +778,24 @@ namespace V3SClient.UI.Views
         private void AllCameraFilter_Click(object sender, RoutedEventArgs e)
         {
             _viewModel.AiOnly = false;
+            _viewModel.OnlineOnly = false;
+            _viewModel.ExpandCameraGroups();
+            UpdateFilterButtonVisuals();
+        }
+
+        private void OnlineCameraFilter_Click(object sender, RoutedEventArgs e)
+        {
+            _viewModel.AiOnly = false;
+            _viewModel.OnlineOnly = true;
+            _viewModel.ExpandCameraGroups();
             UpdateFilterButtonVisuals();
         }
 
         private void AiCameraFilter_Click(object sender, RoutedEventArgs e)
         {
             _viewModel.AiOnly = true;
+            _viewModel.OnlineOnly = false;
+            _viewModel.ExpandCameraGroups();
             UpdateFilterButtonVisuals();
         }
 
@@ -898,7 +956,13 @@ namespace V3SClient.UI.Views
             BuildGrid(deferStaleCleanup: true);
         }
 
-        private void LayoutMenuButton_Click(object sender, RoutedEventArgs e) { LayoutPopup.IsOpen = !LayoutPopup.IsOpen; }
+        private void LayoutMenuButton_Click(object sender, RoutedEventArgs e)
+        {
+            var button = sender as Button;
+            if (button != null)
+                LayoutPopup.PlacementTarget = button;
+            LayoutPopup.IsOpen = !LayoutPopup.IsOpen;
+        }
         private void LayoutMenu_MouseEnter(object sender, MouseEventArgs e) { LayoutPopup.IsOpen = true; }
         private void LayoutPopup_MouseLeave(object sender, MouseEventArgs e) { LayoutPopup.IsOpen = false; }
 
@@ -1140,6 +1204,20 @@ namespace V3SClient.UI.Views
             CameraGrid.Visibility = Visibility.Visible;
             var cleanupTasks = tiles.Select(tile => tile.DisconnectInBackgroundAsync()).ToArray();
             _ = Task.WhenAll(cleanupTasks).ContinueWith(_ => Dispatcher.BeginInvoke(new Action(UpdateStatus)));
+        }
+
+        private void ToggleAllConnection_Click(object sender, RoutedEventArgs e)
+        {
+            if (_allDisconnected)
+                ConnectAll_Click(sender, e);
+            else
+                DisconnectAll_Click(sender, e);
+
+            _allDisconnected = !_allDisconnected;
+            BulkConnectionButton.ToolTip = _allDisconnected ? "Kết nối tất cả" : "Ngắt kết nối tất cả";
+            BulkConnectionIcon.Kind = _allDisconnected
+                ? MahApps.Metro.IconPacks.PackIconMaterialKind.PowerPlug
+                : MahApps.Metro.IconPacks.PackIconMaterialKind.PowerPlugOff;
         }
 
         private async void RemoveAll_Click(object sender, RoutedEventArgs e)
@@ -1454,15 +1532,10 @@ namespace V3SClient.UI.Views
                 return;
             }
 
-            // The original client treats fullscreen as a virtual-desktop
-            // wall: when Windows is in Extend mode, one camera wall spans
-            // every display instead of choosing a single target screen.
-            var shellWindow = Window.GetWindow(this) as ShellWindow_v3;
-            if (shellWindow != null)
-            {
-                shellWindow.ToggleVirtualDesktopMode();
-                QueueHeaderActionCentering();
-            }
+            // This command belongs to the live-grid toolbar, so it expands
+            // only the camera wall. Window maximize remains the responsibility
+            // of the chrome control in the top-right corner.
+            SetGridFullscreen(!_gridFullscreen);
         }
 
         private void SetGridFullscreen(bool entering, FormsScreen targetScreen = null)
@@ -1470,6 +1543,8 @@ namespace V3SClient.UI.Views
             var window = Window.GetWindow(this);
             if (window == null) return;
             if (entering == _gridFullscreen && targetScreen == null) return;
+
+            var shellWindow = window as ShellWindow_v3;
 
                 RunGridGeometryTransition(new Action(() =>
             {
@@ -1489,6 +1564,8 @@ namespace V3SClient.UI.Views
                     _gridWindowWidth = bounds.Width;
                     _gridWindowHeight = bounds.Height;
                     _gridWindowStateSaved = true;
+                    _gridUsesVirtualDesktop = targetScreen == null && shellWindow != null &&
+                        FormsScreen.AllScreens != null && FormsScreen.AllScreens.Length > 1;
                 }
                 _gridFullscreen = entering;
                 var shell = GetShellPage(window);
@@ -1515,25 +1592,46 @@ namespace V3SClient.UI.Views
                         window.Width = targetScreen.WorkingArea.Width;
                         window.Height = targetScreen.WorkingArea.Height;
                     }
-                    window.WindowState = WindowState.Maximized;
+                    if (_gridUsesVirtualDesktop && targetScreen == null && shellWindow != null)
+                    {
+                        if (!shellWindow.IsVirtualDesktopMode)
+                            shellWindow.ToggleVirtualDesktopMode();
+                    }
+                    else
+                    {
+                        window.WindowState = WindowState.Maximized;
+                    }
                 }
                 else
                 {
-                    var stateToRestore = _gridWindowStateSaved ? _gridWindowState : WindowState.Normal;
-                    window.WindowState = stateToRestore;
-                    if (stateToRestore == WindowState.Normal && _gridWindowWidth > 0 && _gridWindowHeight > 0)
+                    var restoredByVirtualDesktop = _gridUsesVirtualDesktop && shellWindow != null &&
+                        shellWindow.IsVirtualDesktopMode;
+                    if (restoredByVirtualDesktop)
                     {
-                        // Set the final bounds immediately after leaving
-                        // Maximized, while the camera grid is still hidden.
-                        // This prevents the native video HWNDs from ever
-                        // receiving the transient RestoreBounds rectangle.
-                        window.Left = _gridWindowLeft;
-                        window.Top = _gridWindowTop;
-                        window.Width = _gridWindowWidth;
-                        window.Height = _gridWindowHeight;
+                        shellWindow.ToggleVirtualDesktopMode();
+                    }
+                    else
+                    {
+                        var stateToRestore = _gridWindowStateSaved ? _gridWindowState : WindowState.Normal;
+                        window.WindowState = stateToRestore;
+                        if (stateToRestore == WindowState.Normal && _gridWindowWidth > 0 && _gridWindowHeight > 0)
+                        {
+                            // Set the final bounds immediately after leaving
+                            // Maximized, while the camera grid is still hidden.
+                            // This prevents the native video HWNDs from ever
+                            // receiving the transient RestoreBounds rectangle.
+                            window.Left = _gridWindowLeft;
+                            window.Top = _gridWindowTop;
+                            window.Width = _gridWindowWidth;
+                            window.Height = _gridWindowHeight;
+                        }
                     }
                 }
-                if (!entering) _gridWindowStateSaved = false;
+                if (!entering)
+                {
+                    _gridWindowStateSaved = false;
+                    _gridUsesVirtualDesktop = false;
+                }
                 UpdateFullscreenControls();
                 }), suspendVideoSurfaces: true);
         }
@@ -1544,19 +1642,226 @@ namespace V3SClient.UI.Views
             var icon = _gridFullscreen
                 ? MahApps.Metro.IconPacks.PackIconMaterialKind.FullscreenExit
                 : MahApps.Metro.IconPacks.PackIconMaterialKind.Fullscreen;
+            if (GridFullscreenButton != null) GridFullscreenButton.ToolTip = tooltip;
+            if (GridFullscreenIcon != null) GridFullscreenIcon.Kind = icon;
+        }
+
+        private void ToggleAllMute_Click(object sender, RoutedEventArgs e)
+        {
+            _allMuted = !_allMuted;
+            foreach (var tile in _tiles.Values) tile.SetMuted(_allMuted);
+            GlobalMuteButton.ToolTip = _allMuted ? "Bật âm thanh tất cả" : "Tắt âm thanh tất cả";
+            GlobalMuteIcon.Kind = _allMuted ? MahApps.Metro.IconPacks.PackIconMaterialKind.VolumeOff : MahApps.Metro.IconPacks.PackIconMaterialKind.VolumeHigh;
+        }
+
+        private async void Tile_SnapshotRequested(object sender, EventArgs e)
+        {
+            var tile = sender as LiveTile_v3;
+            if (tile != null && !string.IsNullOrWhiteSpace(await tile.TrySaveSourceSnapshotAsync()))
+                ShowLiveToast("Chụp ảnh", "Đã lưu ảnh " + (tile.Slot?.Camera?.camID ?? "camera") + ".");
+            else
+                ShowLiveToast("Chụp ảnh", "Không thể lấy frame gốc từ camera hiện tại.", LiveToastKind.Warning);
+        }
+
+        private async void SnapshotAll_Click(object sender, RoutedEventArgs e)
+        {
+            var saved = 0;
+            foreach (var tile in _tiles.Values.Where(item => item?.Slot?.Camera != null))
+            {
+                if (!string.IsNullOrWhiteSpace(await tile.TrySaveSourceSnapshotAsync())) saved++;
+            }
+            ShowLiveToast("Chụp ảnh", saved > 0 ? "Đã lưu " + saved + " ảnh camera." : "Chưa thể chụp ảnh các camera đang phát.",
+                saved > 0 ? LiveToastKind.Info : LiveToastKind.Warning);
+        }
+
+        private void ShowLiveToast(string title, string message, LiveToastKind kind = LiveToastKind.Info)
+        {
+            var brushKey = kind == LiveToastKind.Error ? "VmsErrorBrush_v3"
+                : kind == LiveToastKind.Warning ? "VmsWarningBrush_v3" : "VmsInfoBrush_v3";
+            var accent = FindResource(brushKey) as Brush;
+            if (accent != null)
+            {
+                LiveToastAccent.Background = accent;
+                LiveToastIcon.Foreground = accent;
+            }
+            LiveToastTitle.Text = title;
+            LiveToastMessage.Text = message;
+            LiveToast.Visibility = Visibility.Visible;
+            _liveToastTimer.Stop();
+            _liveToastTimer.Start();
+        }
+
+        private void CloseLiveToast_Click(object sender, RoutedEventArgs e)
+        {
+            _liveToastTimer.Stop();
+            LiveToast.Visibility = Visibility.Collapsed;
+        }
+
+        private void LiveToastTimer_Tick(object sender, EventArgs e)
+        {
+            _liveToastTimer.Stop();
+            LiveToast.Visibility = Visibility.Collapsed;
+        }
+
+        private void AiTimeFilterButton_Click(object sender, RoutedEventArgs e)
+        {
+            var menu = AiTimeFilterButton.ContextMenu;
+            if (menu == null) return;
+            menu.PlacementTarget = AiTimeFilterButton;
+            menu.IsOpen = true;
+        }
+
+        private void AiTimeFilter_Click(object sender, RoutedEventArgs e)
+        {
+            var item = sender as MenuItem;
+            var label = item == null ? null : item.Tag as string;
+            if (!string.IsNullOrWhiteSpace(label))
+            {
+                AiTimeFilterText.Text = label;
+                _ = RefreshAiSummaryAsync();
+            }
+        }
+
+        private async Task RefreshAiSummaryAsync()
+        {
+            if (_disposed || Interlocked.Exchange(ref _aiSummaryRefreshInProgress, 1) != 0)
+                return;
+
+            try
+            {
+                var endAt = System.DateTime.Now;
+                var label = AiTimeFilterText == null ? string.Empty : AiTimeFilterText.Text;
+                var startAt = label == "1 giờ gần nhất" ? endAt.AddHours(-1)
+                    : label == "6 giờ gần nhất" ? endAt.AddHours(-6)
+                    : label == "12 giờ gần nhất" ? endAt.AddHours(-12)
+                    : label == "1 ngày gần nhất" ? endAt.AddDays(-1)
+                    : endAt.AddMinutes(-15);
+                var counts = await ApiManager.Instance.GetFrameDetectionCountsAsync(startAt, endAt, _lifetime.Token);
+                if (!_disposed && counts != null && AiVehicleCountText != null)
+                    AiVehicleCountText.Text = counts.AccumulatedDetectionCount.ToString();
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _aiSummaryRefreshInProgress, 0);
+            }
+        }
+
+        private void ToggleAiSummary_Click(object sender, RoutedEventArgs e)
+        {
+            var showSummary = AiSummaryPanel.Visibility != Visibility.Visible;
+            AiSummaryPanel.Visibility = showSummary ? Visibility.Visible : Visibility.Collapsed;
+            AiSummaryExpandButton.Visibility = showSummary ? Visibility.Collapsed : Visibility.Visible;
+            // Keep all right-side controls within their shared header frame.
+            HeaderTopOverflowPanel.Visibility = Visibility.Visible;
+            HeaderRightAiControls.Visibility = showSummary ? Visibility.Visible : Visibility.Collapsed;
+            Grid.SetColumnSpan(CameraGridHost, _cameraSidebarCollapsed ? 2 : 1);
+            // The camera drawer repositions itself between its open side
+            // header and its compact inline-header representation.
+            UpdateCameraSidebarPlacement();
+            if (showSummary)
+                AiSummaryDetails.Visibility = Visibility.Visible;
+            UpdateSidebarOpenButtons();
+        }
+
+        private void AiAlertButton_Click(object sender, RoutedEventArgs e)
+        {
+            ShowLiveToast("Thông báo AI", "Có 2 cảnh báo AI cần được xử lý.", LiveToastKind.Warning);
+        }
+
+        private void LivePageHeader_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            for (DependencyObject source = e.OriginalSource as DependencyObject;
+                 source != null;
+                 source = VisualTreeHelper.GetParent(source))
+            {
+                if (source is Button || source is ComboBox || source is TextBox || source is MenuItem)
+                    return;
+            }
+
+            var shell = Window.GetWindow(this) as ShellWindow_v3;
+            if (shell != null && e.LeftButton == MouseButtonState.Pressed)
+                shell.BeginMoveFromHeader();
         }
 
         private void ToggleSidebar_Click(object sender, RoutedEventArgs e)
         {
-            var hide = CameraSidebar.Visibility == Visibility.Visible;
+            var collapse = !_cameraSidebarCollapsed;
             RunGridGeometryTransition(new Action(() =>
             {
-                CameraSidebar.Visibility = hide ? Visibility.Collapsed : Visibility.Visible;
-                SidebarColumn.MinWidth = hide ? 0 : 210;
-                SidebarColumn.MaxWidth = hide ? double.PositiveInfinity : 320;
-                SidebarColumn.Width = hide ? new GridLength(0) : new GridLength(0.20, GridUnitType.Star);
+                _cameraSidebarCollapsed = collapse;
+                // The sidebar column is a stable anchor for the header.  Its
+                // content may fold vertically, but its width must never be
+                // reset to zero by a previous horizontal-collapse state.
+                SidebarColumn.MinWidth = 210;
+                SidebarColumn.MaxWidth = 320;
+                SidebarColumn.Width = new GridLength(0.20, GridUnitType.Star);
+                CameraSidebarStats.Visibility = collapse ? Visibility.Collapsed : Visibility.Visible;
+                CameraSidebarSearch.Visibility = collapse ? Visibility.Collapsed : Visibility.Visible;
+                CameraSidebarFilters.Visibility = collapse ? Visibility.Collapsed : Visibility.Visible;
+                CameraSidebarListCaption.Visibility = collapse ? Visibility.Collapsed : Visibility.Visible;
+                CameraSidebarList.Visibility = collapse ? Visibility.Collapsed : Visibility.Visible;
+                // Keep the sidebar header in exactly the same place. Only the
+                // list content folds vertically; the transparent area beneath
+                // lets the camera grid use the released space.
+                CameraSidebar.Height = double.NaN;
+                CameraSidebar.VerticalAlignment = VerticalAlignment.Stretch;
+                CameraSidebar.Background = collapse
+                    ? Brushes.Transparent
+                    : FindResource("VmsSidebarBrush_v3") as Brush;
+                CameraSidebar.BorderThickness = collapse
+                    ? new Thickness(0)
+                    : new Thickness(1, 0, 0, 0);
+                CameraSidebarToggleButton.ToolTip = collapse ? "Mở danh sách camera theo chiều dọc" : "Thu gọn danh sách camera theo chiều dọc";
+                CameraSidebarToggleIcon.Kind = collapse
+                    ? MahApps.Metro.IconPacks.PackIconMaterialKind.ChevronDown
+                    : MahApps.Metro.IconPacks.PackIconMaterialKind.ChevronUp;
+                CollapsedCameraListHeaderButton.ToolTip = collapse
+                    ? "Mở danh sách camera" : "Thu gọn danh sách camera";
+                CollapsedCameraListHeaderIcon.Kind = collapse
+                    ? MahApps.Metro.IconPacks.PackIconMaterialKind.ChevronDown
+                    : MahApps.Metro.IconPacks.PackIconMaterialKind.ChevronUp;
+                // Opening the list restores the grid's original column;
+                // folding it vertically lets the grid use both columns.
+                Grid.SetColumnSpan(CameraGridHost, collapse ? 2 : 1);
+                UpdateCameraSidebarPlacement();
                 UpdateSidebarOpenButtons();
             }), suspendVideoSurfaces: false);
+        }
+
+        private void UpdateCameraSidebarPlacement()
+        {
+            var aiSummaryOpen = AiSummaryPanel.Visibility == Visibility.Visible;
+            // A collapsed camera list always becomes one compact inline tab,
+            // including while the AI summary remains expanded.
+            var useHeaderTab = _cameraSidebarCollapsed;
+            CollapsedCameraListHeaderButton.Visibility = useHeaderTab
+                ? Visibility.Visible : Visibility.Collapsed;
+            CameraSidebarHeader.Visibility = useHeaderTab
+                ? Visibility.Collapsed : Visibility.Visible;
+            Grid.SetColumnSpan(CameraGridHost, useHeaderTab ? 2 : 1);
+            HeaderTopOverflowPanel.Visibility = Visibility.Visible;
+            HeaderRightAiControls.Visibility = aiSummaryOpen ? Visibility.Visible : Visibility.Collapsed;
+            PlaceHeaderOverflow(aiSummaryOpen);
+            // The camera list begins at the same Y position as the grid;
+            // it must not be pulled over the AI summary/header.
+            CameraSidebar.Margin = new Thickness(0);
+        }
+
+        private void PlaceHeaderOverflow(bool besideAiControls)
+        {
+            var currentParent = VisualTreeHelper.GetParent(HeaderTopOverflowPanel) as Panel;
+            Panel targetParent = besideAiControls
+                ? (Panel)HeaderRightAiControls
+                : (Panel)LiveHeaderLayoutGrid;
+            if (ReferenceEquals(currentParent, targetParent)) return;
+
+            currentParent?.Children.Remove(HeaderTopOverflowPanel);
+            targetParent.Children.Add(HeaderTopOverflowPanel);
+            if (!besideAiControls)
+            {
+                Grid.SetRow(HeaderTopOverflowPanel, 0);
+                Grid.SetColumn(HeaderTopOverflowPanel, 2);
+            }
         }
 
         private void UpdateSidebarOpenButtons()
@@ -1565,10 +1870,10 @@ namespace V3SClient.UI.Views
             // header opener were both made visible after switching fullscreen,
             // producing the duplicated chevrons shown in the UI.
             SidebarOpenButton.Visibility = Visibility.Collapsed;
-            SidebarOpenHeaderButton.Visibility = LivePageHeader.Visibility == Visibility.Visible &&
-                CameraSidebar.Visibility != Visibility.Visible
-                ? Visibility.Visible
-                : Visibility.Collapsed;
+            var canOpenSidebar = LivePageHeader.Visibility == Visibility.Visible &&
+                CameraSidebar.Visibility != Visibility.Visible;
+            SidebarOpenHeaderButton.Visibility = canOpenSidebar
+                ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private void UpdateStatus()
@@ -1611,6 +1916,10 @@ namespace V3SClient.UI.Views
             _resizeSettledTimer.Tick -= ResizeSettledTimer_Tick;
             _deviceStatusRefreshTimer.Stop();
             _deviceStatusRefreshTimer.Tick -= DeviceStatusRefreshTimer_Tick;
+            _aiSummaryRefreshTimer.Stop();
+            _aiSummaryRefreshTimer.Tick -= AiSummaryRefreshTimer_Tick;
+            _liveToastTimer.Stop();
+            _liveToastTimer.Tick -= LiveToastTimer_Tick;
             LivePageHeader.SizeChanged -= LivePageHeader_SizeChanged;
             CameraGrid.SizeChanged -= CameraGrid_SizeChanged;
             SizeChanged -= LivePage_SizeChanged;

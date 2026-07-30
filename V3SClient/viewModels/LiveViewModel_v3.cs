@@ -67,13 +67,16 @@ namespace V3SClient.viewModels
         private void OnChanged([CallerMemberName] string name = null) { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name)); }
     }
 
-    public sealed class LiveCameraGroupViewModel_v3
+    public sealed class LiveCameraGroupViewModel_v3 : INotifyPropertyChanged
     {
+        private bool _isExpanded;
         public string Name { get; set; }
         public ObservableCollection<Camera> Cameras { get; set; }
         public ObservableCollection<LiveCameraItemViewModel_v3> CameraItems { get; set; }
-        public bool IsExpanded { get; set; }
+        public bool IsExpanded { get { return _isExpanded; } set { if (_isExpanded == value) return; _isExpanded = value; OnChanged(); } }
         public int Count { get { return Cameras == null ? 0 : Cameras.Count; } }
+        public event PropertyChangedEventHandler PropertyChanged;
+        private void OnChanged([CallerMemberName] string name = null) { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name)); }
     }
 
     public sealed class LiveCameraItemViewModel_v3 : INotifyPropertyChanged
@@ -128,6 +131,7 @@ namespace V3SClient.viewModels
         private readonly List<VMTalkGroup> _sourceGroups;
         private string _searchText;
         private bool _aiOnly;
+        private bool _onlineOnly;
         private LiveLayoutMode_v3 _layout = LiveLayoutMode_v3.Layout2x2;
         private int _customSlotCount = 10;
 
@@ -160,6 +164,7 @@ namespace V3SClient.viewModels
         public int CustomSlotCount { get { return _customSlotCount; } set { _customSlotCount = Math.Max(1, Math.Min(Math.Max(1, CameraCount), value)); OnPropertyChanged(); } }
         public string SearchText { get { return _searchText; } set { if (_searchText == value) return; _searchText = value; OnPropertyChanged(); ApplySearch(); } }
         public bool AiOnly { get { return _aiOnly; } set { if (_aiOnly == value) return; _aiOnly = value; OnPropertyChanged(); ApplySearch(); } }
+        public bool OnlineOnly { get { return _onlineOnly; } set { if (_onlineOnly == value) return; _onlineOnly = value; OnPropertyChanged(); ApplySearch(); } }
 
         public void SetLayout(LiveLayoutMode_v3 layout)
         {
@@ -314,6 +319,7 @@ namespace V3SClient.viewModels
                 var groupMatch = Contains(group.name, query);
                 var cameras = (group.Cameras ?? new ObservableCollection<Camera>())
                     .Where(camera => !_aiOnly || IsAiCamera(camera))
+                    .Where(camera => !_onlineOnly || camera.is_online == true)
                     .Where(camera => groupMatch || CameraMatches(camera, query))
                     .OrderBy(camera => camera.name)
                     .ToList();
@@ -327,6 +333,12 @@ namespace V3SClient.viewModels
                 });
             }
             OnPropertyChanged(nameof(CameraGroups));
+        }
+
+        public void ExpandCameraGroups()
+        {
+            foreach (var group in CameraGroups)
+                group.IsExpanded = true;
         }
 
         public void RefreshCameraIndicators()

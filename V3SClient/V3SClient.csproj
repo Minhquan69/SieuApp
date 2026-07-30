@@ -1170,6 +1170,7 @@
     <Resource Include="images\base_camera.png" />
     <Resource Include="images\close.png" />
     <Resource Include="images\logo\*.*" />
+    <Resource Include="images\login\login-background.png" />
     <EmbeddedResource Include="audios\abnormal_warning.wav" />
     <Resource Include="images\layout\layout_custom.png" />
     <Resource Include="images\mouse_action.png" />

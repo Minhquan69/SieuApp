@@ -64,7 +64,9 @@
                     </StackPanel>
                 </StackPanel>
 
-                <Frame x:Name="frmSearchToolbar" Grid.Column="1" NavigationUIVisibility="Hidden" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" CanContentScroll="False" VerticalAlignment="Center" Margin="8,0">
+                    <Frame x:Name="frmSearchToolbar" NavigationUIVisibility="Hidden" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                </ScrollViewer>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button x:Name="PlaybackSidebarOpenButton" Width="34" Height="34" Visibility="Collapsed" Click="TogglePlaybackSidebar_Click" ToolTip="Open camera list" Style="{StaticResource PlaybackToolbarButton_v3}">

@@ -151,7 +151,7 @@
                     </Grid>
                     <StackPanel Grid.Row="2">
                         <TextBlock Text="THỜI GIAN" Style="{StaticResource PlaybackSearchLabel_v3}"/>
-                        <TextBox x:Name="popupTimeInput" Height="34" Padding="9,0" VerticalContentAlignment="Center" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" Background="{StaticResource VmsHeaderBrush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" LostFocus="PopupTimeInput_LostFocus"/>
+                        <TextBox x:Name="popupTimeInput" Height="34" Padding="9,0" VerticalContentAlignment="Center" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" Background="{StaticResource VmsHeaderBrush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" LostFocus="PopupTimeInput_LostFocus" KeyDown="PopupTimeInput_KeyDown" ToolTip="Nhập HH:mm:ss rồi nhấn Enter để áp dụng"/>
                     </StackPanel>
                 </Grid>
             </Border>

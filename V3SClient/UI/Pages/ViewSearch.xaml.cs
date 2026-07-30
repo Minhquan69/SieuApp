@@ -245,6 +245,20 @@ namespace V3SClient.UI.Pages
 
         private void PopupTimeInput_LostFocus(object sender, RoutedEventArgs e)
         {
+            CommitPopupTime();
+        }
+
+        private void PopupTimeInput_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (e.Key != Key.Enter)
+                return;
+
+            CommitPopupTime();
+            e.Handled = true;
+        }
+
+        private void CommitPopupTime()
+        {
             TimeSpan time;
             if (TimeSpan.TryParseExact(popupTimeInput.Text, "hh\\:mm\\:ss", CultureInfo.InvariantCulture, out time))
             {

@@ -174,6 +174,7 @@ namespace V3SClient.UI.Views
         private static readonly SemaphoreSlim PipelineConstructionGate = new SemaphoreSlim(1, 1);
         private CancellationTokenSource _cancellation;
         private Pipeline _pipeline;
+        private bool _isMuted;
         private readonly ConcurrentDictionary<Pipeline, GstBusMessagePump> _busMessagePumps =
             new ConcurrentDictionary<Pipeline, GstBusMessagePump>();
         private Element _aiOverlayElement;
@@ -287,6 +288,10 @@ namespace V3SClient.UI.Views
         public void Send2Draw(AiMetadataFrame_v3 frame)
         {
             if (frame == null || !AiOverlayEnabled) return;
+            // Snapshot export must not depend on the native draw callback.
+            // That callback is paused when a tile is hidden or being promoted
+            // to the main stream, while metadata continues to arrive.
+            Interlocked.Exchange(ref _lastAiFrame, frame);
             AiMetadataFrame_v3 ignored;
             while (_aiResult.TryTake(out ignored)) { }
             _aiResult.TryAdd(frame);
@@ -667,7 +672,8 @@ namespace V3SClient.UI.Views
                     // Camera-wall tiles intentionally fill their allocated grid
                     // cell.  Do not letterbox the source aspect ratio: the user
                     // expects every camera stream to use the entire tile.
-                    "d3d11overlay name=videoOverlay ! d3d11videosink force-aspect-ratio=false async=false sync=false qos=false";
+                    "d3d11overlay name=videoOverlay ! d3d11videosink force-aspect-ratio=false async=false sync=false qos=false " +
+                    "videoSource. ! queue ! application/x-rtp,media=audio ! decodebin ! audioconvert ! volume name=audioVolume mute=" + (_isMuted ? "true" : "false") + " ! autoaudiosink sync=false";
                 pipeline = (Pipeline)Parse.Launch(pipelineText);
                 if (pipeline == null)
                     throw new InvalidOperationException("GStreamer returned an empty playback pipeline.");
@@ -853,6 +859,193 @@ namespace V3SClient.UI.Views
                 }
             }
             }
+        }
+
+        public void SetMuted(bool muted)
+        {
+            _isMuted = muted;
+            var pipeline = _pipeline;
+            if (pipeline == null) return;
+            var volume = pipeline.GetByName("audioVolume");
+            if (volume == null) return;
+            try { volume["mute"] = muted; }
+            finally { volume.Dispose(); }
+        }
+
+        public bool TrySaveSnapshot(out string savedPath)
+        {
+            savedPath = null;
+            if (_videoPanel.IsDisposed || _videoPanel.Width < 2 || _videoPanel.Height < 2) return false;
+            try
+            {
+                var downloads = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+                System.IO.Directory.CreateDirectory(downloads);
+                var safeId = string.Concat((_camera?.camID ?? "camera").Select(ch => System.IO.Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch));
+                savedPath = System.IO.Path.Combine(downloads, safeId + "_" + System.DateTime.Now.ToString("yyyyMMdd_HHmmss_fff") + ".png");
+                using (var bitmap = new System.Drawing.Bitmap(_videoPanel.Width, _videoPanel.Height))
+                {
+                    var source = _videoPanel.PointToScreen(System.Drawing.Point.Empty);
+                    using (var graphics = System.Drawing.Graphics.FromImage(bitmap))
+                        graphics.CopyFromScreen(source, System.Drawing.Point.Empty, bitmap.Size, System.Drawing.CopyPixelOperation.SourceCopy);
+                    bitmap.Save(savedPath, System.Drawing.Imaging.ImageFormat.Png);
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Không thể chụp ảnh Live View " + (_camera?.camID ?? string.Empty));
+                savedPath = null;
+                return false;
+            }
+        }
+
+        public async System.Threading.Tasks.Task<string> TrySaveSourceSnapshotAsync()
+        {
+            var source = GetSnapshotRtspSource();
+            if (source == null || string.IsNullOrWhiteSpace(source.Url)) return null;
+
+            var ffmpeg = ResolveFfmpegExecutable();
+            if (string.IsNullOrWhiteSpace(ffmpeg)) return null;
+
+            var outputPath = CreateSnapshotOutputPath();
+            if (string.IsNullOrWhiteSpace(outputPath)) return null;
+
+            try
+            {
+                var startInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = ffmpeg,
+                    Arguments = "-hide_banner -loglevel error -y -rtsp_transport tcp -i " + QuoteProcessArgument(source.Url) +
+                        " -map 0:v:0 -frames:v 1 -an -c:v png " + QuoteProcessArgument(outputPath),
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardError = true,
+                    RedirectStandardOutput = true
+                };
+                using (var process = System.Diagnostics.Process.Start(startInfo))
+                {
+                    if (process == null) return null;
+                    var errorRead = process.StandardError.ReadToEndAsync();
+                    var outputRead = process.StandardOutput.ReadToEndAsync();
+                    var exited = await System.Threading.Tasks.Task.Run(() => process.WaitForExit(15000));
+                    if (!exited)
+                    {
+                        try { process.Kill(); } catch { }
+                        return null;
+                    }
+                    await System.Threading.Tasks.Task.WhenAll(errorRead, outputRead);
+                    if (process.ExitCode != 0 || !System.IO.File.Exists(outputPath) || new System.IO.FileInfo(outputPath).Length == 0)
+                    {
+                        try { if (System.IO.File.Exists(outputPath)) System.IO.File.Delete(outputPath); } catch { }
+                        return null;
+                    }
+                }
+                DrawAiOnSnapshotFile(outputPath);
+                return outputPath;
+            }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Không thể xuất frame gốc Live View " + (_camera?.camID ?? string.Empty));
+                return null;
+            }
+        }
+
+        private RtspSource_v3 GetSnapshotRtspSource()
+        {
+            var camera = _camera;
+            if (camera == null) return null;
+
+            // The grid may deliberately display the lightweight raw substream.
+            // For an AI camera, its paired AI RTSP source is the authoritative
+            // image for export and retains any server-composited detections.
+            var hasAi = camera.HasAIStream ||
+                string.Equals(camera.type, "ai_processed", StringComparison.OrdinalIgnoreCase) ||
+                (camera.Streams != null && camera.Streams.Any(stream => stream != null && stream.IsAiMode == true));
+            if (hasAi)
+            {
+                var isMain = _selectedStream != null && string.Equals(_selectedStream.StreamType,
+                    "main", StringComparison.OrdinalIgnoreCase);
+                var aiUrl = isMain ? camera.RtspUrlMainAI : camera.RtspUrlAI;
+                if (!string.IsNullOrWhiteSpace(aiUrl) &&
+                    System.Uri.IsWellFormedUriString(aiUrl, System.UriKind.Absolute))
+                {
+                    return new RtspSource_v3
+                    {
+                        Url = aiUrl,
+                        IsH264 = isMain ? camera.IsH264MainAI : camera.IsH264AI
+                    };
+                }
+            }
+            return GetRtspSource(camera, _selectedStream);
+        }
+
+        private string CreateSnapshotOutputPath()
+        {
+            var downloads = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+            System.IO.Directory.CreateDirectory(downloads);
+            var safeId = string.Concat((_camera?.camID ?? "camera").Select(ch => System.IO.Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch));
+            return System.IO.Path.Combine(downloads, safeId + "_" + System.DateTime.Now.ToString("yyyyMMdd_HHmmss_fff") + ".png");
+        }
+
+        private static string ResolveFfmpegExecutable()
+        {
+            var configured = Environment.GetEnvironmentVariable("FFMPEG_PATH");
+            var candidates = new[] { configured, System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ffmpeg.exe"), @"C:\ffmpeg-8.1-essentials_build\bin\ffmpeg.exe" };
+            return candidates.FirstOrDefault(path => !string.IsNullOrWhiteSpace(path) && System.IO.File.Exists(path));
+        }
+
+        private static string QuoteProcessArgument(string value) { return "\"" + (value ?? string.Empty).Replace("\"", "\\\"") + "\""; }
+
+        private void DrawAiOnSnapshotFile(string outputPath)
+        {
+            var frame = System.Threading.Interlocked.CompareExchange(ref _lastAiFrame, null, null);
+            if (frame == null || frame.Objects == null || frame.Objects.Count == 0)
+                return;
+
+            var temporaryPath = outputPath + ".ai.tmp";
+            try
+            {
+                using (var bitmap = new System.Drawing.Bitmap(outputPath))
+                using (var graphics = System.Drawing.Graphics.FromImage(bitmap))
+                {
+                    // Some metadata publishers omit debug.source_width/source_height.
+                    // The bbox payload is still normalized, so the native source
+                    // PNG is the correct fallback coordinate space.
+                    var sourceWidth = frame.SourceWidth > 0 ? frame.SourceWidth : bitmap.Width;
+                    var sourceHeight = frame.SourceHeight > 0 ? frame.SourceHeight : bitmap.Height;
+                    var scaleX = bitmap.Width / (float)sourceWidth;
+                    var scaleY = bitmap.Height / (float)sourceHeight;
+                    var lineWidth = Math.Max(2f, 2.5f * Math.Min(scaleX, scaleY));
+                    using (var font = new System.Drawing.Font(System.Drawing.FontFamily.GenericSansSerif, Math.Max(11f, 12f * Math.Min(scaleX, scaleY)), System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Pixel))
+                    using (var format = new System.Drawing.StringFormat(System.Drawing.StringFormatFlags.NoWrap | System.Drawing.StringFormatFlags.NoClip))
+                    using (var pen = new System.Drawing.Pen(System.Drawing.Color.Lime, lineWidth))
+                    using (var background = new System.Drawing.SolidBrush(System.Drawing.Color.Lime))
+                    using (var foreground = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(3, 19, 10)))
+                    {
+                        graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                        foreach (var item in frame.Objects)
+                        {
+                            if (item == null) continue;
+                            var left = item.HasPixelBounds ? item.PixelLeft : item.Left * sourceWidth;
+                            var top = item.HasPixelBounds ? item.PixelTop : item.Top * sourceHeight;
+                            var width = item.HasPixelBounds ? item.PixelWidth : item.Width * sourceWidth;
+                            var height = item.HasPixelBounds ? item.PixelHeight : item.Height * sourceHeight;
+                            if (width <= 0 || height <= 0) continue;
+                            var rect = new System.Drawing.RectangleF((float)(left * scaleX), (float)(top * scaleY), (float)(width * scaleX), (float)(height * scaleY));
+                            graphics.DrawRectangle(pen, rect.X, rect.Y, rect.Width, rect.Height);
+                            var label = string.IsNullOrWhiteSpace(item.Label) ? "AI" : item.Label;
+                            var size = graphics.MeasureString(label, font, int.MaxValue, format);
+                            var labelY = Math.Max(0, rect.Y - size.Height - 4);
+                            graphics.FillRectangle(background, rect.X, labelY, size.Width + 8, size.Height + 4);
+                            graphics.DrawString(label, font, foreground, rect.X + 4, labelY + 2, format);
+                        }
+                    }
+                    bitmap.Save(temporaryPath, System.Drawing.Imaging.ImageFormat.Png);
+                }
+                System.IO.File.Copy(temporaryPath, outputPath, true);
+            }
+            catch (Exception ex) { LoggerManager.LogException(ex, "Không thể vẽ AI lên ảnh gốc Live View"); }
+            finally { try { if (System.IO.File.Exists(temporaryPath)) System.IO.File.Delete(temporaryPath); } catch { } }
         }
 
         private void ResetStableVideoFrameWait()

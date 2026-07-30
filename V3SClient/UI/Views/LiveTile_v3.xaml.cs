@@ -44,6 +44,7 @@ namespace V3SClient.UI.Views
         private bool _changingStream;
         private bool _actionsPinned;
         private bool _fullscreenMode;
+        private bool _isMuted;
         private bool _usingMainPresentation;
         private bool _gridStreamWarmedForRestore;
         private int _mainPresentationGeneration;
@@ -224,6 +225,7 @@ namespace V3SClient.UI.Views
 
         public event EventHandler RemoveRequested;
         public event EventHandler FullscreenRequested;
+        public event EventHandler SnapshotRequested;
         public event EventHandler StateChanged;
 
         public void Bind(LiveSlotViewModel_v3 slot)
@@ -292,6 +294,18 @@ namespace V3SClient.UI.Views
                 HideActions();
             }
         }
+
+        public void SetMuted(bool muted)
+        {
+            _isMuted = muted;
+            Player.SetMuted(muted);
+            MainPlayer.SetMuted(muted);
+            MuteButton.ToolTip = muted ? "Bật âm thanh" : "Tắt âm thanh";
+            MuteIcon.Kind = muted ? MahApps.Metro.IconPacks.PackIconMaterialKind.VolumeOff : MahApps.Metro.IconPacks.PackIconMaterialKind.VolumeHigh;
+        }
+
+        public bool TrySaveSnapshot(out string savedPath) { return Player.TrySaveSnapshot(out savedPath); }
+        public System.Threading.Tasks.Task<string> TrySaveSourceSnapshotAsync() { return Player.TrySaveSourceSnapshotAsync(); }
 
         public void RefreshPopupPlacement()
         {
@@ -723,6 +737,8 @@ namespace V3SClient.UI.Views
         private void Disconnect_Click(object sender, RoutedEventArgs e) { Disconnect(); }
         private void Remove_Click(object sender, RoutedEventArgs e) { RemoveRequested?.Invoke(this, EventArgs.Empty); }
         private void Fullscreen_Click(object sender, RoutedEventArgs e) { FullscreenRequested?.Invoke(this, EventArgs.Empty); }
+        private void Snapshot_Click(object sender, RoutedEventArgs e) { SnapshotRequested?.Invoke(this, EventArgs.Empty); }
+        private void Mute_Click(object sender, RoutedEventArgs e) { SetMuted(!_isMuted); }
 
         private void ShowActions()
         {

@@ -3,20 +3,75 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:Icon="http://metro.mahapps.com/winfx/xaml/iconpacks"
              Height="48">
-    <Grid Background="{StaticResource VmsHeaderBrush_v3}" MouseLeftButtonDown="Header_MouseLeftButtonDown">
+    <Grid x:Name="HeaderRoot" MouseLeftButtonDown="Header_MouseLeftButtonDown">
+        <Grid.Style>
+            <Style TargetType="Grid">
+                <Setter Property="Background" Value="{StaticResource VmsHeaderBrush_v3}" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding SelectedNavigationItem.Route}" Value="/live">
+                        <Setter Property="Background" Value="{x:Null}" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Grid.Style>
+        <Grid.Resources>
+            <!-- Match the left navigation's soft blue hover affordance. -->
+            <Style x:Key="WindowControlButton_v3" TargetType="Button">
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderBrush" Value="Transparent" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border Background="{TemplateBinding Background}" CornerRadius="6" Margin="2"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" /></Border></ControlTemplate></Setter.Value></Setter>
+                <Style.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#1A2563EB" /></Trigger>
+                    <Trigger Property="IsPressed" Value="True"><Setter Property="Background" Value="#332563EB" /></Trigger>
+                </Style.Triggers>
+            </Style>
+            <Style x:Key="WindowControlIcon_v3" TargetType="Icon:PackIconMaterial">
+                <Setter Property="Foreground" Value="#BFD1E5" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
+                        <Setter Property="Foreground" Value="#60A5FA" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding IsPressed, RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
+                        <Setter Property="Foreground" Value="#3B82F6" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Grid.Resources>
         <Grid.ColumnDefinitions>
             <ColumnDefinition />
             <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0">
+            <StackPanel.Style>
+                <Style TargetType="StackPanel">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding SelectedNavigationItem.Route}" Value="/live">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </StackPanel.Style>
             <Border Width="30" Height="30" Background="{StaticResource VmsPrimarySofterBrush_v3}"
                     BorderBrush="{StaticResource VmsPrimaryBorderBrush_v3}" BorderThickness="1" CornerRadius="7" Margin="0,0,10,0">
                 <Icon:PackIconMaterial Kind="{Binding SelectedNavigationItem.IconKind}" Width="16" Height="16"
                                        Foreground="{StaticResource VmsFocusBrush_v3}" HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
-            <TextBlock Text="{Binding PageTitle}" Foreground="{StaticResource VmsTextPrimaryBrush_v3}"
-                       FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <TextBlock Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontSize="14" FontWeight="Bold" VerticalAlignment="Center">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Text" Value="{Binding PageTitle}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding SelectedNavigationItem.Route}" Value="/live">
+                                <Setter Property="Text" Value="GIÁM SÁT TRỰC TIẾP" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
         </StackPanel>
 
         <Grid x:Name="AccountPopupAnchor" Grid.Column="1" Margin="0,0,8,0" HorizontalAlignment="Right">
@@ -26,8 +81,8 @@
                 <ColumnDefinition Width="36" />
                 <ColumnDefinition Width="36" />
             </Grid.ColumnDefinitions>
-            <Button x:Name="AccountButton" Click="AccountButton_Click" Background="Transparent" BorderThickness="0"
-                    Cursor="Hand" Padding="4,0" HorizontalAlignment="Right" VerticalAlignment="Center">
+            <Button x:Name="AccountButton" Click="AccountButton_Click" Style="{StaticResource WindowControlButton_v3}"
+                    Padding="4,0" HorizontalAlignment="Right" VerticalAlignment="Center">
                 <StackPanel Orientation="Horizontal">
                     <Border Width="28" Height="28" CornerRadius="14" Background="{StaticResource VmsPrimarySofterBrush_v3}">
                         <TextBlock Text="{Binding UserInitials}" Foreground="{StaticResource VmsFocusBrush_v3}" FontWeight="SemiBold"
@@ -40,25 +95,25 @@
                 </StackPanel>
             </Button>
             <Button Grid.Column="1" Click="MinimizeWindowButton_Click" ToolTip="Thu nhỏ"
-                    Background="Transparent" BorderThickness="0" Cursor="Hand" Padding="0">
-                <Icon:PackIconMaterial Kind="Minus" Width="18" Height="18"
-                                       Foreground="#BFD1E5"
+                    Style="{StaticResource WindowControlButton_v3}">
+                <Icon:PackIconMaterial Kind="Minus" Width="18" Height="18" Style="{StaticResource WindowControlIcon_v3}"
                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Button>
             <Button Grid.Column="2" Click="WindowModeButton_Click" ToolTip="Thu phóng màn hình"
-                    Background="Transparent" BorderThickness="0" Cursor="Hand" Padding="0">
-                <Icon:PackIconMaterial x:Name="WindowModeIcon" Kind="WindowMaximize" Width="17" Height="17"
-                                       Foreground="#BFD1E5"
+                    Style="{StaticResource WindowControlButton_v3}">
+                <Icon:PackIconMaterial x:Name="WindowModeIcon" Kind="WindowMaximize" Width="17" Height="17" Style="{StaticResource WindowControlIcon_v3}"
                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Button>
             <Button Grid.Column="3" Click="CloseApplicationButton_Click" ToolTip="Đóng ứng dụng"
-                    Background="Transparent" BorderThickness="0" Cursor="Hand" Padding="0">
-                <Icon:PackIconMaterial Kind="Close" Width="17" Height="17" Foreground="#BFD1E5"
+                    Style="{StaticResource WindowControlButton_v3}">
+                <Icon:PackIconMaterial Kind="Close" Width="17" Height="17" Style="{StaticResource WindowControlIcon_v3}"
                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Button>
         </Grid>
 
-        <Border Grid.ColumnSpan="2" VerticalAlignment="Bottom" Height="1" Background="{StaticResource VmsBorderBrush_v3}" />
+        <Border Grid.ColumnSpan="2" VerticalAlignment="Bottom" Height="1" Background="{StaticResource VmsBorderBrush_v3}">
+            <Border.Style><Style TargetType="Border"><Style.Triggers><DataTrigger Binding="{Binding SelectedNavigationItem.Route}" Value="/live"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Border.Style>
+        </Border>
         <Popup x:Name="AccountPopup" Placement="Bottom" PlacementTarget="{Binding ElementName=AccountPopupAnchor}"
                VerticalOffset="1" StaysOpen="False" AllowsTransparency="True">
             <Border Width="208" Background="{StaticResource VmsElevatedBrush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}"

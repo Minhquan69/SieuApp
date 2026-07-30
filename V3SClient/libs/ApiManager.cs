@@ -40,6 +40,24 @@ namespace V3SClient.libs
     }
     public class ApiManager
     {
+        public sealed class FrameDetectionCountsResponse
+        {
+            [JsonProperty("total_detection_count")]
+            public int TotalDetectionCount { get; set; }
+
+            [JsonProperty("snapshot_totals")]
+            public List<FrameDetectionSnapshotTotal> SnapshotTotals { get; set; } = new List<FrameDetectionSnapshotTotal>();
+
+            public int AccumulatedDetectionCount => SnapshotTotals == null || SnapshotTotals.Count == 0
+                ? TotalDetectionCount
+                : SnapshotTotals.Sum(item => item == null ? 0 : item.TotalDetectionCount);
+        }
+
+        public sealed class FrameDetectionSnapshotTotal
+        {
+            [JsonProperty("total_detection_count")]
+            public int TotalDetectionCount { get; set; }
+        }
         private static readonly Lazy<ApiManager> _instance = new Lazy<ApiManager>(() => new ApiManager());
         public static ApiManager Instance => _instance.Value;
 
@@ -56,6 +74,7 @@ namespace V3SClient.libs
         private string _baseUrl = "http://localhost:8100";
         private string _streamApiUrl = "http://localhost:3000/streams";
         private string _deviceStatusApiUrl;
+        private string _frameDetectionCountsApiUrl = "http://192.168.1.12:8080/api/frame-detection-counts";
         // This gateway key is deliberately separate from _backendToken.
         // _backendToken is replaced by the interactive-login JWT, whereas the
         // status gateway always expects its own X-API-Key.
@@ -98,6 +117,7 @@ namespace V3SClient.libs
         private const string BackendTokenEnvironmentVariable = "IVISTA_BACKEND_TOKEN";
         private const string DeviceStatusApiUrlEnvironmentVariable = "IVISTA_DEVICE_STATUS_API_URL";
         private const string DeviceStatusApiKeyEnvironmentVariable = "IVISTA_DEVICE_STATUS_API_KEY";
+        private const string FrameDetectionCountsApiUrlEnvironmentVariable = "IVISTA_FRAME_DETECTION_COUNTS_API_URL";
 
         private ApiManager()
         {
@@ -114,6 +134,7 @@ namespace V3SClient.libs
             LoadBackendTokenFromEnvironment();
             LoadDeviceStatusApiUrlFromEnvironment();
             LoadDeviceStatusApiKeyFromEnvironment();
+            LoadFrameDetectionCountsApiUrlFromEnvironment();
         }
 
         /// <summary>
@@ -158,6 +179,15 @@ namespace V3SClient.libs
                 key = Environment.GetEnvironmentVariable(BackendTokenEnvironmentVariable, EnvironmentVariableTarget.User);
 
             _deviceStatusApiKey = string.IsNullOrWhiteSpace(key) ? null : key.Trim();
+        }
+
+        private void LoadFrameDetectionCountsApiUrlFromEnvironment()
+        {
+            var url = Environment.GetEnvironmentVariable(FrameDetectionCountsApiUrlEnvironmentVariable, EnvironmentVariableTarget.Process);
+            if (string.IsNullOrWhiteSpace(url))
+                url = Environment.GetEnvironmentVariable(FrameDetectionCountsApiUrlEnvironmentVariable, EnvironmentVariableTarget.User);
+            if (!string.IsNullOrWhiteSpace(url))
+                _frameDetectionCountsApiUrl = url.Trim().TrimEnd('/');
         }
 
         /// <summary>
@@ -1809,6 +1839,31 @@ namespace V3SClient.libs
             {
                 LoggerManager.LogException(ex, $"Lỗi khi gọi UpdateDeviceTalkStatusAsync cho thiết bị {deviceId}");
                 return false;
+            }
+        }
+
+        public async Task<FrameDetectionCountsResponse> GetFrameDetectionCountsAsync(System.DateTime startAt, System.DateTime endAt, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            try
+            {
+                var start = Uri.EscapeDataString(startAt.ToString("yyyy-MM-ddTHH:mm:ss"));
+                var end = Uri.EscapeDataString(endAt.ToString("yyyy-MM-ddTHH:mm:ss"));
+                var url = string.Format("{0}?start_at={1}&end_at={2}&cam_ids=&object_classes=", _frameDetectionCountsApiUrl, start, end);
+                using (var response = await _deviceStatusHttpClient.GetAsync(url, cancellationToken))
+                {
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        LoggerManager.LogWarn($"Frame detection counts returned {(int)response.StatusCode}.");
+                        return null;
+                    }
+                    var json = await response.Content.ReadAsStringAsync();
+                    return JsonConvert.DeserializeObject<FrameDetectionCountsResponse>(json);
+                }
+            }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Lỗi khi gọi GetFrameDetectionCountsAsync");
+                return null;
             }
         }
 

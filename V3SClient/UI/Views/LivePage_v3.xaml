@@ -21,12 +21,36 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
+        <Style x:Key="AiTimeContextMenuStyle_v3" TargetType="ContextMenu">
+            <Setter Property="Background" Value="#0C2132"/>
+            <Setter Property="BorderBrush" Value="{StaticResource VmsPrimaryBorderBrush_v3}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="4"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ContextMenu"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="5" Padding="{TemplateBinding Padding}"><StackPanel IsItemsHost="True"/></Border></ControlTemplate></Setter.Value></Setter>
+        </Style>
+        <Style x:Key="AiTimeMenuItemStyle_v3" TargetType="MenuItem">
+            <Setter Property="Foreground" Value="#F8FAFC"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="11,7"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="MenuItem"><Border x:Name="ItemBorder" Background="{TemplateBinding Background}" CornerRadius="4"><ContentPresenter ContentSource="Header" Margin="{TemplateBinding Padding}"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ItemBorder" Property="Background" Value="#1A2563EB"/></Trigger><Trigger Property="IsPressed" Value="True"><Setter TargetName="ItemBorder" Property="Background" Value="#332563EB"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+        </Style>
+        <Style x:Key="CollapsedCameraListButtonStyle_v3" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle_v3}">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#1A2563EB"/></Trigger>
+                <Trigger Property="IsPressed" Value="True"><Setter Property="Background" Value="#332563EB"/></Trigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
     <Grid>
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
 
-        <Border x:Name="LivePageHeader" Background="{StaticResource VmsHeaderBrush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="0,0,0,1" Padding="10,6">
-            <Grid>
+        <Border x:Name="LivePageHeader" MouseLeftButtonDown="LivePageHeader_MouseLeftButtonDown" HorizontalAlignment="Stretch" Background="#0C2132" BorderBrush="{StaticResource VmsPrimaryBorderBrush_v3}" BorderThickness="1" CornerRadius="6" Padding="10,0">
+            <Grid x:Name="LiveHeaderLayoutGrid">
                 <Grid.Resources>
                     <Style x:Key="LiveHeaderActionStyle_v3" TargetType="Button">
                         <Setter Property="Background" Value="{StaticResource VmsSurface2Brush_v3}"/>
@@ -46,28 +70,75 @@
                         </Style.Triggers>
                     </Style>
                 </Grid.Resources>
-                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <Grid.RowDefinitions><RowDefinition Height="48"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto" MinWidth="230"/><ColumnDefinition Width="235"/></Grid.ColumnDefinitions>
                 <StackPanel x:Name="HeaderTitlePanel" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="Live View _v3" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontWeight="SemiBold" FontSize="16"/>
-                    <Border Background="{StaticResource VmsSurface2Brush_v3}" CornerRadius="10" Padding="8,3" Margin="10,0,0,0">
-                        <TextBlock x:Name="CameraStatus" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" FontSize="11"/>
+                    <Border Width="30" Height="30" Background="{StaticResource VmsPrimarySofterBrush_v3}" BorderBrush="{StaticResource VmsPrimaryBorderBrush_v3}" BorderThickness="1" CornerRadius="7" Margin="0,0,10,0">
+                        <Icon:PackIconMaterial Kind="CameraOutline" Width="16" Height="16" Foreground="{StaticResource VmsFocusBrush_v3}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
+                    <TextBlock Text="GIÁM SÁT TRỰC TIẾP" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontWeight="Bold" FontSize="15" VerticalAlignment="Center"/>
+                    <Border Height="30" VerticalAlignment="Center" Background="{StaticResource VmsSurface2Brush_v3}" BorderBrush="{StaticResource VmsPrimaryBorderBrush_v3}" BorderThickness="1" CornerRadius="7" Padding="7,0" Margin="12,0,0,0">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Icon:PackIconMaterial Kind="CameraOutline" Width="13" Height="13" Foreground="{StaticResource VmsPrimaryBrush_v3}" Margin="0,0,5,0" VerticalAlignment="Center"/><TextBlock Foreground="{StaticResource VmsTextSecondaryBrush_v3}" FontSize="11" VerticalAlignment="Center"><Run Text=""/><Run Text="{Binding CameraCount, Mode=OneWay}"/><Run Text=" camera"/></TextBlock></StackPanel>
+                    </Border>
+                    <Border Height="30" VerticalAlignment="Center" Background="{StaticResource VmsSurface2Brush_v3}" BorderBrush="{StaticResource VmsSuccessBrush_v3}" BorderThickness="1" CornerRadius="7" Padding="7,0" Margin="5,0,0,0">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Icon:PackIconMaterial Kind="AccessPoint" Width="13" Height="13" Foreground="{StaticResource VmsSuccessBrush_v3}" Margin="0,0,5,0" VerticalAlignment="Center"/><TextBlock Foreground="{StaticResource VmsTextSecondaryBrush_v3}" FontSize="11" VerticalAlignment="Center"><Run Text=""/><Run Text="{Binding OnlineCameraCount, Mode=OneWay}"/><Run Text=" trực tuyến"/></TextBlock></StackPanel>
+                    </Border>
+                    <Border Height="30" VerticalAlignment="Center" Background="{StaticResource VmsSurface2Brush_v3}" BorderBrush="{StaticResource VmsBorderStrongBrush_v3}" BorderThickness="1" CornerRadius="7" Padding="7,0" Margin="5,0,0,0">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Icon:PackIconMaterial Kind="AccountGroupOutline" Width="13" Height="13" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" Margin="0,0,5,0" VerticalAlignment="Center"/><TextBlock Foreground="{StaticResource VmsTextSecondaryBrush_v3}" FontSize="11" VerticalAlignment="Center"><Run Text=""/><Run Text="{Binding GroupCount, Mode=OneWay}"/><Run Text=" nhóm"/></TextBlock></StackPanel>
+                    </Border>
+                    <TextBlock x:Name="CameraStatus" Visibility="Collapsed"/>
                 </StackPanel>
-                <StackPanel x:Name="HeaderActionPanel" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0" Visibility="Visible">
-                    <Button Click="DisconnectAll_Click" Style="{StaticResource LiveHeaderActionStyle_v3}" Padding="7,4" Margin="2" ToolTip="Ngắt kết nối tất cả"><Icon:PackIconMaterial Kind="PowerPlugOff" Width="14" Height="14"/></Button>
-                    <Button Click="ConnectAll_Click" Style="{StaticResource LiveHeaderActionStyle_v3}" Padding="7,4" Margin="2" ToolTip="Kết nối tất cả"><Icon:PackIconMaterial Kind="PlayNetwork" Width="14" Height="14"/></Button>
-                    <Button Click="RemoveAll_Click" Style="{StaticResource LiveHeaderActionStyle_v3}" Padding="7,4" Margin="2" ToolTip="Xóa tất cả"><Icon:PackIconMaterial Kind="DeleteSweepOutline" Width="14" Height="14"/></Button>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <StackPanel x:Name="HeaderLayoutQuickPanel" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Visible">
+                        <Button Tag="Layout1x1" Click="LayoutButton_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="8,5" Margin="1" ToolTip="1 camera"><Icon:PackIconMaterial Kind="CheckboxBlankOutline" Width="15" Height="15"/></Button>
+                        <Button Tag="Layout2x2" Click="LayoutButton_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="8,5" Margin="1" ToolTip="4 camera · 2 × 2"><Icon:PackIconMaterial Kind="ViewDashboardOutline" Width="15" Height="15"/></Button>
+                        <Button Tag="Layout3x3" Click="LayoutButton_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="8,5" Margin="1" ToolTip="9 camera · 3 × 3"><Icon:PackIconMaterial Kind="ViewModule" Width="15" Height="15"/></Button>
+                    </StackPanel>
+                    <StackPanel x:Name="HeaderActionPanel" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="8,0,0,0" Visibility="Visible">
+                    <Border Width="1" Height="28" Background="#24435A" Margin="10,0,9,0" VerticalAlignment="Center"/>
+                    <StackPanel x:Name="HeaderUtilityPanel" Orientation="Horizontal" HorizontalAlignment="Left">
+                        <Button x:Name="GlobalMuteButton" Click="ToggleAllMute_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="9,5" Margin="1" ToolTip="Tắt âm thanh tất cả"><Icon:PackIconMaterial x:Name="GlobalMuteIcon" Kind="VolumeHigh" Width="16" Height="16"/></Button>
+                        <Button Click="SnapshotAll_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="9,5" Margin="1" ToolTip="Chụp ảnh tất cả camera"><Icon:PackIconMaterial Kind="CameraOutline" Width="16" Height="16"/></Button>
+                        <Button x:Name="GridFullscreenButton" Click="FullscreenButton_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="9,5" Margin="1" ToolTip="Toàn màn hình lưới"><Icon:PackIconMaterial x:Name="GridFullscreenIcon" Kind="Fullscreen" Width="16" Height="16"/></Button>
+                        <Button x:Name="BulkConnectionButton" Click="ToggleAllConnection_Click" Style="{StaticResource LiveHeaderActionStyle_v3}" Padding="10,6" Margin="3" ToolTip="Ngắt kết nối tất cả"><Icon:PackIconMaterial x:Name="BulkConnectionIcon" Kind="PowerPlugOff" Width="16" Height="16"/></Button>
+                        <Button Click="RemoveAll_Click" Style="{StaticResource LiveHeaderActionStyle_v3}" Padding="9,5" Margin="1" ToolTip="Xóa tất cả"><Icon:PackIconMaterial Kind="DeleteSweepOutline" Width="16" Height="16"/></Button>
+                    </StackPanel>
                 </StackPanel>
-                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
-                    <Button x:Name="HeaderLayoutButton" Click="LayoutMenuButton_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="6,3" Margin="1" ToolTip="Chọn bố cục"><StackPanel Orientation="Horizontal"><Icon:PackIconMaterial Kind="ViewDashboardOutline" Width="14" Height="14" Margin="0,0,4,0"/><TextBlock Text="Bố cục"/></StackPanel></Button>
+                </StackPanel>
+                <Border x:Name="AiSummaryPanel" Grid.Row="1" Grid.ColumnSpan="2" Background="Transparent" BorderThickness="0" Margin="0" Padding="0,7,0,8">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="118"/><ColumnDefinition Width="1"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Icon:PackIconMaterial Kind="RobotOutline" Width="20" Height="20" Foreground="{StaticResource VmsPrimaryBrush_v3}"/><TextBlock Text="AI GIÁM SÁT" Foreground="#F8FAFC" FontWeight="Bold" FontSize="12" Margin="7,0,0,0" VerticalAlignment="Center"/></StackPanel>
+                        <Border Grid.Column="1" Background="#24435A" Margin="0,2"/>
+                        <Grid x:Name="AiSummaryDetails" Grid.Column="2">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="1"/><ColumnDefinition Width="*"/><ColumnDefinition Width="1"/><ColumnDefinition Width="*"/><ColumnDefinition Width="1"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center"><Icon:PackIconMaterial Kind="CarOutline" Width="25" Height="25" Foreground="#00C8ED"/><StackPanel Margin="8,0,0,0"><TextBlock Text="PHƯƠNG TIỆN" Foreground="#D5E2EC" FontSize="9" FontWeight="Bold"/><TextBlock x:Name="AiVehicleCountText" Text="18" Foreground="#00C8ED" FontSize="20" FontWeight="Bold" LineHeight="19"/></StackPanel></StackPanel>
+                            <Border Grid.Column="1" Background="#24435A" Margin="0,2"/>
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center"><Icon:PackIconMaterial Kind="AccountOutline" Width="24" Height="24" Foreground="#00D27A"/><StackPanel Margin="8,0,0,0"><TextBlock Text="NGƯỜI" Foreground="#D5E2EC" FontSize="9" FontWeight="Bold"/><TextBlock Text="7" Foreground="#00D27A" FontSize="20" FontWeight="Bold" LineHeight="19"/></StackPanel></StackPanel>
+                            <Border Grid.Column="3" Background="#24435A" Margin="0,2"/>
+                            <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center"><Icon:PackIconMaterial Kind="AlertCircleOutline" Width="24" Height="24" Foreground="#FFD200"/><StackPanel Margin="8,0,0,0"><TextBlock Text="BẤT THƯỜNG" Foreground="#D5E2EC" FontSize="9" FontWeight="Bold"/><TextBlock Text="3" Foreground="#FFD200" FontSize="20" FontWeight="Bold" LineHeight="19"/></StackPanel></StackPanel>
+                            <Border Grid.Column="5" Background="#24435A" Margin="0,2"/>
+                            <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center"><Icon:PackIconMaterial Kind="BellAlertOutline" Width="24" Height="24" Foreground="#FF4D63"/><StackPanel Margin="8,0,0,0"><StackPanel Orientation="Horizontal"><TextBlock Text="CẦN XỬ LÝ" Foreground="#D5E2EC" FontSize="9" FontWeight="Bold"/><Ellipse Width="5" Height="5" Fill="#FF4D63" Margin="5,1,0,0" VerticalAlignment="Top"/></StackPanel><TextBlock Text="2" Foreground="#FF4D63" FontSize="20" FontWeight="Bold" LineHeight="19"/></StackPanel></StackPanel>
+                        </Grid>
+                    </Grid>
+                </Border>
+                <StackPanel x:Name="HeaderTopOverflowPanel" Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Visibility="Visible">
+                    <Button x:Name="AiSummaryExpandButton" Click="ToggleAiSummary_Click" Visibility="Collapsed" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="7,3" Margin="1" ToolTip="Mở bảng thông tin AI"><Icon:PackIconMaterial Kind="RobotOutline" Width="16" Height="16" Foreground="{StaticResource VmsPrimaryBrush_v3}"/></Button>
+                    <Button x:Name="CollapsedCameraListHeaderButton" Click="ToggleSidebar_Click" Visibility="Collapsed" Style="{StaticResource CollapsedCameraListButtonStyle_v3}" Padding="8,3" Margin="5,1,1,1" ToolTip="Mở danh sách camera"><StackPanel Orientation="Horizontal"><Icon:PackIconMaterial Kind="VideoOutline" Width="16" Height="16" Foreground="{StaticResource VmsPrimaryBrush_v3}" Margin="0,0,7,0"/><TextBlock Text="Danh sách camera" FontWeight="SemiBold"/><Icon:PackIconMaterial x:Name="CollapsedCameraListHeaderIcon" Kind="ChevronDown" Width="15" Height="15" Margin="9,0,0,0"/></StackPanel></Button>
                     <Button x:Name="SidebarOpenHeaderButton" Click="ToggleSidebar_Click" Visibility="Collapsed" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="6,3" Margin="3,1,1,1" ToolTip="Mở danh sách camera"><Icon:PackIconMaterial Kind="ChevronLeft" Width="14" Height="14"/></Button>
+                    <Button x:Name="HeaderLayoutButton" Click="LayoutMenuButton_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="8,5" Margin="1" ToolTip="Các bố cục khác"><Icon:PackIconMaterial Kind="DotsHorizontal" Width="16" Height="16"/></Button>
+                </StackPanel>
+                <StackPanel x:Name="HeaderRightAiControls" Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,14,0">
+                            <Button x:Name="AiTimeFilterButton" Click="AiTimeFilterButton_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="10,5" Margin="1" ToolTip="Chọn khoảng thời gian AI"><Button.ContextMenu><ContextMenu Style="{StaticResource AiTimeContextMenuStyle_v3}"><MenuItem Style="{StaticResource AiTimeMenuItemStyle_v3}" Header="15 phút gần nhất" Tag="15 phút gần nhất" Click="AiTimeFilter_Click"/><MenuItem Style="{StaticResource AiTimeMenuItemStyle_v3}" Header="1 giờ gần nhất" Tag="1 giờ gần nhất" Click="AiTimeFilter_Click"/><MenuItem Style="{StaticResource AiTimeMenuItemStyle_v3}" Header="6 giờ gần nhất" Tag="6 giờ gần nhất" Click="AiTimeFilter_Click"/><MenuItem Style="{StaticResource AiTimeMenuItemStyle_v3}" Header="12 giờ gần nhất" Tag="12 giờ gần nhất" Click="AiTimeFilter_Click"/><MenuItem Style="{StaticResource AiTimeMenuItemStyle_v3}" Header="1 ngày gần nhất" Tag="1 ngày gần nhất" Click="AiTimeFilter_Click"/></ContextMenu></Button.ContextMenu><StackPanel Orientation="Horizontal"><Icon:PackIconMaterial Kind="ClockOutline" Width="15" Height="15" Margin="0,0,7,0"/><TextBlock x:Name="AiTimeFilterText" Text="15 phút gần nhất" Foreground="#F8FAFC" FontWeight="SemiBold" FontSize="11"/><Icon:PackIconMaterial Kind="ChevronDown" Width="15" Height="15" Margin="8,0,0,0"/></StackPanel></Button>
+                            <Button x:Name="AiSummaryCollapseButton" Click="ToggleAiSummary_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="4" Margin="3,1,1,1" ToolTip="Thu gọn bảng AI"><Icon:PackIconMaterial x:Name="AiSummaryCollapseIcon" Kind="ChevronUp" Width="18" Height="18"/></Button>
                 </StackPanel>
             </Grid>
         </Border>
 
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition x:Name="SidebarColumn" Width="0.20*" MinWidth="210" MaxWidth="320"/></Grid.ColumnDefinitions>
-            <Grid Grid.Column="0">
+            <Grid x:Name="CameraHeaderWidthHost" Grid.Column="0" IsHitTestVisible="False"/>
+            <Grid x:Name="CameraGridHost" Grid.Column="0">
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                 <Border Visibility="Collapsed" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8" Padding="4" Panel.ZIndex="20" Background="{StaticResource VmsElevatedBrush_v3}" BorderBrush="{StaticResource VmsBorderStrongBrush_v3}" BorderThickness="1" CornerRadius="4">
                     <StackPanel Orientation="Horizontal">
@@ -100,7 +171,7 @@
                 <Border Visibility="Collapsed" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8" Background="{StaticResource VmsElevatedBrush_v3}" BorderBrush="{StaticResource VmsBorderStrongBrush_v3}" BorderThickness="1" CornerRadius="4" Padding="3" MouseEnter="LayoutMenu_MouseEnter">
                     <Button x:Name="LayoutMenuButton" Content="▦ 2x2" Click="LayoutMenuButton_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="8,4"/>
                 </Border>
-                <Popup x:Name="LayoutPopup" Placement="Bottom" PlacementTarget="{Binding ElementName=HeaderLayoutButton}" StaysOpen="True" AllowsTransparency="True">
+                <Popup x:Name="LayoutPopup" Placement="Bottom" PlacementTarget="{Binding ElementName=HeaderLayoutButton}" StaysOpen="False" AllowsTransparency="True">
                     <Border Background="{StaticResource VmsSidebarBrush_v3}" BorderBrush="{StaticResource VmsFocusBrush_v3}" BorderThickness="1" CornerRadius="8" Padding="8" Width="244" SnapsToDevicePixels="True">
                         <StackPanel>
                             <DockPanel Margin="2,0,2,7"><Icon:PackIconMaterial Kind="ViewDashboardOutline" Width="16" Height="16" Foreground="{StaticResource VmsPrimaryBrush_v3}" Margin="0,0,6,0"/><StackPanel><TextBlock Text="Bố cục hiển thị" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontWeight="SemiBold" FontSize="12"/><TextBlock Text="Thay đổi lưới camera đang xem" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" FontSize="10" Margin="0,1,0,0"/></StackPanel></DockPanel>
@@ -151,30 +222,29 @@
                 </Border>
             </Grid>
 
-            <Border x:Name="CameraSidebar" Grid.Column="1" Background="{StaticResource VmsSidebarBrush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1,0,0,0">
+            <Border x:Name="CameraSidebar" Grid.Column="1" Margin="0,-52,0,0" Panel.ZIndex="30" Background="{StaticResource VmsSidebarBrush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1,0,0,0">
                 <Grid>
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                    <!-- Keep a reserved second line for the AI counter.  With
-                         an Auto-height header it could be covered by the
-                         statistics row while the window was narrow. -->
-                    <Grid Margin="12,8,12,5" Height="59" ClipToBounds="True">
+                    <!-- The sidebar begins alongside the AI summary, so its
+                         title stays visible in the previously empty upper-right
+                         space and the camera grid can take the released width. -->
+                    <Border x:Name="CameraSidebarHeader" Margin="12,8,12,5" Height="38" ClipToBounds="True" Background="Transparent" BorderThickness="0">
+                    <Grid>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                        <StackPanel Grid.Row="0" Orientation="Horizontal" ClipToBounds="True">
+                        <Grid.RowDefinitions><RowDefinition Height="*"/></Grid.RowDefinitions>
+                        <StackPanel Grid.Row="0" Orientation="Horizontal" ClipToBounds="True" VerticalAlignment="Center">
                             <Icon:PackIconMaterial Kind="VideoOutline" Foreground="{StaticResource VmsPrimaryBrush_v3}" Width="16" Height="16" VerticalAlignment="Center" Margin="0,0,7,0"/>
                             <TextBlock Text="Danh sách camera" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center"/>
                         </StackPanel>
-                        <!-- At the sidebar minimum width this counter must
-                             not compete with the close button. -->
-                        <Border Grid.Row="1" Background="{StaticResource VmsPrimarySoftBrush_v3}" BorderBrush="{StaticResource VmsPrimaryBorderBrush_v3}" BorderThickness="1" CornerRadius="5" Margin="0,5,0,0" Padding="6,3" MinWidth="58" HorizontalAlignment="Left"><StackPanel Orientation="Horizontal" HorizontalAlignment="Center"><Icon:PackIconMaterial Kind="RobotOutline" Width="12" Height="12" Foreground="{StaticResource VmsPrimaryBrush_v3}" VerticalAlignment="Center" Margin="0,0,4,0"/><TextBlock Foreground="{StaticResource VmsPrimaryBrush_v3}" FontSize="10" FontWeight="SemiBold"><Run Text="AI "/><Run Text="{Binding AiCameraCount, Mode=OneWay}"/></TextBlock></StackPanel></Border>
-                        <Button Grid.Row="0" Grid.Column="1" Grid.RowSpan="2" Click="ToggleSidebar_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="6,4" ToolTip="Đóng danh sách camera"><Icon:PackIconMaterial Kind="ChevronRight" Width="14" Height="14"/></Button>
+                        <Button x:Name="CameraSidebarToggleButton" Grid.Row="0" Grid.Column="1" Click="ToggleSidebar_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="6,4" ToolTip="Thu gọn danh sách camera theo chiều dọc"><Icon:PackIconMaterial x:Name="CameraSidebarToggleIcon" Kind="ChevronUp" Width="14" Height="14"/></Button>
                     </Grid>
-                    <UniformGrid Grid.Row="1" Columns="3" Height="46" Margin="10,0,10,6">
-                        <Border Background="{StaticResource VmsSurface2Brush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" CornerRadius="5" Margin="2,1" Padding="3,2"><StackPanel><TextBlock Text="CAMERA" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="9" HorizontalAlignment="Center"/><TextBlock Text="{Binding CameraCount}" Foreground="{StaticResource VmsPrimaryBrush_v3}" FontSize="15" HorizontalAlignment="Center" FontWeight="SemiBold"/></StackPanel></Border>
-                        <Border Background="{StaticResource VmsSurface2Brush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" CornerRadius="5" Margin="2,1" Padding="3,2"><StackPanel><TextBlock Text="TRỰC TUYẾN" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="8" HorizontalAlignment="Center"/><TextBlock Text="{Binding OnlineCameraCount}" Foreground="{StaticResource VmsSuccessBrush_v3}" FontSize="15" HorizontalAlignment="Center" FontWeight="SemiBold"/></StackPanel></Border>
-                        <Border Background="{StaticResource VmsSurface2Brush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1" CornerRadius="5" Margin="2,1" Padding="3,2"><StackPanel><TextBlock Text="NHÓM" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="9" HorizontalAlignment="Center"/><TextBlock Text="{Binding GroupCount}" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontSize="15" HorizontalAlignment="Center" FontWeight="SemiBold"/></StackPanel></Border>
+                    </Border>
+                    <UniformGrid x:Name="CameraSidebarStats" Grid.Row="1" Columns="3" Height="52" Margin="10,0,10,6">
+                        <Border Background="{StaticResource VmsPrimarySoftBrush_v3}" BorderBrush="{StaticResource VmsPrimaryBorderBrush_v3}" BorderThickness="1" CornerRadius="6" Margin="2,1" Padding="5,3"><StackPanel><TextBlock Text="CAMERA" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontSize="10" HorizontalAlignment="Center" FontWeight="Bold"/><TextBlock Text="{Binding CameraCount}" Foreground="{StaticResource VmsPrimaryBrush_v3}" FontSize="18" HorizontalAlignment="Center" FontWeight="Bold"/></StackPanel></Border>
+                        <Border Background="#1422C55E" BorderBrush="{StaticResource VmsSuccessBrush_v3}" BorderThickness="1" CornerRadius="6" Margin="2,1" Padding="5,3"><StackPanel><TextBlock Text="TRỰC TUYẾN" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontSize="9" HorizontalAlignment="Center" FontWeight="Bold"/><TextBlock Text="{Binding OnlineCameraCount}" Foreground="{StaticResource VmsSuccessBrush_v3}" FontSize="18" HorizontalAlignment="Center" FontWeight="Bold"/></StackPanel></Border>
+                        <Border Background="{StaticResource VmsSurface2Brush_v3}" BorderBrush="{StaticResource VmsBorderStrongBrush_v3}" BorderThickness="1" CornerRadius="6" Margin="2,1" Padding="5,3"><StackPanel><TextBlock Text="NHÓM" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontSize="10" HorizontalAlignment="Center" FontWeight="Bold"/><TextBlock Text="{Binding GroupCount}" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontSize="18" HorizontalAlignment="Center" FontWeight="Bold"/></StackPanel></Border>
                     </UniformGrid>
-                    <Border Grid.Row="2" Margin="10,0,10,5" Height="31" Background="{StaticResource VmsSurface2Brush_v3}" BorderBrush="{StaticResource VmsFocusBrush_v3}" BorderThickness="1" CornerRadius="6" Panel.ZIndex="20">
+                    <Border x:Name="CameraSidebarSearch" Grid.Row="2" Margin="10,0,10,5" Height="31" Background="{StaticResource VmsSurface2Brush_v3}" BorderBrush="{StaticResource VmsFocusBrush_v3}" BorderThickness="1" CornerRadius="6" Panel.ZIndex="20">
                         <Grid>
                             <Icon:PackIconMaterial Kind="Magnify" Width="15" Height="15" Margin="10,0,0,0" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" VerticalAlignment="Center"/>
                             <TextBlock Text="Tìm camera" Margin="30,0,6,0" VerticalAlignment="Center" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" IsHitTestVisible="False">
@@ -191,12 +261,13 @@
                             <TextBox x:Name="CameraSearchText" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Margin="30,0,6,0" Background="Transparent" BorderThickness="0" Padding="0" VerticalContentAlignment="Center" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" CaretBrush="White" ToolTip="Tìm camera"/>
                         </Grid>
                     </Border>
-                    <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="12,0,10,4" Panel.ZIndex="20">
+                    <StackPanel x:Name="CameraSidebarFilters" Grid.Row="3" Orientation="Horizontal" Margin="12,0,10,4" Panel.ZIndex="20">
                         <Button x:Name="AllCameraFilterButton" Content="Tất cả" Click="AllCameraFilter_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="6,2" Margin="0,0,5,0" FontSize="10"/>
+                        <Button x:Name="OnlineCameraFilterButton" Click="OnlineCameraFilter_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="6,2" Margin="0,0,5,0" FontSize="10" ToolTip="Chỉ hiển thị camera đang trực tuyến"><StackPanel Orientation="Horizontal"><Ellipse Width="7" Height="7" Fill="{StaticResource VmsSuccessBrush_v3}" Margin="0,0,3,0" VerticalAlignment="Center"/><TextBlock Text="Trực tuyến"/></StackPanel></Button>
                         <Button x:Name="AiCameraFilterButton" Click="AiCameraFilter_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="6,2" FontSize="10"><StackPanel Orientation="Horizontal"><Icon:PackIconMaterial Kind="RobotOutline" Width="10" Height="10" Margin="0,0,3,0"/><TextBlock Text="AI"/></StackPanel></Button>
                     </StackPanel>
-                    <Grid Grid.Row="4" Margin="12,0,10,3" Panel.ZIndex="25"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="CAMERA" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" FontSize="10"/><TextBlock Grid.Column="1" Text="{Binding CameraCount}" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="10"/></Grid>
-                    <ScrollViewer Grid.Row="5" VerticalScrollBarVisibility="Auto">
+                    <Grid x:Name="CameraSidebarListCaption" Grid.Row="4" Margin="12,0,10,3" Panel.ZIndex="25"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="CAMERA" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" FontSize="10"/><TextBlock Grid.Column="1" Text="{Binding CameraCount}" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="10"/></Grid>
+                    <ScrollViewer x:Name="CameraSidebarList" Grid.Row="5" VerticalScrollBarVisibility="Auto">
                         <ScrollViewer.Resources>
                             <Style TargetType="ScrollBar">
                                 <Setter Property="Width" Value="6"/>
@@ -272,5 +343,14 @@
             </Border>
         </Grid>
         <Button x:Name="SidebarOpenButton" Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,10,8,0" Click="ToggleSidebar_Click" Visibility="Collapsed" Panel.ZIndex="500" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="7,4" ToolTip="Mở danh sách camera"><Icon:PackIconMaterial Kind="ChevronLeft" Width="14" Height="14"/></Button>
+        <Border x:Name="LiveToast" Grid.Row="0" Grid.RowSpan="2" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,18,18,0" Width="350" Visibility="Collapsed" Panel.ZIndex="1000" Background="{StaticResource VmsSurfaceBrush_v3}" BorderBrush="{StaticResource VmsBorderStrongBrush_v3}" BorderThickness="1" CornerRadius="9">
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="5"/><ColumnDefinition Width="44"/><ColumnDefinition Width="*"/><ColumnDefinition Width="32"/></Grid.ColumnDefinitions>
+                <Border x:Name="LiveToastAccent" Grid.Column="0" Background="{StaticResource VmsInfoBrush_v3}" CornerRadius="9,0,0,9"/>
+                <Border Grid.Column="1" Width="30" Height="30" CornerRadius="15" Background="{StaticResource VmsPrimarySoftBrush_v3}" HorizontalAlignment="Center" VerticalAlignment="Center"><Icon:PackIconMaterial x:Name="LiveToastIcon" Kind="InformationOutline" Width="19" Height="19" Foreground="{StaticResource VmsInfoBrush_v3}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                <StackPanel Grid.Column="2" Margin="0,13,4,13" VerticalAlignment="Center"><TextBlock x:Name="LiveToastTitle" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontWeight="SemiBold" FontSize="13"/><TextBlock x:Name="LiveToastMessage" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"/></StackPanel>
+                <Button Grid.Column="3" Click="CloseLiveToast_Click" Width="28" Height="28" Padding="0" Margin="0,7,6,0" VerticalAlignment="Top" Background="Transparent" BorderThickness="0" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" ToolTip="Đóng thông báo"><Icon:PackIconMaterial Kind="Close" Width="16" Height="16"/></Button>
+            </Grid>
+        </Border>
     </Grid>
 </UserControl>

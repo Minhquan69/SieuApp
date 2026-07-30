@@ -133,9 +133,19 @@ namespace V3SClient.UI.Views
 
             if (_viewModel.SelectedNavigationItem.Route == "/live")
             {
+                ShellHeader.Visibility = Visibility.Visible;
+                ShellHeaderRow.Height = GridLength.Auto;
+                Grid.SetRow(ContentFrame, 0);
+                Grid.SetRowSpan(ContentFrame, 2);
+                Panel.SetZIndex(ShellHeader, 10);
                 ShowModule(new LivePage_v3());
                 return;
             }
+            ShellHeader.Visibility = Visibility.Visible;
+            ShellHeaderRow.Height = GridLength.Auto;
+            Grid.SetRow(ContentFrame, 1);
+            Grid.SetRowSpan(ContentFrame, 1);
+            Panel.SetZIndex(ShellHeader, 0);
             if (_viewModel.SelectedNavigationItem.Route == "/playback")
             {
                 if (_playbackPage == null)

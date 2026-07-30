@@ -20,8 +20,9 @@ namespace V3SClient.viewModels
         public LoginViewModel_v3()
         {
             Profiles = new ObservableCollection<ApiManager.ClientProfile>();
-            LoginCommand = new AsyncRelayCommand(LoginAsync, _ => !IsBusy && !IsProfileSelectionVisible);
+            LoginCommand = new AsyncRelayCommand(LoginAsync, _ => !IsBusy && !IsProfileSelectionVisible && IsLoginReady);
             ContinueCommand = new AsyncRelayCommand(ContinueAsync, _ => !IsBusy && IsProfileSelectionVisible && SelectedProfile != null);
+            BackToLoginCommand = new AsyncRelayCommand(_ => { BackToLogin(); return Task.CompletedTask; }, _ => !IsBusy && IsProfileSelectionVisible);
             LogoutCommand = new AsyncRelayCommand(_ => { ResetLogin(); return Task.CompletedTask; }, _ => !IsBusy && IsProfileSelectionVisible);
             LoadLoginCache();
         }
@@ -29,16 +30,18 @@ namespace V3SClient.viewModels
         public ObservableCollection<ApiManager.ClientProfile> Profiles { get; private set; }
         public AsyncRelayCommand LoginCommand { get; private set; }
         public AsyncRelayCommand ContinueCommand { get; private set; }
+        public AsyncRelayCommand BackToLoginCommand { get; private set; }
         public AsyncRelayCommand LogoutCommand { get; private set; }
         public event EventHandler LoginResetRequested;
-        public string Username { get { return _username; } set { _username = value; OnPropertyChanged(); } }
-        public string Password { get { return _password; } set { _password = value; OnPropertyChanged(); } }
+        public string Username { get { return _username; } set { _username = value; OnPropertyChanged(); OnPropertyChanged(nameof(IsLoginReady)); LoginCommand.RaiseCanExecuteChanged(); } }
+        public string Password { get { return _password; } set { _password = value; OnPropertyChanged(); OnPropertyChanged(nameof(IsLoginReady)); LoginCommand.RaiseCanExecuteChanged(); } }
+        public bool IsLoginReady { get { return !string.IsNullOrWhiteSpace(Username) && !string.IsNullOrWhiteSpace(Password); } }
         public bool IsRememberMe { get { return _isRememberMe; } set { _isRememberMe = value; OnPropertyChanged(); } }
         public string ErrorMessage { get { return _errorMessage; } private set { _errorMessage = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasError)); } }
         public bool HasError { get { return !string.IsNullOrWhiteSpace(ErrorMessage); } }
         public string StatusMessage { get { return _statusMessage; } private set { _statusMessage = value; OnPropertyChanged(); } }
-        public bool IsBusy { get { return _isBusy; } private set { _isBusy = value; OnPropertyChanged(); LoginCommand.RaiseCanExecuteChanged(); ContinueCommand.RaiseCanExecuteChanged(); } }
-        public bool IsProfileSelectionVisible { get { return _isProfileSelectionVisible; } private set { _isProfileSelectionVisible = value; OnPropertyChanged(); LoginCommand.RaiseCanExecuteChanged(); ContinueCommand.RaiseCanExecuteChanged(); } }
+        public bool IsBusy { get { return _isBusy; } private set { _isBusy = value; OnPropertyChanged(); LoginCommand.RaiseCanExecuteChanged(); ContinueCommand.RaiseCanExecuteChanged(); BackToLoginCommand.RaiseCanExecuteChanged(); } }
+        public bool IsProfileSelectionVisible { get { return _isProfileSelectionVisible; } private set { _isProfileSelectionVisible = value; OnPropertyChanged(); LoginCommand.RaiseCanExecuteChanged(); ContinueCommand.RaiseCanExecuteChanged(); BackToLoginCommand.RaiseCanExecuteChanged(); } }
         public ApiManager.ClientProfile SelectedProfile { get { return _selectedProfile; } set { _selectedProfile = value; OnPropertyChanged(); ContinueCommand.RaiseCanExecuteChanged(); } }
 
         private async Task LoginAsync(object parameter)
@@ -75,6 +78,13 @@ namespace V3SClient.viewModels
             catch (OperationCanceledException) { StatusMessage = null; }
             catch (Exception ex) { LoggerManager.LogException(ex, "Login v3 profile selection failed."); ErrorMessage = "Không thể tải thiết bị cho profile được chọn."; StatusMessage = null; }
             finally { IsBusy = false; }
+        }
+        private void BackToLogin()
+        {
+            ErrorMessage = null;
+            StatusMessage = null;
+            SelectedProfile = null;
+            IsProfileSelectionVisible = false;
         }
         public void ResetLogin()
         {
