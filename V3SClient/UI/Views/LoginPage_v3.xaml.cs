@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.ComponentModel;
 using System.Windows.Threading;
 using System.Windows.Controls.Primitives;
@@ -30,7 +31,6 @@ namespace V3SClient.UI.Views
             UpdateResponsiveLoginLayout();
             UpdatePlatformCaption(this);
             UpdateApplicationMarketingText(this);
-            NormalizeMarketingPanelBackground(this);
             var cachedLogin = DataContext as LoginViewModel_v3;
             if (cachedLogin != null && string.IsNullOrEmpty(PasswordInput.Password) && !string.IsNullOrEmpty(cachedLogin.Password))
                 PasswordInput.Password = cachedLogin.Password;
@@ -137,6 +137,18 @@ namespace V3SClient.UI.Views
         private void ViewModel_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName == "IsProfileSelectionVisible") ScheduleProfileLayout();
+            if (e.PropertyName == "HasError" && DataContext is LoginViewModel_v3 viewModel && viewModel.HasError)
+                PlayLoginErrorAnimation();
+        }
+        private void PlayLoginErrorAnimation()
+        {
+            if (LoginCardTranslate == null) return;
+            var shake = new DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromMilliseconds(320) };
+            shake.KeyFrames.Add(new EasingDoubleKeyFrame(-7, KeyTime.FromPercent(0.2)));
+            shake.KeyFrames.Add(new EasingDoubleKeyFrame(6, KeyTime.FromPercent(0.45)));
+            shake.KeyFrames.Add(new EasingDoubleKeyFrame(-3, KeyTime.FromPercent(0.7)));
+            shake.KeyFrames.Add(new EasingDoubleKeyFrame(0, KeyTime.FromPercent(1)));
+            LoginCardTranslate.BeginAnimation(TranslateTransform.XProperty, shake);
         }
         private void ScheduleProfileLayout()
         {
@@ -241,7 +253,10 @@ namespace V3SClient.UI.Views
             if (LoginSubmitButton == null || UsernameInput == null || PasswordInput == null) return;
             var isReady = !string.IsNullOrWhiteSpace(UsernameInput.Text) && !string.IsNullOrWhiteSpace(PasswordInput.Password);
             LoginSubmitButton.IsEnabled = isReady;
-            LoginSubmitButton.Background = new SolidColorBrush(isReady ? Color.FromRgb(37, 99, 235) : Color.FromRgb(16, 53, 93));
+            Brush buttonBackground = isReady
+                ? (Brush)new LinearGradientBrush(Color.FromRgb(37, 99, 235), Color.FromRgb(14, 165, 233), new Point(0, 0), new Point(1, 0))
+                : new SolidColorBrush(Color.FromRgb(16, 53, 93));
+            LoginSubmitButton.Background = buttonBackground;
         }
         private void LoginSubmitButton_Click(object sender, RoutedEventArgs e)
         {
