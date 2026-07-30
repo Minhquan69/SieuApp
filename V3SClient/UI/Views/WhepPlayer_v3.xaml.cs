@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using Gst;
@@ -173,6 +174,8 @@ namespace V3SClient.UI.Views
         private static readonly SemaphoreSlim PipelineConstructionGate = new SemaphoreSlim(1, 1);
         private CancellationTokenSource _cancellation;
         private Pipeline _pipeline;
+        private readonly ConcurrentDictionary<Pipeline, GstBusMessagePump> _busMessagePumps =
+            new ConcurrentDictionary<Pipeline, GstBusMessagePump>();
         private Element _aiOverlayElement;
         private Pipeline _aiOverlayPipeline;
         private Camera _camera;
@@ -182,6 +185,15 @@ namespace V3SClient.UI.Views
         private bool _useAlternateCodec;
         private bool _alternateCodecAttempted;
         private string _lastPipelineBuildError;
+        // Fullscreen must switch only after the newly-created main pipeline
+        // has decoded several real frames.  A fixed timer is inaccurate: it
+        // delays healthy cameras and can still reveal an incomplete first
+        // predictive frame from a slow camera.
+        private const int StableVideoFrameCount = 6;
+        private const int StableVideoFrameWaitMilliseconds = 1500;
+        private int _decodedVideoFrameCount;
+        private TaskCompletionSource<bool> _stableVideoFrames =
+            new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         private int _aiOverlayEnabled;
         private readonly BlockingCollection<AiMetadataFrame_v3> _aiResult =
             new BlockingCollection<AiMetadataFrame_v3>(new ConcurrentQueue<AiMetadataFrame_v3>(), 1);
@@ -463,6 +475,22 @@ namespace V3SClient.UI.Views
 
         public System.Threading.Tasks.Task ReconnectAsync() { return ConnectAsync(); }
 
+        /// <summary>
+        /// Waits for a small run of decoded frames from the current pipeline.
+        /// This is used only for the invisible fullscreen-main warm-up; normal
+        /// playback remains non-blocking.
+        /// </summary>
+        public async System.Threading.Tasks.Task WaitForStableVideoFramesAsync()
+        {
+            var completion = Volatile.Read(ref _stableVideoFrames);
+            if (Volatile.Read(ref _decodedVideoFrameCount) >= StableVideoFrameCount)
+                return;
+
+            await System.Threading.Tasks.Task.WhenAny(
+                completion.Task,
+                System.Threading.Tasks.Task.Delay(StableVideoFrameWaitMilliseconds)).ConfigureAwait(true);
+        }
+
         public void Disconnect()
         {
             _cancellation?.Cancel();
@@ -661,8 +689,8 @@ namespace V3SClient.UI.Views
 
                 var source = pipeline.GetByName("videoSource");
                 source["location"] = rtspUrl;
-                pipeline.Bus.EnableSyncMessageEmission();
-                pipeline.Bus.SyncMessage += OnSyncMessage;
+                AttachBusMessagePump(pipeline);
+                ResetStableVideoFrameWait();
                 if (pipeline.SetState(State.Playing) == StateChangeReturn.Failure)
                     throw new InvalidOperationException("GStreamer could not start the direct RTSP playback pipeline.");
 
@@ -717,6 +745,7 @@ namespace V3SClient.UI.Views
         // disposed from this callback.
         protected void Draw(object o, SignalArgs args)
         {
+            ObserveDecodedVideoFrame(o);
             AiMetadataFrame_v3 incomingFrame;
             if (_aiResult.TryTake(out incomingFrame, 0))
                 Interlocked.Exchange(ref _lastAiFrame, incomingFrame);
@@ -824,6 +853,29 @@ namespace V3SClient.UI.Views
                 }
             }
             }
+        }
+
+        private void ResetStableVideoFrameWait()
+        {
+            Interlocked.Exchange(ref _decodedVideoFrameCount, 0);
+            var replacement = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var previous = Interlocked.Exchange(ref _stableVideoFrames, replacement);
+            previous.TrySetResult(true);
+        }
+
+        private void ObserveDecodedVideoFrame(object sender)
+        {
+            // GStreamer can finish a draw callback from a disposed pipeline
+            // while a replacement is being built.  Count only the active
+            // overlay so old frames never make a new stream look ready.
+            lock (_aiRendererSync)
+            {
+                if (!ReferenceEquals(_aiOverlayElement, sender)) return;
+            }
+
+            if (Interlocked.Increment(ref _decodedVideoFrameCount) != StableVideoFrameCount)
+                return;
+            Volatile.Read(ref _stableVideoFrames).TrySetResult(true);
         }
 
         private static SolidColorBrush GetRoiBrush(int index, SolidColorBrush first, SolidColorBrush second,
@@ -1060,12 +1112,46 @@ namespace V3SClient.UI.Views
             DisposePipelineInstance(pipeline);
         }
 
+        private void AttachBusMessagePump(Pipeline pipeline)
+        {
+            var messagePump = new GstBusMessagePump(pipeline.Bus);
+            var enabled = false;
+            var attached = false;
+            try
+            {
+                messagePump.Bus.EnableSyncMessageEmission();
+                enabled = true;
+                messagePump.Bus.SyncMessage += OnSyncMessage;
+                attached = true;
+                if (!_busMessagePumps.TryAdd(pipeline, messagePump))
+                    throw new InvalidOperationException("A GStreamer bus pump is already registered for this pipeline.");
+            }
+            catch
+            {
+                if (attached) { try { messagePump.Bus.SyncMessage -= OnSyncMessage; } catch { } }
+                if (enabled) { try { messagePump.Bus.DisableSyncMessageEmission(); } catch { } }
+                messagePump.Dispose();
+                throw;
+            }
+        }
+
+        private GstBusMessagePump DetachBusMessagePump(Pipeline pipeline)
+        {
+            GstBusMessagePump messagePump;
+            if (!_busMessagePumps.TryRemove(pipeline, out messagePump)) return null;
+            try { messagePump.Bus.SyncMessage -= OnSyncMessage; } catch { }
+            try { messagePump.Bus.DisableSyncMessageEmission(); } catch { }
+            return messagePump;
+        }
+
         private void DisposePipelineInstance(Pipeline pipeline)
         {
             if (pipeline == null) return;
+            var messagePump = DetachBusMessagePump(pipeline);
             try
             {
-                pipeline.Bus.SyncMessage -= OnSyncMessage;
+                try { if (messagePump != null) messagePump.Dispose(); }
+                catch (Exception ex) { LoggerManager.LogException(ex, "Live View _v3 GStreamer bus pump cleanup failed"); }
                 pipeline.SetState(State.Null);
             }
             catch (Exception ex)

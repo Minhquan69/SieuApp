@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Windows;
 using Gst;
 using Gst.Video;
@@ -12,6 +13,7 @@ namespace V3SClient.UI.Views
         private readonly System.Windows.Forms.Panel _videoPanel =
             new System.Windows.Forms.Panel { Dock = System.Windows.Forms.DockStyle.Fill };
         private Pipeline _pipeline;
+        private GstBusMessagePump _busMessagePump;
         private Camera _camera;
 
         public GstRtspPlayer_v3()
@@ -83,15 +85,25 @@ namespace V3SClient.UI.Views
                 videoChain +
                 " ! d3d11convert ! d3d11overlay name=videoOverlay ! d3d11videosink async=false sync=false qos=false";
 
-            _pipeline = (Pipeline)Parse.Launch(pipelineText);
-            var source = _pipeline.GetByName("videoSource");
-            source["location"] = rtspUrl;
-            _pipeline.Bus.EnableSyncMessageEmission();
-            _pipeline.Bus.SyncMessage += OnSyncMessage;
+            try
+            {
+                _pipeline = (Pipeline)Parse.Launch(pipelineText);
+                var source = _pipeline.GetByName("videoSource");
+                source["location"] = rtspUrl;
+                var messagePump = new GstBusMessagePump(_pipeline.Bus);
+                _busMessagePump = messagePump;
+                messagePump.Bus.EnableSyncMessageEmission();
+                messagePump.Bus.SyncMessage += OnSyncMessage;
 
-            var result = _pipeline.SetState(State.Playing);
-            if (result == StateChangeReturn.Failure)
-                throw new InvalidOperationException("GStreamer could not start the RTSP pipeline.");
+                var result = _pipeline.SetState(State.Playing);
+                if (result == StateChangeReturn.Failure)
+                    throw new InvalidOperationException("GStreamer could not start the RTSP pipeline.");
+            }
+            catch
+            {
+                DisposePipeline();
+                throw;
+            }
         }
 
         private void OnSyncMessage(object sender, SyncMessageArgs args)
@@ -151,13 +163,24 @@ namespace V3SClient.UI.Views
 
         private void DisposePipeline()
         {
-            if (_pipeline == null)
-                return;
-
-            _pipeline.Bus.SyncMessage -= OnSyncMessage;
-            _pipeline.SetState(State.Null);
-            _pipeline.Dispose();
+            var pipeline = _pipeline;
             _pipeline = null;
+            var messagePump = Interlocked.Exchange(ref _busMessagePump, null);
+            if (pipeline == null)
+            {
+                if (messagePump != null) messagePump.Dispose();
+                return;
+            }
+
+            if (messagePump != null)
+            {
+                try { messagePump.Bus.SyncMessage -= OnSyncMessage; } catch { }
+                try { messagePump.Bus.DisableSyncMessageEmission(); } catch { }
+                try { messagePump.Dispose(); }
+                catch (Exception ex) { LoggerManager.LogException(ex, "Could not stop direct RTSP bus message pump"); }
+            }
+            try { pipeline.SetState(State.Null); }
+            finally { pipeline.Dispose(); }
         }
 
         private IntPtr GetVideoWindowHandle()

@@ -474,10 +474,11 @@ namespace V3SClient.UI.Views
         private async System.Threading.Tasks.Task SwitchToStableMainAsync(int generation)
         {
             // The first frame after an RTSP pipeline reaches Playing can be
-            // a predictive frame that lacks its reference data. Keep it
-            // hidden long enough for the main decoder to receive an IDR and
-            // a few complete frames; sub1 remains visible throughout.
-            await System.Threading.Tasks.Task.Delay(TimeSpan.FromMilliseconds(850));
+            // a predictive frame that lacks its reference data. Wait for real
+            // decoded frames instead of an unconditional 850 ms delay: a
+            // healthy camera promotes sooner, while a slow camera keeps sub1
+            // visible until its main decoder is genuinely ready.
+            await MainPlayer.WaitForStableVideoFramesAsync();
             if (_disposed || generation != _mainPresentationGeneration || _usingMainPresentation ||
                 Slot == null || Slot.Camera == null || _pendingMainStream == null)
                 return;

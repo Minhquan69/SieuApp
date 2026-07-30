@@ -248,15 +248,6 @@ namespace V3SClient.models
                         continue;
                     }
 
-                    // d3d11overlay reports its native texture size on the first
-                    // draw callback. Do not consume a segment before boxes can be
-                    // scaled to that texture, otherwise it would be cached empty.
-                    if (OverlayFrameWidth <= 0 || OverlayFrameHeight <= 0)
-                    {
-                        await System.Threading.Tasks.Task.Delay(150, token).ConfigureAwait(false);
-                        continue;
-                    }
-
                     Func<System.DateTime> clock;
                     List<HlsAiSegment> candidates;
                     lock (_hlsAiSync)
@@ -265,17 +256,17 @@ namespace V3SClient.models
                         var now = clock == null ? System.DateTime.MinValue : clock();
                         // Match the Web player's HLS buffering behaviour: retain a
                         // little history for a late decoder frame and prefetch the
-                        // next 24 seconds before the video cursor reaches it.  The
-                        // previous two-second window was the reason a fragment was
-                        // often parsed after its video had already been displayed.
+                        // next 24 seconds before the video cursor reaches it.
+                        // Fetching begins before the first draw callback; bytes
+                        // are buffered until the native overlay reports its size.
                         candidates = now == System.DateTime.MinValue
                             ? new List<HlsAiSegment>()
                             : _hlsAiSegments
                                 .Where(segment =>
                                     segment.StartTime.AddSeconds(segment.DurationSeconds) >= now.AddSeconds(-3) &&
-                                    segment.StartTime <= now.AddSeconds(6))
+                                    segment.StartTime <= now.AddSeconds(24))
                                 .OrderBy(segment => Math.Abs((segment.StartTime - now).TotalSeconds))
-                                .Take(2)
+                                .Take(6)
                                 .ToList();
                     }
 
@@ -287,6 +278,27 @@ namespace V3SClient.models
                         if (alreadyLoaded) continue;
 
                         var bytes = await _hlsAiClient.GetByteArrayAsync(segment.Url).ConfigureAwait(false);
+                        // The first video frame may not yet have created the
+                        // D3D overlay texture. Keep the downloaded fragment so
+                        // its AI is parsed immediately after that first draw,
+                        // rather than waiting for the next loader pass.
+                        if (OverlayFrameWidth <= 0 || OverlayFrameHeight <= 0)
+                        {
+                            lock (_hlsAiSync)
+                            {
+                                _loadedHlsAiSegments.Add(segment.Url);
+                                _capturedHlsAiSegments.Add(new CapturedHlsAiSegment
+                                {
+                                    Url = segment.Url,
+                                    StartTime = segment.StartTime,
+                                    Bytes = bytes
+                                });
+                                if (_capturedHlsAiSegments.Count > 48)
+                                    _capturedHlsAiSegments.RemoveRange(0, _capturedHlsAiSegments.Count - 48);
+                            }
+                            continue;
+                        }
+
                         var frames = ParseHlsAiFrames(bytes, segment.StartTime, segment.Url);
                         lock (_hlsAiSync)
                         {
@@ -638,8 +650,7 @@ namespace V3SClient.models
             bool ret = this.CreatePipeline();
             if (!ret) return false;
 
-            player.Bus.EnableSyncMessageEmission();
-            player.Bus.SyncMessage += Monitor;
+            StartBusMessagePump();
 
             // Playback intentionally does not consume AI/SEI metadata.  It must
             // remain a video-only pipeline so its stability is independent of
@@ -662,10 +673,22 @@ namespace V3SClient.models
                 videoSource = ElementFactory.Make("souphttpsrc", "videoSource");
                 if (!string.IsNullOrEmpty(hlsUrl))
                     videoSource["location"] = hlsUrl;
-                videoSource["is-live"] = true;
-                videoSource["retries"] = -1;
-                videoSource["ssl-use-system-ca-file"] = true;
-                videoSource["ssl-strict"] = true;
+                // Playback playlists are finite VOD recordings. Marking this
+                // source as live makes souphttpsrc/hlsdemux treat the terminal
+                // playlist response as a streaming failure on some Windows
+                // GStreamer builds ("Received EOS without a manifest").
+                videoSource["is-live"] = false;
+                videoSource["retries"] = 3;
+
+                // Keep souphttpsrc on its packaged/default TLS backend. It
+                // is the same runtime used for every media fragment; forcing
+                // the Windows certificate-store switch can make its TLS
+                // behaviour differ from the .NET validation done above.
+                System.Uri hlsUri;
+                var sourceDescription = System.Uri.TryCreate(hlsUrl, System.UriKind.Absolute, out hlsUri)
+                    ? hlsUri.Scheme + "://" + hlsUri.Host + hlsUri.AbsolutePath
+                    : "invalid-url";
+                LoggerManager.LogInfo("Playback HLS source configured: " + sourceDescription + " (VOD, retries=3)");
 
                 // The playlist URL carries a token, but some deployments also
                 // require it on every media fragment requested by hlsdemux.
@@ -678,11 +701,11 @@ namespace V3SClient.models
                 }
 
                 Element hlsDemux = ElementFactory.Make("hlsdemux", "hlsDemux");
-                // An explicit container demux consumes the dynamic HLS output.
-                // decodebin directly after hlsdemux can leave fMP4 pads unlinked.
-                bool isFmp4 = !string.IsNullOrEmpty(hlsUrl) &&
-                    hlsUrl.IndexOf("playback=fmp4", StringComparison.OrdinalIgnoreCase) >= 0;
-                demux = ElementFactory.Make(isFmp4 ? "qtdemux" : "parsebin", "mediaDemux");
+                // hlsdemux can expose more than one dynamic stream pad for an
+                // fMP4 playlist. parsebin handles that negotiated output like
+                // the proven legacy client; forcing qtdemux here left a pad
+                // unconsumed and made hlsdemux stop with not-linked (-1).
+                demux = ElementFactory.Make("parsebin", "mediaDemux");
 
                 if (videoSource == null || hlsDemux == null || demux == null)
                     throw new InvalidOperationException("GStreamer runtime is missing the HLS playback elements.");
@@ -743,13 +766,15 @@ namespace V3SClient.models
                             Element vParse = ElementFactory.Make(parseName, "video-parse");
                             identity = ElementFactory.Make("identity", "identity");
 
-                            // A D3D11 decoder can be installed but unusable on an
-                            // older GPU/driver. libav is packaged with the setup and
-                            // gives playback the same behaviour on every client PC.
+                            // Playback renders through d3d11overlay/videosink.
+                            // Keep decoded frames in that same D3D11 device just
+                            // like Live View. Software avdec produces system-memory
+                            // frames and this runtime's d3d11convert then fails its
+                            // device-interface negotiation, which surfaces upstream
+                            // as hlsdemux "not-linked".
                             Element decoder = null;
                             string decoderName = softwareDecoderName;
-                            if (!capsName.StartsWith("video/x-raw", StringComparison.OrdinalIgnoreCase) &&
-                                libs.Counter.HasNvidiaGPU)
+                            if (!capsName.StartsWith("video/x-raw", StringComparison.OrdinalIgnoreCase))
                             {
                                 decoderName = isH265 ? "d3d11h265dec" : "d3d11h264dec";
                                 decoder = ElementFactory.Make(decoderName, "video-decoder");
@@ -1065,12 +1090,12 @@ namespace V3SClient.models
             StopHlsAiMetadataLoader();
             _hlsAiProxy?.Dispose();
             _hlsAiProxy = null;
+            StopBusMessagePump();
             if (player != null)
             {
                 player.SetState(State.Paused);
                 player.SetState(State.Ready);
                 player.SetState(State.Null);
-                player.Bus.DisableSyncMessageEmission();
                 var children = player.Children;
                 foreach (Element child in children)
                     if (child != null)

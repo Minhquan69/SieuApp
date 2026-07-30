@@ -140,12 +140,12 @@ namespace V3SClient.models
 
         protected override void ReleasePipeline()
         {
+            StopBusMessagePump();
             if (player != null)
             {
                 player.SetState(State.Paused);
                 player.SetState(State.Ready);
                 player.SetState(State.Null);
-                player.Bus.DisableSyncMessageEmission();
                 var children = player.Children;
                 foreach (Element child in children)
                     if (child != null)
