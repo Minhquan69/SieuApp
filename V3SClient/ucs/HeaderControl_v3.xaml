@@ -6,7 +6,7 @@
     <Grid x:Name="HeaderRoot" MouseLeftButtonDown="Header_MouseLeftButtonDown">
         <Grid.Style>
             <Style TargetType="Grid">
-                <Setter Property="Background" Value="{StaticResource VmsHeaderBrush_v3}" />
+                <Setter Property="Background" Value="Transparent" />
                 <Style.Triggers>
                     <DataTrigger Binding="{Binding SelectedNavigationItem.Route}" Value="/live">
                         <Setter Property="Background" Value="{x:Null}" />
@@ -111,9 +111,6 @@
             </Button>
         </Grid>
 
-        <Border Grid.ColumnSpan="2" VerticalAlignment="Bottom" Height="1" Background="{StaticResource VmsBorderBrush_v3}">
-            <Border.Style><Style TargetType="Border"><Style.Triggers><DataTrigger Binding="{Binding SelectedNavigationItem.Route}" Value="/live"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Border.Style>
-        </Border>
         <Popup x:Name="AccountPopup" Placement="Bottom" PlacementTarget="{Binding ElementName=AccountPopupAnchor}"
                VerticalOffset="1" StaysOpen="False" AllowsTransparency="True">
             <Border Width="208" Background="{StaticResource VmsElevatedBrush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}"

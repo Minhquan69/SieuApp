@@ -1,14 +1,16 @@
 <UserControl x:Class="V3SClient.ucs.SidebarControl_v3" x:Name="Root" Width="176" ClipToBounds="True"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:Icon="http://metro.mahapps.com/winfx/xaml/iconpacks">
- <Border Background="{StaticResource VmsSidebarBrush_v3}" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="0,0,1,0" SnapsToDevicePixels="True">
+ <Border Background="{StaticResource VmsSidebarBrush_v3}" BorderThickness="0" SnapsToDevicePixels="True">
   <Border.Resources>
    <SolidColorBrush x:Key="SidebarHoverBrush_v3" Color="#1A2563EB"/>
    <SolidColorBrush x:Key="SidebarSelectedBrush_v3" Color="#332563EB"/>
   </Border.Resources>
   <Grid>
    <Grid.RowDefinitions><RowDefinition Height="48"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-   <Border Grid.Row="0" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="0,0,0,1">
+   <!-- The logo sits directly on the shared application header; it must not
+        create a separate coloured block or vertical divider. -->
+   <Border Grid.Row="0" Background="{StaticResource VmsSidebarBrush_v3}" BorderThickness="0">
     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
      <Image x:Name="LogoImage" Source="/images/logo/ivista_logo.png" Width="112" Height="30" Stretch="Uniform" HorizontalAlignment="Center"/>
      <TextBlock x:Name="LogoSubtext" Text="Enterprise VMS" Foreground="{StaticResource VmsPrimaryBrush_v3}" FontSize="9" HorizontalAlignment="Center"/>

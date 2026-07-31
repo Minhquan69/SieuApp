@@ -13,6 +13,15 @@
             <ColumnDefinition x:Name="ShellSidebarColumn" Width="Auto"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
+        <!-- One continuous application header: logo and page toolbar share this surface. -->
+        <Border Grid.ColumnSpan="2"
+                Height="48"
+                VerticalAlignment="Top"
+                Background="{StaticResource VmsSidebarBrush_v3}"
+                IsHitTestVisible="False"
+                Panel.ZIndex="-1">
+            <Border BorderBrush="{StaticResource VmsBorderSubtleBrush_v3}" BorderThickness="0,0,0,1"/>
+        </Border>
         <ucs:SidebarControl_v3 x:Name="ShellSidebar"/>
         <Grid Grid.Column="1">
             <Grid.RowDefinitions>

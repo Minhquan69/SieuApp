@@ -1843,11 +1843,20 @@ namespace V3SClient.UI.Views
         private void LivePageHeader_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             for (DependencyObject source = e.OriginalSource as DependencyObject;
-                 source != null;
-                 source = VisualTreeHelper.GetParent(source))
+                 source != null;)
             {
                 if (source is Button || source is ComboBox || source is TextBox || source is MenuItem)
                     return;
+
+                // Text inside a TextBlock is a Run (ContentElement), not a Visual.
+                // VisualTreeHelper only accepts Visual/Visual3D, so use the logical
+                // tree for text content and the visual tree for normal controls.
+                var parent = source is Visual
+                    ? VisualTreeHelper.GetParent(source)
+                    : LogicalTreeHelper.GetParent(source);
+                if (ReferenceEquals(parent, source))
+                    break;
+                source = parent;
             }
 
             var shell = Window.GetWindow(this) as ShellWindow_v3;

@@ -37,15 +37,16 @@ namespace V3SClient.UI.Views
             if (cachedLogin != null && string.IsNullOrEmpty(PasswordInput.Password) && !string.IsNullOrEmpty(cachedLogin.Password))
                 PasswordInput.Password = cachedLogin.Password;
             UpdateLoginButtonState();
+            UpdateLoginBusyVisuals();
             StartLoginAmbientAnimation();
             var cardContent = LoginCard == null ? null : LoginCard.Child as StackPanel;
             if (cardContent != null && cardContent.Tag == null)
             {
                 var footer = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
-                footer.Children.Add(new TextBlock { Text = "⚙", Foreground = new SolidColorBrush(Color.FromRgb(143, 167, 190)), FontSize = 15, Margin = new Thickness(0, 0, 7, 0) });
-                footer.Children.Add(new TextBlock { Text = "Phiên bản " + GetType().Assembly.GetName().Version.ToString(3), Foreground = new SolidColorBrush(Color.FromRgb(175, 193, 209)), FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
-                footer.Children.Add(new Border { Width = 1, Height = 16, Background = new SolidColorBrush(Color.FromRgb(54, 80, 107)), Margin = new Thickness(20, 0, 20, 0) });
-                footer.Children.Add(new TextBlock { Text = "© 2026 iVista Tech", Foreground = new SolidColorBrush(Color.FromRgb(175, 193, 209)), FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
+                footer.Children.Add(new TextBlock { Text = "\uE713", FontFamily = new FontFamily("Segoe MDL2 Assets"), Foreground = new SolidColorBrush(Color.FromRgb(143, 167, 190)), FontSize = 20, Margin = new Thickness(0, 0, 9, 0), VerticalAlignment = VerticalAlignment.Center });
+                footer.Children.Add(new TextBlock { Text = "Phiên bản " + GetType().Assembly.GetName().Version.ToString(3), Foreground = new SolidColorBrush(Color.FromRgb(175, 193, 209)), FontSize = 17, VerticalAlignment = VerticalAlignment.Center });
+                footer.Children.Add(new Border { Width = 1, Height = 22, Background = new SolidColorBrush(Color.FromRgb(54, 80, 107)), Margin = new Thickness(22, 0, 22, 0) });
+                footer.Children.Add(new TextBlock { Text = "© 2026 iVista Tech", Foreground = new SolidColorBrush(Color.FromRgb(175, 193, 209)), FontSize = 17, VerticalAlignment = VerticalAlignment.Center });
                 cardContent.Children.Add(new Border { BorderBrush = new SolidColorBrush(Color.FromRgb(36, 63, 89)), BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(0, 20, 0, 0), Padding = new Thickness(0, 16, 0, 0), Child = footer });
                 cardContent.Tag = footer;
             }
@@ -54,8 +55,8 @@ namespace V3SClient.UI.Views
             var index = parent.Children.IndexOf(PasswordInput);
             var host = new Grid { Height = 56, Margin = PasswordInput.Margin };
             PasswordInput.Margin = new Thickness(0); PasswordInput.Padding = new Thickness(0); PasswordInput.VerticalContentAlignment = VerticalAlignment.Center;
-            _visiblePassword = new TextBox { Visibility = Visibility.Collapsed, Height = 56, Padding = new Thickness(48, 0, 42, 0), VerticalContentAlignment = VerticalAlignment.Center, FontSize = 14, Background = PasswordInput.Background, BorderBrush = PasswordInput.BorderBrush, BorderThickness = PasswordInput.BorderThickness, Foreground = PasswordInput.Foreground };
-            var passwordHint = new TextBlock { Text = "Nhập mật khẩu", Foreground = new SolidColorBrush(Color.FromRgb(130, 149, 170)), FontSize = 14, FontStyle = FontStyles.Italic, Margin = new Thickness(48, 0, 42, 0), VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false };
+            _visiblePassword = new TextBox { Visibility = Visibility.Collapsed, Height = 56, Padding = new Thickness(48, 0, 42, 0), VerticalContentAlignment = VerticalAlignment.Center, FontSize = 20, Background = PasswordInput.Background, BorderBrush = PasswordInput.BorderBrush, BorderThickness = PasswordInput.BorderThickness, Foreground = PasswordInput.Foreground };
+            var passwordHint = new TextBlock { Text = "Nhập mật khẩu", Foreground = new SolidColorBrush(Color.FromRgb(130, 149, 170)), FontSize = 18, FontStyle = FontStyles.Italic, Margin = new Thickness(48, 0, 42, 0), VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false };
             passwordHint.Visibility = string.IsNullOrEmpty(PasswordInput.Password) ? Visibility.Visible : Visibility.Collapsed;
             PasswordInput.PasswordChanged += (s, a) => passwordHint.Visibility = string.IsNullOrEmpty(PasswordInput.Password) && !_isPasswordVisible ? Visibility.Visible : Visibility.Collapsed;
             _visiblePassword.TextChanged += (s, a) => { if (_isPasswordVisible && DataContext is LoginViewModel_v3 vm) vm.Password = _visiblePassword.Text; };
@@ -95,19 +96,6 @@ namespace V3SClient.UI.Views
         {
             AnimateGlow(LoginCard, 0.36, 0.78, 2.2);
             AnimateGlow(LoginSubmitButton, 0.48, 0.9, 1.35);
-            AnimateGlow(SecurityShield, 0.25, 0.9, 1.6);
-
-            if (SecurityShieldScale != null)
-            {
-                var scale = new DoubleAnimation(1, 1.09, TimeSpan.FromSeconds(1.6))
-                {
-                    AutoReverse = true,
-                    RepeatBehavior = RepeatBehavior.Forever,
-                    EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
-                };
-                SecurityShieldScale.BeginAnimation(ScaleTransform.ScaleXProperty, scale);
-                SecurityShieldScale.BeginAnimation(ScaleTransform.ScaleYProperty, scale);
-            }
         }
 
         private static void AnimateGlow(UIElement element, double from, double to, double durationSeconds)
@@ -205,6 +193,7 @@ namespace V3SClient.UI.Views
         private void ViewModel_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName == "IsProfileSelectionVisible") ScheduleProfileLayout();
+            if (e.PropertyName == "IsBusy") UpdateLoginBusyVisuals();
             if (e.PropertyName == "HasError" && DataContext is LoginViewModel_v3 viewModel && viewModel.HasError)
                 PlayLoginErrorAnimation();
         }
@@ -325,6 +314,19 @@ namespace V3SClient.UI.Views
                 ? (Brush)new LinearGradientBrush(Color.FromRgb(37, 99, 235), Color.FromRgb(14, 165, 233), new Point(0, 0), new Point(1, 0))
                 : new SolidColorBrush(Color.FromRgb(16, 53, 93));
             LoginSubmitButton.Background = buttonBackground;
+        }
+
+        private void UpdateLoginBusyVisuals()
+        {
+            var isBusy = (DataContext as LoginViewModel_v3)?.IsBusy == true;
+            if (LoginSubmitText != null)
+                LoginSubmitText.Visibility = isBusy ? Visibility.Collapsed : Visibility.Visible;
+            if (LoginSubmitArrow != null)
+                LoginSubmitArrow.Visibility = isBusy ? Visibility.Collapsed : Visibility.Visible;
+            if (LoginBusyIndicator != null)
+                LoginBusyIndicator.Visibility = isBusy ? Visibility.Visible : Visibility.Collapsed;
+            if (LoginSubmitButton != null)
+                LoginSubmitButton.IsHitTestVisible = !isBusy;
         }
         private void LoginSubmitButton_Click(object sender, RoutedEventArgs e)
         {
