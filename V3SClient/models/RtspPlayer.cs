@@ -12,6 +12,7 @@ using System.Windows.Controls;
 using System.Windows;
 using Gst.App;
 using System.Runtime.InteropServices;
+using System.Configuration;
 
 using OpenCvSharp;
 using SharpDX.Direct2D1;
@@ -523,12 +524,21 @@ namespace V3SClient.models
             }
         }
 
+        private static string GetConfiguredTlsPath(string settingName, string defaultFileName)
+        {
+            string configuredPath = ConfigurationManager.AppSettings[settingName];
+            if (!string.IsNullOrWhiteSpace(configuredPath))
+                return Path.GetFullPath(configuredPath);
+
+            return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TLS", defaultFileName);
+        }
+
         protected virtual bool CreatePipeline()
         {
             // Tự động giải nén từ Embedded Resource ra thư mục Temp. Nếu không có sẽ fallback về file cục bộ.
             string rtspCaCert = ExtractResourceToTempFile("ca.pem", "TLS\\ca.pem");
-            string rtspCertPem = ExtractResourceToTempFile("client_cert.pem", "TLS\\client_cert.pem");
-            string rtspCertKey = ExtractResourceToTempFile("client.key", "TLS\\client.key");
+            string rtspCertPem = GetConfiguredTlsPath("RtspTlsClientCertificatePath", "client_cert.pem");
+            string rtspCertKey = GetConfiguredTlsPath("RtspTlsClientKeyPath", "client.key");
             try
             {
 
@@ -544,12 +554,18 @@ namespace V3SClient.models
                 videoSource["location"] = this.rtspAddres;               
                 videoSource["is-live"] = true;
 #if TLS
-                TlsCertificate caCertificate = new TlsCertificate(rtspCaCert);
-                TlsCertificate cert = new TlsCertificate(rtspCertPem, rtspCertKey);
-
-                RtspClientTlsInteraction interaction = new RtspClientTlsInteraction(cert, caCertificate);
-                videoSource["tls-interaction"] = interaction;
-                videoSource["tls-validation-flags"] = TlsCertificateFlags.GenericError;
+                if (File.Exists(rtspCaCert) && File.Exists(rtspCertPem) && File.Exists(rtspCertKey))
+                {
+                    TlsCertificate caCertificate = new TlsCertificate(rtspCaCert);
+                    TlsCertificate cert = new TlsCertificate(rtspCertPem, rtspCertKey);
+                    RtspClientTlsInteraction interaction = new RtspClientTlsInteraction(cert, caCertificate);
+                    videoSource["tls-interaction"] = interaction;
+                    videoSource["tls-validation-flags"] = TlsCertificateFlags.GenericError;
+                }
+                else
+                {
+                    libs.LoggerManager.LogWarn("RTSP TLS client credentials are not configured; continuing without client certificate.");
+                }
                 
 
 #else

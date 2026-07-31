@@ -8,24 +8,24 @@
   #define PrerequisiteDir "prerequisites"
 #endif
 
-#define AppName "iVista VMS"
+#define AppName "iVMS"
 #define AppVersion "2.6.5.19"
 #define AppPublisher "iVista Tech"
-#define AppExeName "V3SClient.exe"
+#define AppExeName "iVMS.exe"
 
 [Setup]
 AppId={{D65DA08B-5957-4F25-84E4-D0150E7F53B1}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
-DefaultDirName={autopf64}\iVista VMS
-DefaultGroupName=iVista VMS
+DefaultDirName={autopf64}\iVMS
+DefaultGroupName=iVMS
 DisableProgramGroupPage=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
 OutputDir={#OutputDir}
-OutputBaseFilename=iVista-VMS-Setup-{#AppVersion}-x64
+OutputBaseFilename=iVMS-Setup-{#AppVersion}-x64
 SetupIconFile={#StageDir}\App\icon.ico
 UninstallDisplayIcon={app}\{#AppExeName}
 Compression=lzma2/ultra64
@@ -41,15 +41,17 @@ Source: "{#StageDir}\App\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdi
 Source: "{#StageDir}\GStreamer\*"; DestDir: "{app}\gstreamer"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#PrerequisiteDir}\vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 Source: "{#PrerequisiteDir}\ndp48-x86-x64-allos-enu.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
+Source: "{#PrerequisiteDir}\MicrosoftEdgeWebView2RuntimeInstallerX64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Icons]
-Name: "{autoprograms}\iVista VMS"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
-Name: "{autodesktop}\iVista VMS"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{autoprograms}\iVMS"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
+Name: "{autodesktop}\iVMS"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "Tạo biểu tượng ngoài màn hình"; GroupDescription: "Biểu tượng bổ sung:"
 
 [Run]
+Filename: "{tmp}\MicrosoftEdgeWebView2RuntimeInstallerX64.exe"; Parameters: "/silent /install"; Flags: waituntilterminated
 Filename: "{tmp}\ndp48-x86-x64-allos-enu.exe"; Parameters: "/q /norestart"; StatusMsg: "Đang cài đặt .NET Framework 4.8..."; Check: not IsDotNet48Installed; Flags: waituntilterminated
 Filename: "{tmp}\vc_redist.x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "Đang cài đặt Microsoft Visual C++ Runtime..."; Flags: waituntilterminated
 Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; Description: "Mở iVista VMS"; Flags: nowait postinstall skipifsilent

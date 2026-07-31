@@ -172,6 +172,27 @@ namespace V3SClient.UI.Views
         // concurrent creation across a camera wall safe. Serialize only this
         // short critical phase; the RTSP sessions then decode concurrently.
         private static readonly SemaphoreSlim PipelineConstructionGate = new SemaphoreSlim(1, 1);
+        private static readonly ConcurrentDictionary<WhepPlayer_v3, byte> ActivePlayers =
+            new ConcurrentDictionary<WhepPlayer_v3, byte>();
+        private static int _preserveCameraAspectRatio;
+
+        /// <summary>
+        /// Shared display preference for every active/new live camera player.
+        /// False preserves the established wall behaviour: fill each grid cell.
+        /// </summary>
+        public static bool PreserveCameraAspectRatio
+        {
+            get { return Volatile.Read(ref _preserveCameraAspectRatio) == 1; }
+            set
+            {
+                var requested = value ? 1 : 0;
+                if (Interlocked.Exchange(ref _preserveCameraAspectRatio, requested) == requested)
+                    return;
+
+                foreach (var player in ActivePlayers.Keys)
+                    player.ApplyAspectRatioPreference(value);
+            }
+        }
         private CancellationTokenSource _cancellation;
         private Pipeline _pipeline;
         private bool _isMuted;
@@ -241,6 +262,7 @@ namespace V3SClient.UI.Views
         public WhepPlayer_v3()
         {
             InitializeComponent();
+            ActivePlayers.TryAdd(this, 0);
             VideoHost.Child = _videoPanel;
             _videoPanel.Controls.Add(_videoSurface);
             _cameraBadge.BackColor = System.Drawing.Color.FromArgb(21, 47, 72);
@@ -669,10 +691,9 @@ namespace V3SClient.UI.Views
                     "rtspsrc name=videoSource protocols=tcp latency=300 timeout=15000000 drop-on-latency=true " +
                     "videoSource. ! queue leaky=downstream max-size-buffers=8 ! application/x-rtp,media=video ! " +
                     videoChain + " ! d3d11convert ! queue leaky=downstream max-size-buffers=4 ! " +
-                    // Camera-wall tiles intentionally fill their allocated grid
-                    // cell.  Do not letterbox the source aspect ratio: the user
-                    // expects every camera stream to use the entire tile.
-                    "d3d11overlay name=videoOverlay ! d3d11videosink force-aspect-ratio=false async=false sync=false qos=false " +
+                    "d3d11overlay name=videoOverlay ! d3d11videosink name=videoSink force-aspect-ratio=" +
+                    (PreserveCameraAspectRatio ? "true" : "false") +
+                    " async=false sync=false qos=false " +
                     "videoSource. ! queue ! application/x-rtp,media=audio ! decodebin ! audioconvert ! volume name=audioVolume mute=" + (_isMuted ? "true" : "false") + " ! autoaudiosink sync=false";
                 pipeline = (Pipeline)Parse.Launch(pipelineText);
                 if (pipeline == null)
@@ -858,6 +879,28 @@ namespace V3SClient.UI.Views
                     renderTargetView.Dispose();
                 }
             }
+            }
+        }
+
+        private void ApplyAspectRatioPreference(bool preserveAspectRatio)
+        {
+            var pipeline = _pipeline;
+            if (pipeline == null) return;
+
+            Element sink = null;
+            try
+            {
+                sink = pipeline.GetByName("videoSink");
+                if (sink != null)
+                    sink["force-aspect-ratio"] = preserveAspectRatio;
+            }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Không thể cập nhật tỉ lệ hiển thị camera");
+            }
+            finally
+            {
+                sink?.Dispose();
             }
         }
 
@@ -1404,6 +1447,8 @@ namespace V3SClient.UI.Views
 
         public void Dispose()
         {
+            byte ignored;
+            ActivePlayers.TryRemove(this, out ignored);
             _cancellation?.Cancel();
             _cancellation?.Dispose();
             _cancellation = null;

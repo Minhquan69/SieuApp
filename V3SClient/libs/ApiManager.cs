@@ -45,6 +45,9 @@ namespace V3SClient.libs
             [JsonProperty("total_detection_count")]
             public int TotalDetectionCount { get; set; }
 
+            [JsonProperty("camera_count")]
+            public int CameraCount { get; set; }
+
             [JsonProperty("snapshot_totals")]
             public List<FrameDetectionSnapshotTotal> SnapshotTotals { get; set; } = new List<FrameDetectionSnapshotTotal>();
 
@@ -57,6 +60,15 @@ namespace V3SClient.libs
         {
             [JsonProperty("total_detection_count")]
             public int TotalDetectionCount { get; set; }
+        }
+
+        public sealed class LiveFrameDetectionCountsResponse
+        {
+            [JsonProperty("total_detection_count")]
+            public int TotalDetectionCount { get; set; }
+
+            [JsonProperty("camera_count")]
+            public int CameraCount { get; set; }
         }
         private static readonly Lazy<ApiManager> _instance = new Lazy<ApiManager>(() => new ApiManager());
         public static ApiManager Instance => _instance.Value;
@@ -75,6 +87,7 @@ namespace V3SClient.libs
         private string _streamApiUrl = "http://localhost:3000/streams";
         private string _deviceStatusApiUrl;
         private string _frameDetectionCountsApiUrl = "http://192.168.1.12:8080/api/frame-detection-counts";
+        private string _liveFrameDetectionCountsApiUrl = "http://192.168.1.12:8080/api/live-frame-detection-counts";
         // This gateway key is deliberately separate from _backendToken.
         // _backendToken is replaced by the interactive-login JWT, whereas the
         // status gateway always expects its own X-API-Key.
@@ -1842,13 +1855,18 @@ namespace V3SClient.libs
             }
         }
 
-        public async Task<FrameDetectionCountsResponse> GetFrameDetectionCountsAsync(System.DateTime startAt, System.DateTime endAt, CancellationToken cancellationToken = default(CancellationToken))
+        public async Task<FrameDetectionCountsResponse> GetFrameDetectionCountsAsync(System.DateTime startAt, System.DateTime endAt, IEnumerable<string> cameraIds = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             try
             {
                 var start = Uri.EscapeDataString(startAt.ToString("yyyy-MM-ddTHH:mm:ss"));
                 var end = Uri.EscapeDataString(endAt.ToString("yyyy-MM-ddTHH:mm:ss"));
-                var url = string.Format("{0}?start_at={1}&end_at={2}&cam_ids=&object_classes=", _frameDetectionCountsApiUrl, start, end);
+                var cameraIdsParameter = string.Join(",", (cameraIds ?? Enumerable.Empty<string>())
+                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                    .Select(id => id.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase));
+                var cameras = Uri.EscapeDataString(cameraIdsParameter);
+                var url = string.Format("{0}?start_at={1}&end_at={2}&cam_ids={3}&object_classes=", _frameDetectionCountsApiUrl, start, end, cameras);
                 using (var response = await _deviceStatusHttpClient.GetAsync(url, cancellationToken))
                 {
                     if (!response.IsSuccessStatusCode)
@@ -1863,6 +1881,35 @@ namespace V3SClient.libs
             catch (Exception ex)
             {
                 LoggerManager.LogException(ex, "Lỗi khi gọi GetFrameDetectionCountsAsync");
+                return null;
+            }
+        }
+
+        public async Task<LiveFrameDetectionCountsResponse> GetLiveFrameDetectionCountsAsync(IEnumerable<string> cameraIds, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            try
+            {
+                var cameraIdsParameter = string.Join(",", (cameraIds ?? Enumerable.Empty<string>())
+                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                    .Select(id => id.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase));
+                var cameras = Uri.EscapeDataString(cameraIdsParameter);
+                var url = string.Format("{0}?cam_ids={1}", _liveFrameDetectionCountsApiUrl, cameras);
+                using (var response = await _deviceStatusHttpClient.GetAsync(url, cancellationToken))
+                {
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        LoggerManager.LogWarn($"Live frame detection counts returned {(int)response.StatusCode}.");
+                        return null;
+                    }
+
+                    var json = await response.Content.ReadAsStringAsync();
+                    return JsonConvert.DeserializeObject<LiveFrameDetectionCountsResponse>(json);
+                }
+            }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Lỗi khi gọi GetLiveFrameDetectionCountsAsync");
                 return null;
             }
         }

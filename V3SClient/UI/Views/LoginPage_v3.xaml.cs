@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
 using System.ComponentModel;
 using System.Windows.Threading;
 using System.Windows.Controls.Primitives;
@@ -31,22 +32,38 @@ namespace V3SClient.UI.Views
             UpdateResponsiveLoginLayout();
             UpdatePlatformCaption(this);
             UpdateApplicationMarketingText(this);
+            UpdateLoginTitle(this);
             var cachedLogin = DataContext as LoginViewModel_v3;
             if (cachedLogin != null && string.IsNullOrEmpty(PasswordInput.Password) && !string.IsNullOrEmpty(cachedLogin.Password))
                 PasswordInput.Password = cachedLogin.Password;
             UpdateLoginButtonState();
+            StartLoginAmbientAnimation();
+            var cardContent = LoginCard == null ? null : LoginCard.Child as StackPanel;
+            if (cardContent != null && cardContent.Tag == null)
+            {
+                var footer = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
+                footer.Children.Add(new TextBlock { Text = "⚙", Foreground = new SolidColorBrush(Color.FromRgb(143, 167, 190)), FontSize = 15, Margin = new Thickness(0, 0, 7, 0) });
+                footer.Children.Add(new TextBlock { Text = "Phiên bản " + GetType().Assembly.GetName().Version.ToString(3), Foreground = new SolidColorBrush(Color.FromRgb(175, 193, 209)), FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
+                footer.Children.Add(new Border { Width = 1, Height = 16, Background = new SolidColorBrush(Color.FromRgb(54, 80, 107)), Margin = new Thickness(20, 0, 20, 0) });
+                footer.Children.Add(new TextBlock { Text = "© 2026 iVista Tech", Foreground = new SolidColorBrush(Color.FromRgb(175, 193, 209)), FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
+                cardContent.Children.Add(new Border { BorderBrush = new SolidColorBrush(Color.FromRgb(36, 63, 89)), BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(0, 20, 0, 0), Padding = new Thickness(0, 16, 0, 0), Child = footer });
+                cardContent.Tag = footer;
+            }
             var parent = VisualTreeHelper.GetParent(PasswordInput) as Panel;
             if (parent == null || _visiblePassword != null) return;
             var index = parent.Children.IndexOf(PasswordInput);
-            var host = new Grid { Height = 48, Margin = PasswordInput.Margin };
-            PasswordInput.Margin = new Thickness(0); PasswordInput.Padding = new Thickness(48, 10, 42, 10);
-            _visiblePassword = new TextBox { Visibility = Visibility.Collapsed, Height = 48, Padding = new Thickness(48, 10, 42, 10), FontSize = 14, Background = PasswordInput.Background, BorderBrush = PasswordInput.BorderBrush, BorderThickness = PasswordInput.BorderThickness, Foreground = PasswordInput.Foreground };
+            var host = new Grid { Height = 56, Margin = PasswordInput.Margin };
+            PasswordInput.Margin = new Thickness(0); PasswordInput.Padding = new Thickness(0); PasswordInput.VerticalContentAlignment = VerticalAlignment.Center;
+            _visiblePassword = new TextBox { Visibility = Visibility.Collapsed, Height = 56, Padding = new Thickness(48, 0, 42, 0), VerticalContentAlignment = VerticalAlignment.Center, FontSize = 14, Background = PasswordInput.Background, BorderBrush = PasswordInput.BorderBrush, BorderThickness = PasswordInput.BorderThickness, Foreground = PasswordInput.Foreground };
+            var passwordHint = new TextBlock { Text = "Nhập mật khẩu", Foreground = new SolidColorBrush(Color.FromRgb(130, 149, 170)), FontSize = 14, FontStyle = FontStyles.Italic, Margin = new Thickness(48, 0, 42, 0), VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false };
+            passwordHint.Visibility = string.IsNullOrEmpty(PasswordInput.Password) ? Visibility.Visible : Visibility.Collapsed;
+            PasswordInput.PasswordChanged += (s, a) => passwordHint.Visibility = string.IsNullOrEmpty(PasswordInput.Password) && !_isPasswordVisible ? Visibility.Visible : Visibility.Collapsed;
             _visiblePassword.TextChanged += (s, a) => { if (_isPasswordVisible && DataContext is LoginViewModel_v3 vm) vm.Password = _visiblePassword.Text; };
             _passwordToggle = new Button { Content = CreateEyeIcon(false), Width = 38, Height = 34, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent, Foreground = new SolidColorBrush(Color.FromRgb(158, 180, 204)), BorderThickness = new Thickness(0), ToolTip = "Hiển thị mật khẩu" };
             _passwordToggle.Click += (s, a) => TogglePassword();
             // A WPF element can have only one logical parent: detach it before placing it in the host grid.
             parent.Children.RemoveAt(index);
-            host.Children.Add(PasswordInput); host.Children.Add(_visiblePassword);
+            host.Children.Add(PasswordInput); host.Children.Add(_visiblePassword); host.Children.Add(passwordHint);
             host.Children.Add(new TextBlock
             {
                 Text = "\uE72E", FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 19,
@@ -56,7 +73,7 @@ namespace V3SClient.UI.Views
             });
             host.Children.Add(_passwordToggle);
             parent.Children.Insert(index, host);
-            var remember = new CheckBox { Content = "Ghi nhớ đăng nhập", Foreground = new SolidColorBrush(Color.FromRgb(194, 211, 229)), Margin = new Thickness(0, 8, 0, 14), IsChecked = (DataContext as LoginViewModel_v3)?.IsRememberMe == true };
+            var remember = new CheckBox { Content = "Ghi nhớ đăng nhập", Style = (Style)FindResource("LoginRememberCheckBox"), Margin = new Thickness(0, 8, 0, 14), IsChecked = (DataContext as LoginViewModel_v3)?.IsRememberMe == true };
             remember.Checked += (s, a) => { if (DataContext is LoginViewModel_v3 vm) vm.IsRememberMe = true; };
             remember.Unchecked += (s, a) => { if (DataContext is LoginViewModel_v3 vm) vm.IsRememberMe = false; };
             parent.Children.Insert(index + 1, remember);
@@ -66,12 +83,49 @@ namespace V3SClient.UI.Views
         {
             if (LoginLayout == null || MarketingPanel == null || LoginCard == null) return;
             var compact = ActualWidth > 0 && ActualWidth < 1100;
-            LoginLayout.Margin = compact ? new Thickness(32, 40, 32, 30) : new Thickness(126, 40, 76, 30);
+            LoginLayout.Margin = compact ? new Thickness(32, 40, 32, 30) : new Thickness(96, 54, 76, 44);
             MarketingPanel.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-            LoginLayout.ColumnDefinitions[0].Width = compact ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
-            LoginLayout.ColumnDefinitions[1].Width = compact ? new GridLength(1, GridUnitType.Star) : new GridLength(650);
-            LoginCard.Width = compact ? Math.Max(360, Math.Min(600, ActualWidth - 64)) : 600;
-            LoginCard.HorizontalAlignment = compact ? HorizontalAlignment.Center : HorizontalAlignment.Right;
+            LoginLayout.ColumnDefinitions[0].Width = compact ? new GridLength(0) : new GridLength(61, GridUnitType.Star);
+            LoginLayout.ColumnDefinitions[1].Width = compact ? new GridLength(1, GridUnitType.Star) : new GridLength(39, GridUnitType.Star);
+            LoginCard.Width = compact ? Math.Max(360, Math.Min(600, ActualWidth - 64)) : double.NaN;
+            LoginCard.HorizontalAlignment = compact ? HorizontalAlignment.Center : HorizontalAlignment.Stretch;
+        }
+
+        private void StartLoginAmbientAnimation()
+        {
+            AnimateGlow(LoginCard, 0.36, 0.78, 2.2);
+            AnimateGlow(LoginSubmitButton, 0.48, 0.9, 1.35);
+            AnimateGlow(SecurityShield, 0.25, 0.9, 1.6);
+
+            if (SecurityShieldScale != null)
+            {
+                var scale = new DoubleAnimation(1, 1.09, TimeSpan.FromSeconds(1.6))
+                {
+                    AutoReverse = true,
+                    RepeatBehavior = RepeatBehavior.Forever,
+                    EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
+                };
+                SecurityShieldScale.BeginAnimation(ScaleTransform.ScaleXProperty, scale);
+                SecurityShieldScale.BeginAnimation(ScaleTransform.ScaleYProperty, scale);
+            }
+        }
+
+        private static void AnimateGlow(UIElement element, double from, double to, double durationSeconds)
+        {
+            if (element == null) return;
+            var effect = element.Effect as DropShadowEffect;
+            if (effect == null) return;
+            if (effect.IsFrozen)
+            {
+                effect = effect.Clone();
+                element.Effect = effect;
+            }
+            effect.BeginAnimation(DropShadowEffect.OpacityProperty, new DoubleAnimation(from, to, TimeSpan.FromSeconds(durationSeconds))
+            {
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever,
+                EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
+            });
         }
 
         private static void UpdateApplicationMarketingText(DependencyObject root)
@@ -96,6 +150,20 @@ namespace V3SClient.UI.Views
             var count = VisualTreeHelper.GetChildrenCount(root);
             for (var index = 0; index < count; index++)
                 UpdateApplicationMarketingText(VisualTreeHelper.GetChild(root, index));
+        }
+
+        private static void UpdateLoginTitle(DependencyObject root)
+        {
+            if (root == null) return;
+            var text = root as TextBlock;
+            if (text != null && text.FontSize >= 26 && text.FontWeight == FontWeights.ExtraBold)
+                text.Text = "ĐĂNG NHẬP";
+            else if (text != null && text.FontSize == 14 && text.HorizontalAlignment == HorizontalAlignment.Center)
+                text.Visibility = Visibility.Collapsed;
+
+            var count = VisualTreeHelper.GetChildrenCount(root);
+            for (var index = 0; index < count; index++)
+                UpdateLoginTitle(VisualTreeHelper.GetChild(root, index));
         }
 
         private static void NormalizeMarketingPanelBackground(DependencyObject root)

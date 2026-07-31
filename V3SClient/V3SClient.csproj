@@ -7,7 +7,11 @@
     <ProjectGuid>{3801FD7C-B029-46A0-A4CF-0CB0147DA3EE}</ProjectGuid>
     <OutputType>WinExe</OutputType>
     <RootNamespace>V3SClient</RootNamespace>
-    <AssemblyName>V3SClient</AssemblyName>
+    <AssemblyName>iVMS</AssemblyName>
+    <Product>iVMS</Product>
+    <Title>iVMS</Title>
+    <Description>Intelligent Video Management System</Description>
+    <Version>2.6.5.19</Version>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <ProjectTypeGuids>{60dc8134-eba5-43b8-bcc9-bb4bc16c2548};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
@@ -1046,8 +1050,6 @@
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
     </None>
     <EmbeddedResource Include="TLS\ca.pem" />
-    <EmbeddedResource Include="TLS\client.key" />
-    <EmbeddedResource Include="TLS\client_cert.pem" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
@@ -1171,6 +1173,8 @@
     <Resource Include="images\close.png" />
     <Resource Include="images\logo\*.*" />
     <Resource Include="images\login\login-background.png" />
+    <Resource Include="Assets\Images\ivms-login-background-3d-1920x1080.png" />
+    <Resource Include="Assets\Images\ai-monitoring-logo.png" />
     <EmbeddedResource Include="audios\abnormal_warning.wav" />
     <Resource Include="images\layout\layout_custom.png" />
     <Resource Include="images\mouse_action.png" />

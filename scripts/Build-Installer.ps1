@@ -1,17 +1,19 @@
 [CmdletBinding()]
 param(
     [string]$OutputDirectory = (Join-Path ([Environment]::GetFolderPath('UserProfile')) 'Downloads'),
+    [string]$GStreamerRoot,
     [switch]$KeepStage
 )
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
+$OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 $projectRoot = Join-Path $repoRoot 'V3SClient'
 $installerRoot = Join-Path $repoRoot 'installer'
 $stageRoot = Join-Path $installerRoot 'stage'
 $appStage = Join-Path $stageRoot 'App'
 $gstStage = Join-Path $stageRoot 'GStreamer'
-$gstRoot = 'C:\Program Files\gstreamer\1.0\msvc_x86_64'
+$gstRoot = if ($GStreamerRoot) { $GStreamerRoot } else { Join-Path $env:ProgramFiles 'gstreamer\1.0\msvc_x86_64' }
 $vsWhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
 $isccCandidates = @(
     (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'),
@@ -33,6 +35,10 @@ if (-not $msBuild) {
 $iscc = $isccCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $iscc) {
     throw 'Không tìm thấy Inno Setup 6 (ISCC.exe).'
+}
+
+if (-not (Test-Path (Join-Path $installerRoot 'prerequisites\MicrosoftEdgeWebView2RuntimeInstallerX64.exe'))) {
+    throw 'Microsoft Edge WebView2 Runtime x64 is missing from installer\prerequisites.'
 }
 
 if (Test-Path $stageRoot) {
@@ -80,7 +86,7 @@ if (Test-Path (Join-Path $gstRoot 'share')) {
 
 # The installed application carries GStreamer beside the executable, so it
 # never depends on a drive/path that only exists on the build machine.
-$appConfig = Join-Path $appStage 'V3SClient.exe.config'
+$appConfig = Join-Path $appStage 'iVMS.exe.config'
 $configText = [IO.File]::ReadAllText($appConfig)
 $configText = [Text.RegularExpressions.Regex]::Replace(
     $configText,
@@ -95,7 +101,7 @@ $iss = Join-Path $installerRoot 'iVista-VMS.iss'
     "/DPrerequisiteDir=$(Join-Path $installerRoot 'prerequisites')" $iss
 if ($LASTEXITCODE -ne 0) { throw "Inno Setup lỗi: $LASTEXITCODE" }
 
-$setup = Get-ChildItem $OutputDirectory -Filter 'iVista-VMS-Setup-*-x64.exe' |
+$setup = Get-ChildItem $OutputDirectory -Filter 'iVMS-Setup-*-x64.exe' |
     Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if (-not $setup) { throw 'Không tìm thấy file bộ cài sau khi build.' }
 
@@ -107,3 +113,4 @@ Write-Host "SHA256: $($hash.Hash)"
 if (-not $KeepStage) {
     Remove-Item -LiteralPath $stageRoot -Recurse -Force
 }
+

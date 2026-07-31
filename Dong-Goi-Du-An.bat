@@ -1,8 +1,8 @@
 @echo off
 setlocal
 
-rem Tao bo cai iVista VMS x64 co the copy sang may Windows khac de cai dat.
-rem Ket qua: thu muc installer\output\iVista-VMS-Setup-*-x64.exe
+rem Tao bo cai iVMS x64 co the copy sang may Windows khac de cai dat.
+rem Ket qua: thu muc installer\output\iVMS-Setup-*-x64.exe
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\Build-Installer.ps1" -OutputDirectory "%~dp0installer\output"
 set "EXIT_CODE=%ERRORLEVEL%"
 

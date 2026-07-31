@@ -58,9 +58,11 @@ namespace V3SClient.UI.Views
         private readonly DispatcherTimer _resizeSettledTimer;
         private readonly DispatcherTimer _deviceStatusRefreshTimer;
         private readonly DispatcherTimer _aiSummaryRefreshTimer;
+        private readonly DispatcherTimer _liveTrafficDensityRefreshTimer;
         private readonly DispatcherTimer _liveToastTimer;
         private int _deviceStatusRefreshInProgress;
         private int _aiSummaryRefreshInProgress;
+        private int _liveTrafficDensityRefreshInProgress;
         private readonly Stopwatch _resizeStopwatch = new Stopwatch();
         private bool _resizeOverlaysSuspended;
         private bool _geometryTransitionInProgress;
@@ -88,6 +90,8 @@ namespace V3SClient.UI.Views
             _deviceStatusRefreshTimer.Tick += DeviceStatusRefreshTimer_Tick;
             _aiSummaryRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
             _aiSummaryRefreshTimer.Tick += AiSummaryRefreshTimer_Tick;
+            _liveTrafficDensityRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+            _liveTrafficDensityRefreshTimer.Tick += LiveTrafficDensityRefreshTimer_Tick;
             _liveToastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
             _liveToastTimer.Tick += LiveToastTimer_Tick;
             // The action icons are centred against the complete header at all
@@ -139,6 +143,8 @@ namespace V3SClient.UI.Views
             QueueHeaderActionCentering();
             await RefreshAiSummaryAsync();
             if (!_disposed) _aiSummaryRefreshTimer.Start();
+            await RefreshLiveTrafficDensityAsync();
+            if (!_disposed) _liveTrafficDensityRefreshTimer.Start();
             await RefreshDeviceStatusesAsync();
             if (!_disposed) _deviceStatusRefreshTimer.Start();
         }
@@ -151,6 +157,11 @@ namespace V3SClient.UI.Views
         private async void AiSummaryRefreshTimer_Tick(object sender, EventArgs e)
         {
             await RefreshAiSummaryAsync();
+        }
+
+        private async void LiveTrafficDensityRefreshTimer_Tick(object sender, EventArgs e)
+        {
+            await RefreshLiveTrafficDensityAsync();
         }
 
         private async Task<bool> RefreshDeviceStatusesAsync()
@@ -961,7 +972,15 @@ namespace V3SClient.UI.Views
             var button = sender as Button;
             if (button != null)
                 LayoutPopup.PlacementTarget = button;
+            if (PreserveCameraAspectCheckBox != null)
+                PreserveCameraAspectCheckBox.IsChecked = WhepPlayer_v3.PreserveCameraAspectRatio;
             LayoutPopup.IsOpen = !LayoutPopup.IsOpen;
+        }
+
+        private void PreserveCameraAspectCheckBox_Changed(object sender, RoutedEventArgs e)
+        {
+            WhepPlayer_v3.PreserveCameraAspectRatio = PreserveCameraAspectCheckBox != null &&
+                PreserveCameraAspectCheckBox.IsChecked == true;
         }
         private void LayoutMenu_MouseEnter(object sender, MouseEventArgs e) { LayoutPopup.IsOpen = true; }
         private void LayoutPopup_MouseLeave(object sender, MouseEventArgs e) { LayoutPopup.IsOpen = false; }
@@ -1638,6 +1657,15 @@ namespace V3SClient.UI.Views
 
         private void UpdateFullscreenControls()
         {
+            // The shell chrome is hidden for grid fullscreen, therefore the
+            // overflow group must use both right header columns and align to
+            // the actual screen edge rather than stopping before the former
+            // profile/chrome area.
+            if (HeaderTopOverflowPanel != null)
+            {
+                Grid.SetColumn(HeaderTopOverflowPanel, 2);
+                Grid.SetColumnSpan(HeaderTopOverflowPanel, _gridFullscreen ? 2 : 1);
+            }
             var tooltip = _gridFullscreen ? "Thu nhỏ" : "Toàn màn hình";
             var icon = _gridFullscreen
                 ? MahApps.Metro.IconPacks.PackIconMaterialKind.FullscreenExit
@@ -1736,13 +1764,57 @@ namespace V3SClient.UI.Views
                     : label == "12 giờ gần nhất" ? endAt.AddHours(-12)
                     : label == "1 ngày gần nhất" ? endAt.AddDays(-1)
                     : endAt.AddMinutes(-15);
-                var counts = await ApiManager.Instance.GetFrameDetectionCountsAsync(startAt, endAt, _lifetime.Token);
-                if (!_disposed && counts != null && AiVehicleCountText != null)
-                    AiVehicleCountText.Text = counts.AccumulatedDetectionCount.ToString();
+                var profileCameraIds = _viewModel.CameraGroups
+                    .SelectMany(group => group.Cameras ?? Enumerable.Empty<Camera>())
+                    .Where(camera => camera != null && !string.IsNullOrWhiteSpace(camera.camID))
+                    .Select(camera => camera.camID.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (profileCameraIds.Count == 0)
+                    return;
+
+                var counts = await ApiManager.Instance.GetFrameDetectionCountsAsync(startAt, endAt, profileCameraIds, _lifetime.Token);
+                if (!_disposed && counts != null)
+                {
+                    if (AiVehicleCountText != null)
+                        AiVehicleCountText.Text = counts.AccumulatedDetectionCount.ToString();
+                }
             }
             finally
             {
                 Interlocked.Exchange(ref _aiSummaryRefreshInProgress, 0);
+            }
+        }
+
+        private async Task RefreshLiveTrafficDensityAsync()
+        {
+            if (_disposed || Interlocked.Exchange(ref _liveTrafficDensityRefreshInProgress, 1) != 0)
+                return;
+
+            try
+            {
+                var profileCameraIds = _viewModel.CameraGroups
+                    .SelectMany(group => group.Cameras ?? Enumerable.Empty<Camera>())
+                    .Where(camera => camera != null && !string.IsNullOrWhiteSpace(camera.camID))
+                    .Select(camera => camera.camID.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (profileCameraIds.Count == 0)
+                {
+                    if (!_disposed && AiTrafficDensityText != null)
+                        AiTrafficDensityText.Text = "0";
+                    return;
+                }
+
+                var counts = await ApiManager.Instance.GetLiveFrameDetectionCountsAsync(profileCameraIds, _lifetime.Token);
+                if (!_disposed && counts != null && AiTrafficDensityText != null)
+                    AiTrafficDensityText.Text = counts.TotalDetectionCount.ToString();
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _liveTrafficDensityRefreshInProgress, 0);
             }
         }
 
@@ -1785,6 +1857,26 @@ namespace V3SClient.UI.Views
 
         private void ToggleSidebar_Click(object sender, RoutedEventArgs e)
         {
+            // In grid fullscreen the sidebar was always kept Collapsed, so
+            // the existing header opener could never reveal the camera list.
+            // Keep the wall fullscreen and only reserve the right column when
+            // the user explicitly opens the list.
+            if (_gridFullscreen)
+            {
+                var showSidebar = CameraSidebar.Visibility != Visibility.Visible;
+                RunGridGeometryTransition(new Action(() =>
+                {
+                    CameraSidebar.Visibility = showSidebar ? Visibility.Visible : Visibility.Collapsed;
+                    SidebarColumn.MinWidth = showSidebar ? 210 : 0;
+                    SidebarColumn.MaxWidth = showSidebar ? 320 : double.PositiveInfinity;
+                    SidebarColumn.Width = showSidebar ? new GridLength(0.20, GridUnitType.Star) : new GridLength(0);
+                    Grid.SetColumnSpan(CameraGridHost, showSidebar ? 1 : 2);
+                    UpdateCameraSidebarPlacement();
+                    UpdateSidebarOpenButtons();
+                }), suspendVideoSurfaces: false);
+                return;
+            }
+
             var collapse = !_cameraSidebarCollapsed;
             RunGridGeometryTransition(new Action(() =>
             {
@@ -1841,7 +1933,9 @@ namespace V3SClient.UI.Views
             Grid.SetColumnSpan(CameraGridHost, useHeaderTab ? 2 : 1);
             HeaderTopOverflowPanel.Visibility = Visibility.Visible;
             HeaderRightAiControls.Visibility = aiSummaryOpen ? Visibility.Visible : Visibility.Collapsed;
-            PlaceHeaderOverflow(aiSummaryOpen);
+            // Dấu ba chấm và nút danh sách camera luôn thuộc thanh tiện ích
+            // phía trên; không di chuyển xuống vùng thông báo AI khi mở AI.
+            PlaceHeaderOverflow(false);
             // The camera list begins at the same Y position as the grid;
             // it must not be pulled over the AI summary/header.
             CameraSidebar.Margin = new Thickness(0);
@@ -1918,6 +2012,8 @@ namespace V3SClient.UI.Views
             _deviceStatusRefreshTimer.Tick -= DeviceStatusRefreshTimer_Tick;
             _aiSummaryRefreshTimer.Stop();
             _aiSummaryRefreshTimer.Tick -= AiSummaryRefreshTimer_Tick;
+            _liveTrafficDensityRefreshTimer.Stop();
+            _liveTrafficDensityRefreshTimer.Tick -= LiveTrafficDensityRefreshTimer_Tick;
             _liveToastTimer.Stop();
             _liveToastTimer.Tick -= LiveToastTimer_Tick;
             LivePageHeader.SizeChanged -= LivePageHeader_SizeChanged;
