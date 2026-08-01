@@ -2,7 +2,7 @@
 
 ## Nền tảng và kiến trúc
 
-- Ứng dụng chính: `V3SClient/V3SClient.csproj`.
+- Ứng dụng chính: `iVMS/iVMS.csproj`.
 - Loại ứng dụng: WPF `WinExe`, .NET Framework 4.8.
 - Kiến trúc phát hành: x64 (`Release|x64`).
 - File thực thi sau build: `V3SClient/bin/Release/iVMS.exe`.
@@ -21,8 +21,8 @@ Bộ cài kiểm tra/cài .NET Framework 4.8 và Visual C++ Runtime x64.
 ## Restore, build và tạo bộ cài
 
 ```powershell
-nuget restore .\V3S.sln
-msbuild .\V3SClient\V3SClient.csproj /t:Rebuild /p:Configuration=Release /p:Platform=x64
+nuget restore .\iVMS.sln
+msbuild .\iVMS\iVMS.csproj /t:Rebuild /p:Configuration=Release /p:Platform=x64
 .\scripts\Build-Installer.ps1 -OutputDirectory .\installer\output
 ```
 

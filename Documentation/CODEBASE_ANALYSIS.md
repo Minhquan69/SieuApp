@@ -21,7 +21,7 @@ Commit `afc3e02` removed registration features. Its parent contains two distinct
 
 ## Existing WPF application
 
-`V3S.sln` contains `V3SClient` and `UnitTest`. `V3SClient` is a .NET Framework 4.8 WPF executable, root namespace `V3SClient`. `App` opens `LoginWindow`, then `MainWindow`. The shell is largely code-behind driven and uses `MainWindow.SelectdPage` for navigation.
+`iVMS.sln` contains `iVMS` and `UnitTest`. `iVMS` is a .NET Framework 4.8 WPF executable that retains the `V3SClient` root namespace for source compatibility. `App` opens `LoginWindow`, then `MainWindow`. The shell is largely code-behind driven and uses `MainWindow.SelectdPage` for navigation.
 
 Key extension infrastructure: `viewModels\VMBase`, `libs\RelayCommand`, `libs\AsyncRelayCommand`, `libs\ApiManager`, `libs\LoggerManager`, `libs\ToastManager`, `Services`, `styles`, and `UI\Converters`. `ApiManager` is a high-impact singleton (GitNexus: 107 upstream dependants; critical risk), so it must not be changed without a dedicated impact review.
 

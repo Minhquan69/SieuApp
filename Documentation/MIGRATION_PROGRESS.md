@@ -28,7 +28,7 @@
 
 | Module | Source evidence | Target evidence | Status | Notes |
 | --- | --- | --- | --- | --- |
-| Repository and project baseline | Current web and WPF repositories indexed | `V3S.sln`, `V3SClient.csproj`, .NET Framework 4.8 | Complete | Existing uncommitted WPF changes preserved |
+| Repository and project baseline | Current web and WPF repositories indexed | `iVMS.sln`, `iVMS.csproj`, .NET Framework 4.8 | Complete | Existing uncommitted WPF changes preserved |
 | Authentication/client selection | Login, profile store, `RequireAuth` | `LoginWindow`, `ApiManager`, `GlobalUserInfo` | Analyzed | No changes |
 | Live monitoring | `/live`, live stores, stream service, metadata WebSocket | `VLiveStream`, `ViewCamera`, stream/services | Implemented side-by-side | New `_v3` page/view models/tile/player/services only; existing V3 controls unchanged |
 | Map | `/emap`, camera store | `EMap`, `SystemAndMap` | Analyzed | No changes |

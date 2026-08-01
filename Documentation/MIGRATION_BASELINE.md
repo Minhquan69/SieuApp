@@ -8,8 +8,8 @@
 | Base working-tree entries at copy time | 37 (preserved; none discarded) |
 | Isolated migration copy | `C:\iVistatech\SieuDuAn\iVista-Client-Application-Migrated` |
 | Copy created | 2026-07-13, Asia/Saigon |
-| Solution | `V3S.sln` |
-| Target project | `V3SClient\V3SClient.csproj` |
+| Solution | `iVMS.sln` |
+| Target project | `iVMS\iVMS.csproj` |
 
 ## Copy exclusions
 

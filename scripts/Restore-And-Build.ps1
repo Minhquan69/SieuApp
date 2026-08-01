@@ -8,7 +8,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$solution = Join-Path $repoRoot 'V3S.sln'
+$solution = Join-Path $repoRoot 'iVMS.sln'
 $vsWhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
 
 if (-not (Test-Path $solution)) {

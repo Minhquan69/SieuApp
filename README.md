@@ -1,4 +1,4 @@
-# iVista Client Application
+# iVMS
 
 Windows desktop client for iVista VMS. The application targets **.NET Framework 4.8** and must be built on Windows with Visual Studio/MSBuild; `dotnet build` is not the supported build path for this legacy WPF solution.
 
@@ -9,7 +9,7 @@ Windows desktop client for iVista VMS. The application targets **.NET Framework 
 
    ```powershell
    git clone --branch VMS-Application https://github.com/iVista-Dev/iVista-Client-Application.git
-   cd iVista-Client-Application
+   cd iVMS
    ```
 
 3. From PowerShell, restore and build the solution:
@@ -19,18 +19,18 @@ Windows desktop client for iVista VMS. The application targets **.NET Framework 
    ```
 
    Use `-Configuration Debug` for a Debug build, or `-SkipBuild` to restore packages only.
-4. Open `V3S.sln` in Visual Studio. Set `V3SClient` as the startup project and select the `x64` platform before running.
+4. Open `iVMS.sln` in Visual Studio. Set `iVMS` as the startup project and select the `x64` platform before running.
 
 ## Runtime requirements
 
-- **GStreamer MSVC x86_64 runtime** is required for Live View. Install a compatible runtime and set `GStreamerRoot_v3` in `V3SClient/App.config` to its root directory. The directory must contain `bin` and `lib\gstreamer-1.0`.
+- **GStreamer MSVC x86_64 runtime** is required for Live View. Install a compatible runtime and set `GStreamerRoot_v3` in `iVMS/App.config` to its root directory. The directory must contain `bin` and `lib\gstreamer-1.0`.
 - The configured API, metadata WebSocket, and camera-stream services must be reachable. These values are environment-specific; do not commit production credentials or endpoints.
 - Microsoft Edge WebView2 Runtime is required for embedded web views. It is normally installed with current Windows/Edge, but can be installed separately if missing.
 
 ## Known setup notes
 
 - The repository intentionally does not commit restored NuGet packages. The build script runs MSBuild restore to download them.
-- GitHub warns that `V3SClient/images/gif/smart_network.gif` is 86.66 MB. Install Git LFS before adding/replacing large binary assets.
+- GitHub warns that `iVMS/images/gif/smart_network.gif` is 86.66 MB. Install Git LFS before adding/replacing large binary assets.
 - `System.Data.SqlClient` 4.8.3 has published security advisories. Upgrade it only after compatibility testing.
 
 See [Documentation/BUILD_AND_RUN.md](Documentation/BUILD_AND_RUN.md) for detailed build, runtime, and troubleshooting instructions.

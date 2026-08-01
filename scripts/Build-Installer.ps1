@@ -8,7 +8,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
-$projectRoot = Join-Path $repoRoot 'V3SClient'
+$projectRoot = Join-Path $repoRoot 'iVMS'
 $installerRoot = Join-Path $repoRoot 'installer'
 $stageRoot = Join-Path $installerRoot 'stage'
 $appStage = Join-Path $stageRoot 'App'
@@ -52,9 +52,9 @@ if (Test-Path $stageRoot) {
 New-Item -ItemType Directory -Force $appStage, $gstStage, $OutputDirectory | Out-Null
 
 Write-Host 'Khôi phục NuGet và build Release x64...'
-& $msBuild (Join-Path $repoRoot 'V3S.sln') '-t:Restore' '-m' '-p:RestorePackagesConfig=true'
+& $msBuild (Join-Path $repoRoot 'iVMS.sln') '-t:Restore' '-m' '-p:RestorePackagesConfig=true'
 if ($LASTEXITCODE -ne 0) { throw "NuGet restore lỗi: $LASTEXITCODE" }
-& $msBuild (Join-Path $projectRoot 'V3SClient.csproj') '-t:Rebuild' '-m' '-p:Configuration=Release' '-p:Platform=x64' "-p:OutDir=$appStage\"
+& $msBuild (Join-Path $projectRoot 'iVMS.csproj') '-t:Rebuild' '-m' '-p:Configuration=Release' '-p:Platform=x64' "-p:OutDir=$appStage\"
 if ($LASTEXITCODE -ne 0) { throw "Build Release lỗi: $LASTEXITCODE" }
 
 Copy-Item (Join-Path $projectRoot 'icon.ico') $appStage -Force

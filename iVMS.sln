@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.9.34723.18
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "V3SClient", "V3SClient\V3SClient.csproj", "{3801FD7C-B029-46A0-A4CF-0CB0147DA3EE}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "iVMS", "iVMS\iVMS.csproj", "{3801FD7C-B029-46A0-A4CF-0CB0147DA3EE}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnitTest", "UnitTest\UnitTest.csproj", "{EAE7402F-C46C-49A5-8F45-12C3EAC746D3}"
 EndProject
