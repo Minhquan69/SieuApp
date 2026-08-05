@@ -179,6 +179,7 @@ function showConfirmDialog(message, title = 'Xác nhận') {
 const markers = {};
 const overlapClusterMarkers = {};
 const cameraData = {};  // Lưu toàn bộ thông tin camera
+const isOverviewMap = window.iVistaMapOverview === true;
 
 
 let trackingCamId = null;
@@ -600,6 +601,10 @@ window.togglePathTracking = function() {
 
 function closeRadial() {
     document.querySelectorAll('.radial-menu.open').forEach(r => r.classList.remove('open'));
+    Object.values(markers).forEach(marker => {
+        const element = marker && marker.getElement();
+        if (element) element.style.zIndex = '';
+    });
 }
 
 function layoutRadialMenu(radial, markerEl) {
@@ -950,6 +955,7 @@ function updateCameras(camList) {
 
             markerEl.addEventListener('click', (e) => {
                 e.stopPropagation();
+                if (isOverviewMap) return;
                 closeRadial();
                 // Do not force zoom 15: it made a zoomed-in map jump back out.
                 window.map.flyTo({ center: ll });
@@ -970,6 +976,12 @@ function updateCameras(camList) {
                     radial = createRadialMenu(cam.camID);
                     markerEl.appendChild(radial);
                 }
+
+                // A radial menu belongs above all markers and their labels.
+                // Without raising the marker container, a nearby pin can paint
+                // over an action and make it impossible to click.
+                markerEl.style.zIndex = '2001';
+                radial.style.zIndex = '2002';
 
                 layoutRadialMenu(radial, markerEl);
                 
@@ -1064,7 +1076,10 @@ function applyOverlapClusters(camList) {
 
     if (camList.length <= 1) return;
 
-    const thresholdPx = 28;
+    // A pin is 36 x 48 px. 28 px only detected exact overlaps, leaving
+    // vertically adjacent pins visually stacked. Group before their full
+    // hit areas touch so a map never renders one camera on top of another.
+    const thresholdPx = 58;
     const points = camList.map(cam => {
         const p = window.map.project([cam.lng, cam.lat]);
         return { cam, x: p.x, y: p.y };
@@ -1093,7 +1108,9 @@ function applyOverlapClusters(camList) {
             // around their shared point. This is local to the browser so it
             // never relies on a delayed native map-data refresh.
             if (getVisibleMapWidthMeters() <= CAMERA_LABEL_MAX_VIEW_WIDTH_METERS) {
-                const radius = 42 + Math.min(group.length * 2, 20);
+                // Keep both the 48px pins and their labels readable when a
+                // close zoom expands a cluster into its members.
+                const radius = 62 + Math.min(group.length * 4, 28);
                 group.forEach((entry, index) => {
                     const angle = (Math.PI * 2 * index) / group.length - Math.PI / 2;
                     const marker = markers[entry.cam.camID];
@@ -1301,6 +1318,10 @@ function updatePositions(positions) {
 window.map.on('style.load', initPathLayers);
 
 window.map.on('zoom', () => {
+    // Recompute grouping for the current projected pixel positions. Without
+    // this, pins that were safe at the previous zoom stayed stacked after a
+    // user zoomed in or out until the next native camera-status refresh.
+    applyOverlapClusters(Object.values(cameraData));
     refreshCameraMarkerLabels();
     if(window.notifyCSharp) {
         window.notifyCSharp('zoomChanged', window.map.getZoom());

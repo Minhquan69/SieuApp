@@ -211,6 +211,59 @@ namespace V3SClient.UI.Views
         }
 
         public LiveSlotViewModel_v3 Slot { get; private set; }
+        private bool _compactDashboardMode;
+        public bool CompactDashboardMode
+        {
+            get { return _compactDashboardMode; }
+            set { _compactDashboardMode = value; if (IsLoaded) ApplyCompactDashboardMode(); }
+        }
+
+        private void ApplyCompactDashboardMode()
+        {
+            if (!_compactDashboardMode) return;
+            ConnectButton.Visibility = DisconnectButton.Visibility = StreamSelector.Visibility = Visibility.Collapsed;
+            MuteButton.Visibility = SnapshotButton.Visibility = FullscreenButton.Visibility = Visibility.Collapsed;
+            // Dashboard quick view keeps only the lightweight spinner. The
+            // full live page retains its connection/status messages.
+            LoadingText.Visibility = Visibility.Collapsed;
+            PendingTitle.Visibility = Visibility.Collapsed;
+            PendingStreamText.Visibility = Visibility.Collapsed;
+            CameraBadgeInline.Padding = new Thickness(4, 2, 4, 2);
+            CameraBadgeInline.Margin = new Thickness(5);
+            CameraNameInline.FontSize = 9;
+            CameraNameInline.MaxWidth = 86;
+            HideOverlayContent(OfflineOverlay);
+            HideOverlayContent(ErrorOverlay);
+            ShowCompactConnectionStatus(OfflineOverlay);
+            ShowCompactConnectionStatus(ErrorOverlay);
+            RemoveButton.Content = "×";
+            RemoveButton.FontSize = 18;
+            RemoveButton.Foreground = Brushes.White;
+            RemoveButton.Width = 22;
+            RemoveButton.Height = 22;
+            RemoveButton.Margin = new Thickness(0);
+            RemoveButton.Background = new SolidColorBrush(Color.FromArgb(150, 0, 0, 0));
+            RemoveButton.BorderBrush = new SolidColorBrush(Color.FromArgb(90, 255, 255, 255));
+            ActionBar.Background = Brushes.Transparent;
+        }
+
+        private static void HideOverlayContent(Border overlay)
+        {
+            var panel = overlay == null ? null : overlay.Child as Panel;
+            if (panel == null) return;
+            foreach (UIElement child in panel.Children) child.Visibility = Visibility.Collapsed;
+        }
+
+        private static void ShowCompactConnectionStatus(Border overlay)
+        {
+            var panel = overlay == null ? null : overlay.Child as Panel;
+            var title = panel != null && panel.Children.Count > 1 ? panel.Children[1] as TextBlock : null;
+            if (title == null) return;
+            title.Text = "Mất kết nối";
+            title.FontSize = 11;
+            title.Foreground = Brushes.White;
+            title.Visibility = Visibility.Visible;
+        }
 
         /// <summary>
         /// A slot is a mutable view-model: selecting a camera fills the same
@@ -247,6 +300,7 @@ namespace V3SClient.UI.Views
             _boundCamera = nextCamera;
             DataContext = slot;
             RefreshVisuals();
+            ApplyCompactDashboardMode();
             if (slot == null || slot.Camera == null)
             {
                 Player.Camera = null;
@@ -708,7 +762,7 @@ namespace V3SClient.UI.Views
             Slot.RetryCount++;
             Slot.State = LiveConnectionState_v3.Retrying;
             _retryTimer.Stop();
-            _retryTimer.Interval = TimeSpan.FromSeconds(15);
+            _retryTimer.Interval = TimeSpan.FromSeconds(_compactDashboardMode ? 5 : 15);
             _retryTimer.Start();
         }
 
@@ -748,6 +802,7 @@ namespace V3SClient.UI.Views
             // while the iVista window is inactive.
             if (_disposed || _popupPlacementSuspended || !IsLoaded || _ownerWindow == null ||
                 !_ownerWindow.IsActive || ActionBar.Visibility != Visibility.Visible) return;
+            ApplyCompactDashboardMode();
             OpenCameraBadgeIfActive();
             SafeStopHideActionsTimer();
             ActionPopup.IsOpen = true;
@@ -782,10 +837,16 @@ namespace V3SClient.UI.Views
                 // edge, independent of the tile's previous layout/fullscreen
                 // size. Popup offsets are WPF DIPs, so convert from screen
                 // device pixels using the current presentation source.
-                var bottomCenter = TileBorder.PointToScreen(new Point(TileBorder.ActualWidth / 2.0, TileBorder.ActualHeight));
-                var dipPoint = source.CompositionTarget.TransformFromDevice.Transform(bottomCenter);
-                var x = dipPoint.X - (ActionBar.ActualWidth / 2.0);
-                var y = dipPoint.Y - ActionBar.ActualHeight - 10.0;
+                var anchor = _compactDashboardMode
+                    ? TileBorder.PointToScreen(new Point(TileBorder.ActualWidth, 0))
+                    : TileBorder.PointToScreen(new Point(TileBorder.ActualWidth / 2.0, TileBorder.ActualHeight));
+                var dipPoint = source.CompositionTarget.TransformFromDevice.Transform(anchor);
+                var x = _compactDashboardMode
+                    ? dipPoint.X - ActionBar.ActualWidth - 1.0
+                    : dipPoint.X - (ActionBar.ActualWidth / 2.0);
+                var y = _compactDashboardMode
+                    ? dipPoint.Y + 1.0
+                    : dipPoint.Y - ActionBar.ActualHeight - 10.0;
                 if (Math.Abs(ActionPopup.HorizontalOffset - x) > 0.1 ||
                     Math.Abs(ActionPopup.VerticalOffset - y) > 0.1)
                 {
@@ -1092,6 +1153,16 @@ namespace V3SClient.UI.Views
             // tile action bar mirrors the web actions (connect, disconnect,
             // fullscreen and remove) only.
             StreamSelector.Visibility = Visibility.Collapsed;
+            if (_compactDashboardMode)
+            {
+                // RefreshVisuals runs again while a stream is connecting and
+                // would otherwise briefly bring Disconnect back into view.
+                ConnectButton.Visibility = Visibility.Collapsed;
+                DisconnectButton.Visibility = Visibility.Collapsed;
+                MuteButton.Visibility = Visibility.Collapsed;
+                SnapshotButton.Visibility = Visibility.Collapsed;
+                FullscreenButton.Visibility = Visibility.Collapsed;
+            }
             _changingStream = false;
             OpenCameraBadgeIfActive();
         }

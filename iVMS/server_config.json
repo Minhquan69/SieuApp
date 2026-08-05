@@ -1,5 +1,15 @@
 {
   "ApiUrl": "https://portal.ivistatech.vn",
   "StreamApiUrl": "http://localhost:3000/streams",
+  "StorageUrl": "http://192.168.1.199:8011",
+  "MapUrl": "https://a.tile.openstreetmap.org",
+  "MetadataWsUrl": "ws://192.168.1.199:8701/ws/metadata",
+  "FrameDetectionCountsApiUrl": "http://192.168.1.199:8080/api/frame-detection-counts",
+  "LiveFrameDetectionCountsApiUrl": "http://192.168.1.199:8080/api/live-frame-detection-counts",
+  "CameraVehicleCountsApiUrl": "http://192.168.1.199:8080/api/camera-vehicle-counts",
+  "CameraHealthTimeseriesApiUrl": "https://portal.ivistatech.vn/api/camera-health/timeseries",
+  "AiEventFeedPath": "http://192.168.1.199:8080/api/object-crops/history",
+  "StorageAccessUrlsApiUrl": "http://192.168.1.199:8011/api/storage/get-access-urls",
+  "StorageAccessUrlsApiToken": "Bearer st_5e5c88eea90f2a81b1a8100f9ab7a85b",
   "NetworkMode": "Public"
 }

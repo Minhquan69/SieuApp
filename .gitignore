@@ -13,6 +13,7 @@
 
 # Local deployment secrets. Never commit these files.
 /V3SClient/device_status.local.json
+/iVMS/device_status.local.json
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs

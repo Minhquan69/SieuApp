@@ -7,6 +7,11 @@ namespace V3SClient.UI.Views
 {
     public partial class MapPage_v3 : UserControl
     {
+        /// <summary>Opt-in isolated software rendering for compact map hosts.</summary>
+        public bool UseSoftwareRendering { get; set; }
+        /// <summary>Hides the map's camera-list sidebar in overview hosts.</summary>
+        public bool CompactOverviewMode { get; set; }
+
         public MapPage_v3()
         {
             InitializeComponent();
@@ -15,7 +20,10 @@ namespace V3SClient.UI.Views
         }
         private void OnLoaded(object sender, RoutedEventArgs e)
         {
-            if (MapHost.Content == null) MapHost.Navigate(new VLivePosition(GlobalSystem.Instance.CameraGroups.CamGroupList));
+            if (MapHost.Content == null) MapHost.Navigate(new VLivePosition(
+                GlobalSystem.Instance.CameraGroups.CamGroupList,
+                UseSoftwareRendering,
+                CompactOverviewMode));
         }
     }
 }

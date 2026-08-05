@@ -29,6 +29,9 @@ namespace V3SClient.UI.Views
 
         private bool _isMapLoaded = false;
         private Microsoft.Web.WebView2.Core.CoreWebView2Environment _webViewEnv;
+        private readonly bool _useSoftwareRendering;
+        private readonly bool _compactOverviewMode;
+        private bool _sidebarHiddenForSingleCamera;
         private double _currentZoom = 12.0;
 
         public event PropertyChangedEventHandler PropertyChanged;
@@ -50,9 +53,19 @@ namespace V3SClient.UI.Views
 
         private ObservableCollection<viewModels.VMTalkGroup> _rawGroupList;
 
-        public VLivePosition(ObservableCollection<viewModels.VMTalkGroup> cam_group_list)
+        public VLivePosition(ObservableCollection<viewModels.VMTalkGroup> cam_group_list, bool useSoftwareRendering = false, bool compactOverviewMode = false)
         {
             InitializeComponent();
+            _useSoftwareRendering = useSoftwareRendering;
+            _compactOverviewMode = compactOverviewMode;
+            if (_compactOverviewMode)
+            {
+                SidebarColumn.MinWidth = 0;
+                SidebarColumn.MaxWidth = 0;
+                SidebarColumn.Width = new GridLength(0);
+                CameraSidebar.Visibility = Visibility.Collapsed;
+                SidebarOpenButton.Visibility = Visibility.Collapsed;
+            }
             DataContext = this;
             _rawGroupList = cam_group_list;
             CameraList = new ObservableCollection<models.Camera>(
@@ -60,6 +73,7 @@ namespace V3SClient.UI.Views
                               .SelectMany(group => group.Cameras));
             Sidebar.Refresh(_rawGroupList, CameraList);
             Sidebar.CameraStatesChanged += Sidebar_CameraStatesChanged;
+            ApplySidebarCameraCountPolicy();
 
             this.Loaded += LoadMapAsync;
             this.Unloaded += VLivePosition_Unloaded;
@@ -157,7 +171,9 @@ namespace V3SClient.UI.Views
         {
             try
             {
-                var env = await V3SClient.libs.WebViewEnvHelper.GetSharedEnvironmentAsync();
+                var env = _useSoftwareRendering
+                    ? await V3SClient.libs.WebViewEnvHelper.GetSoftwareMapEnvironmentAsync()
+                    : await V3SClient.libs.WebViewEnvHelper.GetSharedEnvironmentAsync();
                 _webViewEnv = env;
                 await mapWebView.EnsureCoreWebView2Async(env);
                 
@@ -170,7 +186,8 @@ namespace V3SClient.UI.Views
                 mapWebView.CoreWebView2.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
                 mapWebView.CoreWebView2.WebResourceRequested += CoreWebView2_WebResourceRequested;
 
-                mapWebView.Source = new Uri("http://ivista.map/base_map.html?mode=live");
+                mapWebView.Source = new Uri("http://ivista.map/base_map.html?mode=live" +
+                    (_compactOverviewMode ? "&overview=1" : string.Empty));
                 System.Diagnostics.Debug.WriteLine("[VLivePosition] WebView2 initialized with Embedded Resources.");
             }
             catch (Exception ex)
@@ -763,11 +780,41 @@ namespace V3SClient.UI.Views
         {
             this.CameraList = new ObservableCollection<models.Camera>(activeCameras ?? new List<models.Camera>());
             Sidebar.Refresh(_rawGroupList, CameraList);
+            ApplySidebarCameraCountPolicy();
             Dispatcher.Invoke(() => SendCamerasToMap());
+        }
+
+        private void ApplySidebarCameraCountPolicy()
+        {
+            if (_compactOverviewMode) return;
+
+            var hasSingleCamera = CameraList == null || CameraList.Count <= 1;
+            if (hasSingleCamera)
+            {
+                _sidebarHiddenForSingleCamera = true;
+                SidebarColumn.MinWidth = 0;
+                SidebarColumn.MaxWidth = 0;
+                SidebarColumn.Width = new GridLength(0);
+                CameraSidebar.Visibility = Visibility.Collapsed;
+                SidebarOpenButton.Visibility = Visibility.Collapsed;
+            }
+            else if (_sidebarHiddenForSingleCamera)
+            {
+                _sidebarHiddenForSingleCamera = false;
+                SidebarColumn.MinWidth = 210;
+                SidebarColumn.MaxWidth = 320;
+                SidebarColumn.Width = new GridLength(0.20, GridUnitType.Star);
+                CameraSidebar.Visibility = Visibility.Visible;
+                SidebarOpenButton.Visibility = Visibility.Collapsed;
+            }
+
+            if (_isMapLoaded)
+                _ = mapWebView.ExecuteScriptAsync("window.map && window.map.resize && window.map.resize();");
         }
 
         private void ToggleSidebar_Click(object sender, RoutedEventArgs e)
         {
+            if (_sidebarHiddenForSingleCamera) return;
             bool collapsed = CameraSidebar.Visibility == Visibility.Visible;
             SidebarColumn.MinWidth = collapsed ? 0 : 210;
             SidebarColumn.MaxWidth = collapsed ? double.PositiveInfinity : 320;

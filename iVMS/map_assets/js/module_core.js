@@ -8,6 +8,12 @@ window.notifyCSharp = function(action, data) {
     }
 };
 
+// The dashboard uses the same map engine in a compact read-only mode. It
+// retains MapLibre's zoom / compass / 2D controls but omits the camera-list
+// control and marker action menus; users open the full Map page for those.
+window.iVistaMapOverview = new URLSearchParams(window.location.search).get('overview') === '1';
+if (window.iVistaMapOverview) document.documentElement.classList.add('map-overview');
+
 window.onerror = function(msg, url, line, col, error) {
     notifyCSharp('error', `JS GLOBAL ERROR: ${msg} at ${url}:${line}:${col}`);
     return false;
@@ -152,7 +158,7 @@ class DirectionLockToggle {
     onRemove() { this._el.remove(); }
 }
 
-window.map.addControl(new CameraListToggle(), 'top-right');
+if (!window.iVistaMapOverview) window.map.addControl(new CameraListToggle(), 'top-right');
 window.map.addControl(new DirectionLockToggle(), 'top-right');
 window.map.addControl(new maplibregl.ScaleControl({ maxWidth: 200, unit: 'metric' }), 'bottom-left');
 

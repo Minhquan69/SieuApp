@@ -70,6 +70,36 @@ namespace V3SClient.libs
             [JsonProperty("camera_count")]
             public int CameraCount { get; set; }
         }
+
+        public sealed class CameraVehicleCountsResponse
+        {
+            [JsonProperty("custom_total")]
+            public int CustomTotal { get; set; }
+
+            [JsonProperty("cameras")]
+            public List<CameraVehicleCount> Cameras { get; set; } = new List<CameraVehicleCount>();
+
+            /// <summary>
+            /// Returns the custom-range value reported for the requested camera.
+            /// Falling back to custom_total keeps this compatible with API
+            /// deployments that return one camera but omit the cameras array.
+            /// </summary>
+            public int GetCustomCount(string cameraId)
+            {
+                var camera = Cameras == null ? null : Cameras.FirstOrDefault(item =>
+                    item != null && string.Equals(item.CameraId, cameraId, StringComparison.OrdinalIgnoreCase));
+                return camera == null ? CustomTotal : camera.CustomCount;
+            }
+        }
+
+        public sealed class CameraVehicleCount
+        {
+            [JsonProperty("cam_id")]
+            public string CameraId { get; set; }
+
+            [JsonProperty("custom_count")]
+            public int CustomCount { get; set; }
+        }
         private static readonly Lazy<ApiManager> _instance = new Lazy<ApiManager>(() => new ApiManager());
         public static ApiManager Instance => _instance.Value;
 
@@ -83,11 +113,16 @@ namespace V3SClient.libs
         private readonly HttpClient _deviceStatusHttpClient;
 
         // Backend Domain (The Center Server entry point)
-        private string _baseUrl = "http://localhost:8100";
-        private string _streamApiUrl = "http://localhost:3000/streams";
+        private string _baseUrl;
+        private string _streamApiUrl;
         private string _deviceStatusApiUrl;
-        private string _frameDetectionCountsApiUrl = "http://192.168.1.12:8080/api/frame-detection-counts";
-        private string _liveFrameDetectionCountsApiUrl = "http://192.168.1.12:8080/api/live-frame-detection-counts";
+        private string _frameDetectionCountsApiUrl;
+        private string _liveFrameDetectionCountsApiUrl;
+        private string _cameraVehicleCountsApiUrl;
+        private string _cameraHealthTimeseriesApiUrl;
+        private string _aiEventFeedPath;
+        private string _storageAccessUrlsApiUrl;
+        private string _storageAccessUrlsApiToken;
         // This gateway key is deliberately separate from _backendToken.
         // _backendToken is replaced by the interactive-login JWT, whereas the
         // status gateway always expects its own X-API-Key.
@@ -101,13 +136,13 @@ namespace V3SClient.libs
         private string _networkMode = "Public"; // "Public" or "Internal"
 
         // Local cache for primary storage (backward compatibility)
-        private string _storageUrl = "http://localhost:8012";
+        private string _storageUrl;
         private string _storageToken;
         private string _assetsUrl;
         private string _assetsToken;
         private string _reportUrl;
         private string _reportToken;
-        private string _mapUrl = "https://a.tile.Topenstreetmap.org";
+        private string _mapUrl;
         private string _redisUrl;
 
        
@@ -131,6 +166,9 @@ namespace V3SClient.libs
         private const string DeviceStatusApiUrlEnvironmentVariable = "IVISTA_DEVICE_STATUS_API_URL";
         private const string DeviceStatusApiKeyEnvironmentVariable = "IVISTA_DEVICE_STATUS_API_KEY";
         private const string FrameDetectionCountsApiUrlEnvironmentVariable = "IVISTA_FRAME_DETECTION_COUNTS_API_URL";
+        private const string LiveFrameDetectionCountsApiUrlEnvironmentVariable = "IVISTA_LIVE_FRAME_DETECTION_COUNTS_API_URL";
+        private const string CameraVehicleCountsApiUrlEnvironmentVariable = "IVISTA_CAMERA_VEHICLE_COUNTS_API_URL";
+        private const string AiEventFeedPathEnvironmentVariable = "IVISTA_AI_EVENT_FEED_PATH";
 
         private ApiManager()
         {
@@ -201,6 +239,24 @@ namespace V3SClient.libs
                 url = Environment.GetEnvironmentVariable(FrameDetectionCountsApiUrlEnvironmentVariable, EnvironmentVariableTarget.User);
             if (!string.IsNullOrWhiteSpace(url))
                 _frameDetectionCountsApiUrl = url.Trim().TrimEnd('/');
+
+            var liveUrl = Environment.GetEnvironmentVariable(LiveFrameDetectionCountsApiUrlEnvironmentVariable, EnvironmentVariableTarget.Process);
+            if (string.IsNullOrWhiteSpace(liveUrl))
+                liveUrl = Environment.GetEnvironmentVariable(LiveFrameDetectionCountsApiUrlEnvironmentVariable, EnvironmentVariableTarget.User);
+            if (!string.IsNullOrWhiteSpace(liveUrl))
+                _liveFrameDetectionCountsApiUrl = liveUrl.Trim().TrimEnd('/');
+
+            var vehicleCountsUrl = Environment.GetEnvironmentVariable(CameraVehicleCountsApiUrlEnvironmentVariable, EnvironmentVariableTarget.Process);
+            if (string.IsNullOrWhiteSpace(vehicleCountsUrl))
+                vehicleCountsUrl = Environment.GetEnvironmentVariable(CameraVehicleCountsApiUrlEnvironmentVariable, EnvironmentVariableTarget.User);
+            if (!string.IsNullOrWhiteSpace(vehicleCountsUrl))
+                _cameraVehicleCountsApiUrl = vehicleCountsUrl.Trim().TrimEnd('/');
+
+            var feedPath = Environment.GetEnvironmentVariable(AiEventFeedPathEnvironmentVariable, EnvironmentVariableTarget.Process);
+            if (string.IsNullOrWhiteSpace(feedPath))
+                feedPath = Environment.GetEnvironmentVariable(AiEventFeedPathEnvironmentVariable, EnvironmentVariableTarget.User);
+            if (!string.IsNullOrWhiteSpace(feedPath))
+                _aiEventFeedPath = feedPath.Trim();
         }
 
         /// <summary>
@@ -242,12 +298,39 @@ namespace V3SClient.libs
                     var config = JsonConvert.DeserializeObject<ClientConfig>(json);
                     if (config != null)
                     {
-                        _baseUrl = config.ApiUrl;
+                        _baseUrl = string.IsNullOrWhiteSpace(config.ApiUrl) ? null : config.ApiUrl.Trim().TrimEnd('/');
                         if (!string.IsNullOrWhiteSpace(config.StreamApiUrl))
                             _streamApiUrl = config.StreamApiUrl.TrimEnd('/');
+                        _storageUrl = string.IsNullOrWhiteSpace(config.StorageUrl)
+                            ? null
+                            : config.StorageUrl.Trim().TrimEnd('/');
+                        _mapUrl = string.IsNullOrWhiteSpace(config.MapUrl)
+                            ? null
+                            : config.MapUrl.Trim().TrimEnd('/');
                         _metadataWsUrl = string.IsNullOrWhiteSpace(config.MetadataWsUrl)
                             ? null
                             : config.MetadataWsUrl.Trim();
+                        _frameDetectionCountsApiUrl = string.IsNullOrWhiteSpace(config.FrameDetectionCountsApiUrl)
+                            ? null
+                            : config.FrameDetectionCountsApiUrl.Trim().TrimEnd('/');
+                        _liveFrameDetectionCountsApiUrl = string.IsNullOrWhiteSpace(config.LiveFrameDetectionCountsApiUrl)
+                            ? null
+                            : config.LiveFrameDetectionCountsApiUrl.Trim().TrimEnd('/');
+                        _cameraVehicleCountsApiUrl = string.IsNullOrWhiteSpace(config.CameraVehicleCountsApiUrl)
+                            ? null
+                            : config.CameraVehicleCountsApiUrl.Trim().TrimEnd('/');
+                        _cameraHealthTimeseriesApiUrl = string.IsNullOrWhiteSpace(config.CameraHealthTimeseriesApiUrl)
+                            ? null
+                            : config.CameraHealthTimeseriesApiUrl.Trim().TrimEnd('/');
+                        _aiEventFeedPath = string.IsNullOrWhiteSpace(config.AiEventFeedPath)
+                            ? null
+                            : config.AiEventFeedPath.Trim();
+                        _storageAccessUrlsApiUrl = string.IsNullOrWhiteSpace(config.StorageAccessUrlsApiUrl)
+                            ? null
+                            : config.StorageAccessUrlsApiUrl.Trim().TrimEnd('/');
+                        _storageAccessUrlsApiToken = string.IsNullOrWhiteSpace(config.StorageAccessUrlsApiToken)
+                            ? null
+                            : config.StorageAccessUrlsApiToken.Trim();
                         _networkMode = config.NetworkMode;
                     }
                 }
@@ -268,7 +351,16 @@ namespace V3SClient.libs
                 {
                     ApiUrl = apiUrl,
                     StreamApiUrl = _streamApiUrl,
+                    StorageUrl = _storageUrl,
+                    MapUrl = _mapUrl,
                     MetadataWsUrl = _metadataWsUrl,
+                    FrameDetectionCountsApiUrl = _frameDetectionCountsApiUrl,
+                    LiveFrameDetectionCountsApiUrl = _liveFrameDetectionCountsApiUrl,
+                    CameraVehicleCountsApiUrl = _cameraVehicleCountsApiUrl,
+                    CameraHealthTimeseriesApiUrl = _cameraHealthTimeseriesApiUrl,
+                    AiEventFeedPath = _aiEventFeedPath,
+                    StorageAccessUrlsApiUrl = _storageAccessUrlsApiUrl,
+                    StorageAccessUrlsApiToken = _storageAccessUrlsApiToken,
                     NetworkMode = networkMode
                 };
                 string json = JsonConvert.SerializeObject(config, Formatting.Indented);
@@ -1191,6 +1283,50 @@ namespace V3SClient.libs
             catch { return null; }
         }
 
+        /// <summary>Gets a short-lived dashboard thumbnail URL using the same batch contract as the web app.</summary>
+        public async Task<string> GetDashboardAssetAccessUrlAsync(string assetId, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            if (string.IsNullOrWhiteSpace(assetId) || string.IsNullOrWhiteSpace(_storageAccessUrlsApiUrl)) return null;
+            try
+            {
+                var body = new { asset_ids = new[] { assetId }, access_scope = "file", duration = 3600, as_attachment = false, page = 1, page_size = 1 };
+                using (var request = new HttpRequestMessage(HttpMethod.Post, _storageAccessUrlsApiUrl))
+                {
+                    request.Content = new StringContent(JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json");
+                    var accessToken = !string.IsNullOrWhiteSpace(_storageAccessUrlsApiToken)
+                        ? _storageAccessUrlsApiToken
+                        : _storageToken;
+                    if (!string.IsNullOrWhiteSpace(accessToken)) request.Headers.TryAddWithoutValidation("Authorization", accessToken);
+                    using (var response = await _httpClient.SendAsync(request, cancellationToken))
+                    {
+                        if (!response.IsSuccessStatusCode) return null;
+                        var json = await response.Content.ReadAsStringAsync();
+                        var payload = JsonConvert.DeserializeObject<dynamic>(json);
+                        var items = payload?.items;
+                        if (items == null || items.Count == 0) return null;
+                        var accessUrl = (string)items[0].access_url;
+                        if (string.IsNullOrWhiteSpace(accessUrl)) return null;
+
+                        // The storage service returns a relative path (for example "/files/...").
+                        // Browsers resolve it through the web proxy, but WPF BitmapImage requires an
+                        // absolute URI, so anchor it to the configured storage service origin.
+                        Uri absoluteUrl;
+                        if (Uri.TryCreate(accessUrl, UriKind.Absolute, out absoluteUrl)) return absoluteUrl.AbsoluteUri;
+
+                        Uri storageApiUri;
+                        if (!Uri.TryCreate(_storageAccessUrlsApiUrl, UriKind.Absolute, out storageApiUri)) return null;
+                        var storageOrigin = new Uri(storageApiUri.GetLeftPart(UriPartial.Authority) + "/");
+                        return new Uri(storageOrigin, accessUrl.TrimStart('/')).AbsoluteUri;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Dashboard storage thumbnail");
+                return null;
+            }
+        }
+
         // ============ Storage / Playback Server API ============
         public List<EndpointProfile> GetDiscoveredEndpoints() => _endpointRegistry;
 
@@ -1777,6 +1913,39 @@ namespace V3SClient.libs
             public string AssetId { get; set; }
         }
 
+        /// <summary>
+        /// A compact record returned by the AI event-center crop history API.
+        /// It is deliberately separate from playback search DTOs: the live
+        /// feed only needs the newest detection and its optional crop asset.
+        /// </summary>
+        public sealed class LiveAiEventFeedResponse
+        {
+            [JsonProperty("items")]
+            public List<LiveAiEventFeedItem> Items { get; set; } = new List<LiveAiEventFeedItem>();
+        }
+
+        public sealed class LiveAiEventFeedItem
+        {
+            [JsonProperty("detection_id")]
+            public string DetectionId { get; set; }
+            [JsonProperty("message_id")]
+            public string MessageId { get; set; }
+            [JsonProperty("cam_id")]
+            public string CameraId { get; set; }
+            [JsonProperty("object_id")]
+            public string ObjectId { get; set; }
+            [JsonProperty("event_time")]
+            public string EventTime { get; set; }
+            [JsonProperty("event_type")]
+            public string EventType { get; set; }
+            [JsonProperty("meta_type")]
+            public string MetaType { get; set; }
+            [JsonProperty("confidence")]
+            public double Confidence { get; set; }
+            [JsonProperty("asset_id")]
+            public string AssetId { get; set; }
+        }
+
         public class GpsDto
         {
             [JsonProperty("latitude")]
@@ -1855,6 +2024,128 @@ namespace V3SClient.libs
             }
         }
 
+        /// <summary>
+        /// Gets the latest AI crop events used by the live-monitoring feed.
+        /// This is read-only and uses the same authenticated backend client as
+        /// the existing camera and AI-summary requests.
+        /// </summary>
+        public async Task<LiveAiEventFeedResponse> GetLiveAiEventFeedAsync(
+            System.DateTime startAt,
+            System.DateTime endAt,
+            IEnumerable<string> cameraIds,
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
+            try
+            {
+                var endpoint = ResolveConfiguredEndpoint(_aiEventFeedPath);
+                if (string.IsNullOrWhiteSpace(endpoint))
+                {
+                    LoggerManager.LogWarn("Live AI event feed is not configured. Set AiEventFeedPath in server_config.json.");
+                    return null;
+                }
+                var cameraIdsParameter = string.Join(",", (cameraIds ?? Enumerable.Empty<string>())
+                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                    .Select(id => id.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase));
+                var url = string.Format(
+                    "{0}?start_at={1}&end_at={2}&object_id=&min_confidence=0&page=1&page_size=10&cam_ids={3}",
+                    endpoint,
+                    Uri.EscapeDataString(startAt.ToString("yyyy-MM-ddTHH:mm:ss")),
+                    Uri.EscapeDataString(endAt.ToString("yyyy-MM-ddTHH:mm:ss")),
+                    Uri.EscapeDataString(cameraIdsParameter));
+                using (var response = await _httpClient.GetAsync(url, cancellationToken))
+                {
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        LoggerManager.LogWarn($"Live AI event feed returned {(int)response.StatusCode}.");
+                        return null;
+                    }
+                    var json = await response.Content.ReadAsStringAsync();
+                    return JsonConvert.DeserializeObject<LiveAiEventFeedResponse>(json);
+                }
+            }
+            catch (OperationCanceledException) { return null; }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Lỗi khi gọi GetLiveAiEventFeedAsync");
+                return null;
+            }
+        }
+
+        public sealed class CameraHealthTimeseriesResponse
+        {
+            [JsonProperty("data")]
+            public List<CameraHealthTimeseriesPoint> Data { get; set; } = new List<CameraHealthTimeseriesPoint>();
+        }
+
+        public sealed class CameraHealthTimeseriesPoint
+        {
+            [JsonProperty("bucket_start")]
+            public string BucketStart { get; set; }
+            [JsonProperty("online")]
+            public int Online { get; set; }
+            [JsonProperty("unavailable")]
+            public int Unavailable { get; set; }
+            [JsonProperty("offline")]
+            public int Offline { get; set; }
+            [JsonProperty("unknown")]
+            public int Unknown { get; set; }
+            [JsonProperty("uptime_percent")]
+            public double? UptimePercent { get; set; }
+        }
+
+        private string ResolveConfiguredEndpoint(string configuredValue)
+        {
+            if (string.IsNullOrWhiteSpace(configuredValue))
+                return null;
+            if (Uri.IsWellFormedUriString(configuredValue, UriKind.Absolute))
+                return configuredValue.TrimEnd('/');
+            if (string.IsNullOrWhiteSpace(_baseUrl))
+                return null;
+            return _baseUrl.TrimEnd('/') + "/" + configuredValue.Trim().TrimStart('/');
+        }
+
+        /// <summary>
+        /// Gets a vehicle total for one camera within the selected time range.
+        /// The endpoint accepts a single <c>cam_id</c>.
+        /// </summary>
+        public async Task<CameraVehicleCountsResponse> GetCameraVehicleCountsAsync(
+            System.DateTime startAt,
+            System.DateTime endAt,
+            string cameraId,
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
+            if (string.IsNullOrWhiteSpace(_cameraVehicleCountsApiUrl) || string.IsNullOrWhiteSpace(cameraId))
+                return null;
+
+            try
+            {
+                var url = string.Format(
+                    "{0}?date={1}&start_date={2}&end_date={3}&cam_id={4}",
+                    _cameraVehicleCountsApiUrl,
+                    Uri.EscapeDataString(endAt.ToString("yyyy-MM-dd")),
+                    Uri.EscapeDataString(startAt.ToString("yyyy-MM-ddTHH:mm:ss")),
+                    Uri.EscapeDataString(endAt.ToString("yyyy-MM-ddTHH:mm:ss")),
+                    Uri.EscapeDataString(cameraId.Trim()));
+                using (var response = await _deviceStatusHttpClient.GetAsync(url, cancellationToken))
+                {
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        LoggerManager.LogWarn($"Camera vehicle counts returned {(int)response.StatusCode} for {cameraId}.");
+                        return null;
+                    }
+                    var json = await response.Content.ReadAsStringAsync();
+                    return JsonConvert.DeserializeObject<CameraVehicleCountsResponse>(json);
+                }
+            }
+            catch (OperationCanceledException) { return null; }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Lỗi khi gọi GetCameraVehicleCountsAsync");
+                return null;
+            }
+        }
+
         public async Task<FrameDetectionCountsResponse> GetFrameDetectionCountsAsync(System.DateTime startAt, System.DateTime endAt, IEnumerable<string> cameraIds = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             try
@@ -1910,6 +2201,43 @@ namespace V3SClient.libs
             catch (Exception ex)
             {
                 LoggerManager.LogException(ex, "Lỗi khi gọi GetLiveFrameDetectionCountsAsync");
+                return null;
+            }
+        }
+
+        /// <summary>Gets the aggregated online/offline trend used by the Dashboard chart.</summary>
+        public async Task<CameraHealthTimeseriesResponse> GetCameraHealthTimeseriesAsync(
+            DateTime from, DateTime to, string bucket, IEnumerable<string> cameraIds, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(_cameraHealthTimeseriesApiUrl))
+                return null;
+
+            try
+            {
+                var ids = string.Join(",", (cameraIds ?? Enumerable.Empty<string>())
+                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                    .Select(id => id.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase));
+                var endpoint = _cameraHealthTimeseriesApiUrl + "?from=" + Uri.EscapeDataString(from.ToString("o"))
+                    + "&to=" + Uri.EscapeDataString(to.ToString("o"))
+                    + "&bucket=" + Uri.EscapeDataString(string.IsNullOrWhiteSpace(bucket) ? "2h" : bucket);
+                if (!string.IsNullOrWhiteSpace(ids))
+                    endpoint += "&camera_ids=" + Uri.EscapeDataString(ids);
+
+                var response = await _httpClient.GetAsync(endpoint, cancellationToken);
+                if (!response.IsSuccessStatusCode)
+                {
+                    LoggerManager.LogWarn($"Camera health timeseries returned {(int)response.StatusCode}.");
+                    return null;
+                }
+
+                var json = await response.Content.ReadAsStringAsync();
+                return JsonConvert.DeserializeObject<CameraHealthTimeseriesResponse>(json);
+            }
+            catch (OperationCanceledException) { return null; }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Lỗi khi gọi GetCameraHealthTimeseriesAsync");
                 return null;
             }
         }

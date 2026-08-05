@@ -1,13 +1,18 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using V3SClient.libs;
 using V3SClient.models;
@@ -18,8 +23,47 @@ using FormsScreen = System.Windows.Forms.Screen;
 
 namespace V3SClient.UI.Views
 {
+    /// <summary>Presentation-only model for one record in the live AI feed.</summary>
+    public sealed class LiveAiFeedItemViewModel_v3 : INotifyPropertyChanged
+    {
+        private ImageSource _cropImage;
+
+        public string Title { get; set; }
+        public string CameraId { get; set; }
+        public string EventTime { get; set; }
+        public string EventSummary { get; set; }
+        public string ObjectType { get; set; }
+        public string EventKey { get; set; }
+        private bool _isNew;
+        public bool IsNew
+        {
+            get { return _isNew; }
+            set
+            {
+                if (_isNew == value) return;
+                _isNew = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsNew)));
+            }
+        }
+        public double ConfidencePercent { get; set; }
+        public ImageSource CropImage
+        {
+            get { return _cropImage; }
+            set
+            {
+                if (ReferenceEquals(_cropImage, value)) return;
+                _cropImage = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CropImage)));
+            }
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+    }
+
     public partial class LivePage_v3 : UserControl, IDisposable
     {
+        public event EventHandler OpenEventCenterRequested;
+
         private readonly LiveViewModel_v3 _viewModel;
         private readonly Dictionary<int, LiveTile_v3> _tiles = new Dictionary<int, LiveTile_v3>();
         private CancellationTokenSource _lifetime = new CancellationTokenSource();
@@ -59,10 +103,16 @@ namespace V3SClient.UI.Views
         private readonly DispatcherTimer _deviceStatusRefreshTimer;
         private readonly DispatcherTimer _aiSummaryRefreshTimer;
         private readonly DispatcherTimer _liveTrafficDensityRefreshTimer;
+        private readonly DispatcherTimer _aiEventFeedRefreshTimer;
         private readonly DispatcherTimer _liveToastTimer;
         private int _deviceStatusRefreshInProgress;
         private int _aiSummaryRefreshInProgress;
         private int _liveTrafficDensityRefreshInProgress;
+        private int _aiEventFeedRefreshInProgress;
+        private bool _aiEventFeedAutoRefresh = true;
+        private bool _aiFeedCollapsed;
+        private bool _aiFeedInitialized;
+        private readonly Dictionary<string, ImageSource> _aiFeedCropCache = new Dictionary<string, ImageSource>(StringComparer.OrdinalIgnoreCase);
         private readonly Stopwatch _resizeStopwatch = new Stopwatch();
         private bool _resizeOverlaysSuspended;
         private bool _geometryTransitionInProgress;
@@ -76,6 +126,9 @@ namespace V3SClient.UI.Views
         private List<CustomLayoutCell_v3> _customLayoutCells = new List<CustomLayoutCell_v3>();
         private enum LiveToastKind { Info, Warning, Error }
 
+        public ObservableCollection<LiveAiFeedItemViewModel_v3> AiEventFeedItems { get; } =
+            new ObservableCollection<LiveAiFeedItemViewModel_v3>();
+
         public LivePage_v3()
         {
             InitializeComponent();
@@ -88,10 +141,12 @@ namespace V3SClient.UI.Views
             // Refresh immediately on page load/Connect all, then every 30 s.
             _deviceStatusRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
             _deviceStatusRefreshTimer.Tick += DeviceStatusRefreshTimer_Tick;
-            _aiSummaryRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
+            _aiSummaryRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
             _aiSummaryRefreshTimer.Tick += AiSummaryRefreshTimer_Tick;
             _liveTrafficDensityRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
             _liveTrafficDensityRefreshTimer.Tick += LiveTrafficDensityRefreshTimer_Tick;
+            _aiEventFeedRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+            _aiEventFeedRefreshTimer.Tick += AiEventFeedRefreshTimer_Tick;
             _liveToastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
             _liveToastTimer.Tick += LiveToastTimer_Tick;
             // The action icons are centred against the complete header at all
@@ -145,6 +200,8 @@ namespace V3SClient.UI.Views
             if (!_disposed) _aiSummaryRefreshTimer.Start();
             await RefreshLiveTrafficDensityAsync();
             if (!_disposed) _liveTrafficDensityRefreshTimer.Start();
+            await RefreshAiEventFeedAsync();
+            if (!_disposed && _aiEventFeedAutoRefresh) _aiEventFeedRefreshTimer.Start();
             await RefreshDeviceStatusesAsync();
             if (!_disposed) _deviceStatusRefreshTimer.Start();
         }
@@ -162,6 +219,11 @@ namespace V3SClient.UI.Views
         private async void LiveTrafficDensityRefreshTimer_Tick(object sender, EventArgs e)
         {
             await RefreshLiveTrafficDensityAsync();
+        }
+
+        private async void AiEventFeedRefreshTimer_Tick(object sender, EventArgs e)
+        {
+            await RefreshAiEventFeedAsync();
         }
 
         private async Task<bool> RefreshDeviceStatusesAsync()
@@ -1772,14 +1834,19 @@ namespace V3SClient.UI.Views
                     .ToList();
 
                 if (profileCameraIds.Count == 0)
-                    return;
-
-                var counts = await ApiManager.Instance.GetFrameDetectionCountsAsync(startAt, endAt, profileCameraIds, _lifetime.Token);
-                if (!_disposed && counts != null)
                 {
-                    if (AiVehicleCountText != null)
-                        AiVehicleCountText.Text = counts.AccumulatedDetectionCount.ToString();
+                    if (!_disposed && AiVehicleCountText != null)
+                        AiVehicleCountText.Text = "0";
+                    return;
                 }
+
+                // The API receives the complete profile camera list and
+                // returns its authoritative custom_total for this time range.
+                var counts = await ApiManager.Instance.GetCameraVehicleCountsAsync(
+                    startAt, endAt, string.Join(",", profileCameraIds), _lifetime.Token);
+                var total = counts == null ? 0 : counts.CustomTotal;
+                if (!_disposed && AiVehicleCountText != null)
+                    AiVehicleCountText.Text = total.ToString();
             }
             finally
             {
@@ -1816,6 +1883,223 @@ namespace V3SClient.UI.Views
             {
                 Interlocked.Exchange(ref _liveTrafficDensityRefreshInProgress, 0);
             }
+        }
+
+
+        /// <summary>
+        /// Mirrors the WebApp live feed: the ten newest AI crop events for
+        /// cameras in the current profile, refreshed independently from video
+        /// playback and metadata drawing.
+        /// </summary>
+        private async Task RefreshAiEventFeedAsync()
+        {
+            if (_disposed || Interlocked.Exchange(ref _aiEventFeedRefreshInProgress, 1) != 0)
+                return;
+
+            try
+            {
+                var profileCameraIds = _viewModel.CameraGroups
+                    .SelectMany(group => group.Cameras ?? Enumerable.Empty<Camera>())
+                    .Where(camera => camera != null && !string.IsNullOrWhiteSpace(camera.camID))
+                    .Select(camera => camera.camID.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                if (profileCameraIds.Count == 0)
+                    return;
+
+                var now = DateTime.Now;
+                var response = await ApiManager.Instance.GetLiveAiEventFeedAsync(
+                    now.Date, now, profileCameraIds, _lifetime.Token);
+                if (_disposed || response == null)
+                    return;
+
+                var nextItems = (response.Items ?? new List<ApiManager.LiveAiEventFeedItem>())
+                    .Take(10)
+                    .Select(CreateAiFeedItem)
+                    .ToList();
+
+                var currentItemsByKey = AiEventFeedItems
+                    .Where(item => !string.IsNullOrWhiteSpace(item.EventKey))
+                    .GroupBy(item => item.EventKey)
+                    .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+                var nextKeys = nextItems.Select(item => item.ViewModel.EventKey).ToList();
+                var currentKeys = AiEventFeedItems.Select(item => item.EventKey).ToList();
+                if (_aiFeedInitialized && nextKeys.SequenceEqual(currentKeys, StringComparer.OrdinalIgnoreCase))
+                    return;
+
+                var newItems = nextItems
+                    .Where(item => !currentItemsByKey.ContainsKey(item.ViewModel.EventKey))
+                    .ToList();
+                foreach (var item in nextItems)
+                {
+                    LiveAiFeedItemViewModel_v3 existing;
+                    if (currentItemsByKey.TryGetValue(item.ViewModel.EventKey, out existing))
+                        item.ViewModel = existing;
+                    else
+                        item.ViewModel.IsNew = _aiFeedInitialized;
+                }
+
+                AiEventFeedItems.Clear();
+                foreach (var item in nextItems)
+                    AiEventFeedItems.Add(item.ViewModel);
+                _aiFeedInitialized = true;
+
+                await Task.WhenAll(newItems
+                    .Where(item => !string.IsNullOrWhiteSpace(item.AssetId))
+                    .Select(async item =>
+                    {
+                        if (_aiFeedCropCache.TryGetValue(item.AssetId, out var cached))
+                        {
+                            item.ViewModel.CropImage = cached;
+                            return;
+                        }
+
+                        var accessUrl = await ApiManager.Instance.GetDashboardAssetAccessUrlAsync(item.AssetId, _lifetime.Token);
+                        if (string.IsNullOrWhiteSpace(accessUrl) || _disposed) return;
+                        using (var client = new WebClient())
+                        {
+                            var imageBytes = await client.DownloadDataTaskAsync(new Uri(accessUrl, UriKind.Absolute));
+                            using (var imageStream = new MemoryStream(imageBytes, writable: false))
+                            {
+                                var crop = new BitmapImage();
+                                crop.BeginInit();
+                                crop.CacheOption = BitmapCacheOption.OnLoad;
+                                crop.StreamSource = imageStream;
+                                crop.EndInit();
+                                if (_disposed) return;
+                                _aiFeedCropCache[item.AssetId] = crop;
+                                item.ViewModel.CropImage = crop;
+                            }
+                        }
+                    }));
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Live View _v3 AI feed refresh failed");
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _aiEventFeedRefreshInProgress, 0);
+            }
+        }
+
+        private sealed class AiFeedItemSource
+        {
+            public LiveAiFeedItemViewModel_v3 ViewModel { get; set; }
+            public string AssetId { get; set; }
+        }
+
+        private static AiFeedItemSource CreateAiFeedItem(ApiManager.LiveAiEventFeedItem item)
+        {
+            var confidence = Math.Max(0, Math.Min(100, item.Confidence * 100));
+            DateTime eventTime = DateTime.MinValue;
+            var parsed = !string.IsNullOrWhiteSpace(item.EventTime) && DateTime.TryParse(item.EventTime, out eventTime);
+            var title = !string.IsNullOrWhiteSpace(item.ObjectId)
+                ? item.ObjectId
+                : !string.IsNullOrWhiteSpace(item.MetaType) ? item.MetaType : "Không xác định";
+            var eventType = string.IsNullOrWhiteSpace(item.EventType) ? "AI detection" : item.EventType;
+            return new AiFeedItemSource
+            {
+                AssetId = item.AssetId,
+                ViewModel = new LiveAiFeedItemViewModel_v3
+                {
+                    EventKey = !string.IsNullOrWhiteSpace(item.DetectionId) ? item.DetectionId
+                        : !string.IsNullOrWhiteSpace(item.MessageId) ? item.MessageId
+                        : !string.IsNullOrWhiteSpace(item.AssetId) ? item.AssetId
+                        : string.Format("{0}|{1}|{2}", item.CameraId, item.EventTime, title),
+                    Title = title,
+                    CameraId = string.IsNullOrWhiteSpace(item.CameraId) ? "Camera không xác định" : item.CameraId,
+                    EventTime = parsed ? eventTime.ToString("HH:mm:ss dd/MM/yyyy") : (item.EventTime ?? string.Empty),
+                    EventSummary = string.Format("{0} · {1:0.#}%", eventType, confidence),
+                    ObjectType = string.IsNullOrWhiteSpace(item.MetaType) ? "Không xác định" : item.MetaType,
+                    ConfidencePercent = confidence
+                }
+            };
+        }
+
+        private void AiFeedItem_Click(object sender, MouseButtonEventArgs e)
+        {
+            var item = (sender as FrameworkElement)?.DataContext as LiveAiFeedItemViewModel_v3;
+            if (item == null) return;
+            AiFeedDetailsOverlay.DataContext = item;
+            AiFeedDetailsOverlay.Width = ActualWidth;
+            AiFeedDetailsOverlay.Height = ActualHeight;
+            AiFeedDetailsPopup.IsOpen = true;
+        }
+
+        private void CloseAiFeedDetails_Click(object sender, RoutedEventArgs e)
+        {
+            AiFeedDetailsPopup.IsOpen = false;
+            AiFeedDetailsOverlay.DataContext = null;
+        }
+
+        private void AiFeedDetailsOverlay_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            // Chỉ đóng khi bấm vào phần nền phủ; các thao tác bên trong panel vẫn được giữ nguyên.
+            if (e.OriginalSource == AiFeedDetailsOverlay)
+            {
+                CloseAiFeedDetails_Click(sender, e);
+            }
+        }
+
+        private void ToggleAiFeedRefresh_Click(object sender, RoutedEventArgs e)
+        {
+            _aiEventFeedAutoRefresh = !_aiEventFeedAutoRefresh;
+            if (_aiEventFeedAutoRefresh)
+            {
+                AiFeedPauseIcon.Kind = MahApps.Metro.IconPacks.PackIconMaterialKind.Pause;
+                AiFeedPauseButton.ToolTip = "Dừng tự làm mới";
+                _aiEventFeedRefreshTimer.Start();
+                _ = RefreshAiEventFeedAsync();
+            }
+            else
+            {
+                _aiEventFeedRefreshTimer.Stop();
+                AiFeedPauseIcon.Kind = MahApps.Metro.IconPacks.PackIconMaterialKind.Play;
+                AiFeedPauseButton.ToolTip = "Bật tự làm mới";
+            }
+        }
+
+        private async void AiFeedRefreshSeconds_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key != Key.Enter) return;
+            e.Handled = true;
+
+            int seconds;
+            if (!int.TryParse(AiFeedRefreshText.Text, out seconds))
+                seconds = 5;
+            seconds = Math.Max(1, Math.Min(3600, seconds));
+            AiFeedRefreshText.Text = seconds.ToString();
+            _aiEventFeedRefreshTimer.Interval = TimeSpan.FromSeconds(seconds);
+            Keyboard.ClearFocus();
+
+            if (_aiEventFeedAutoRefresh)
+                await RefreshAiEventFeedAsync();
+        }
+
+        private void OpenAiFeedDetails_Click(object sender, RoutedEventArgs e)
+        {
+            OpenEventCenterRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ToggleAiFeedCollapsed_Click(object sender, RoutedEventArgs e)
+        {
+            _aiFeedCollapsed = !_aiFeedCollapsed;
+            AiFeedScroller.Visibility = _aiFeedCollapsed ? Visibility.Collapsed : Visibility.Visible;
+            if (_aiFeedCollapsed)
+                AiFeedEmptyState.Visibility = Visibility.Collapsed;
+            else
+                AiFeedEmptyState.ClearValue(VisibilityProperty);
+            AiFeedCollapseIcon.Kind = _aiFeedCollapsed
+                ? MahApps.Metro.IconPacks.PackIconMaterialKind.ChevronDown
+                : MahApps.Metro.IconPacks.PackIconMaterialKind.ChevronUp;
+            AiFeedCollapseButton.ToolTip = _aiFeedCollapsed ? "Mở AI Feed" : "Thu gọn AI Feed";
+        }
+
+        private async void RefreshAiEventFeed_Click(object sender, RoutedEventArgs e)
+        {
+            await RefreshAiEventFeedAsync();
         }
 
         private void ToggleAiSummary_Click(object sender, RoutedEventArgs e)
@@ -2023,6 +2307,8 @@ namespace V3SClient.UI.Views
             _aiSummaryRefreshTimer.Tick -= AiSummaryRefreshTimer_Tick;
             _liveTrafficDensityRefreshTimer.Stop();
             _liveTrafficDensityRefreshTimer.Tick -= LiveTrafficDensityRefreshTimer_Tick;
+            _aiEventFeedRefreshTimer.Stop();
+            _aiEventFeedRefreshTimer.Tick -= AiEventFeedRefreshTimer_Tick;
             _liveToastTimer.Stop();
             _liveToastTimer.Tick -= LiveToastTimer_Tick;
             LivePageHeader.SizeChanged -= LivePageHeader_SizeChanged;

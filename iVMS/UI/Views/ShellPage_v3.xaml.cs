@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using V3SClient.viewModels;
@@ -15,6 +16,8 @@ namespace V3SClient.UI.Views
         private ShellViewModel_v3 _viewModel;
         private readonly Grid _moduleHost = new Grid();
         private PlaybackPage_v3 _playbackPage;
+        private DashboardPage_v3 _dashboardPage;
+        private EventCenterPage_v3 _eventCenterPage;
         private UIElement _activeModule;
 
         public ShellPage_v3()
@@ -138,7 +141,10 @@ namespace V3SClient.UI.Views
                 Grid.SetRow(ContentFrame, 0);
                 Grid.SetRowSpan(ContentFrame, 2);
                 Panel.SetZIndex(ShellHeader, 10);
-                ShowModule(new LivePage_v3());
+                var livePage = new LivePage_v3();
+                livePage.OpenEventCenterRequested += (s, e) => _viewModel.SelectNavigationCommand.Execute(
+                    _viewModel.NavigationItems.FirstOrDefault(item => item.Title == "Sự kiện"));
+                ShowModule(livePage);
                 return;
             }
             ShellHeader.Visibility = Visibility.Visible;
@@ -151,6 +157,23 @@ namespace V3SClient.UI.Views
                 if (_playbackPage == null)
                     _playbackPage = new PlaybackPage_v3();
                 ShowModule(_playbackPage);
+                return;
+            }
+            if (_viewModel.ActiveRoute == "/dashboard")
+            {
+                if (_dashboardPage == null)
+                {
+                    _dashboardPage = new DashboardPage_v3();
+                    _dashboardPage.OpenFullMapRequested += (s, e) => _viewModel.SetActiveRoute("/emap");
+                    _dashboardPage.OpenFullLiveRequested += (s, e) => _viewModel.SetActiveRoute("/live");
+                }
+                ShowModule(_dashboardPage);
+                return;
+            }
+            if (_viewModel.ActiveRoute == "/events")
+            {
+                if (_eventCenterPage == null) _eventCenterPage = new EventCenterPage_v3();
+                ShowModule(_eventCenterPage);
                 return;
             }
             if (_viewModel.SelectedNavigationItem.Route == "/emap")

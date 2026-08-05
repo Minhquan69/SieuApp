@@ -27,8 +27,8 @@ namespace V3SClient.viewModels
                 new ShellNavigationItem_v3("Cấu hình", PackIconMaterialKind.CogOutline, null, null),
                 new ShellNavigationItem_v3("Hệ thống", PackIconMaterialKind.Server, null, null)
             };
-            ActiveRoute = "/live";
-            SelectedNavigationItem = NavigationItems[1];
+            ActiveRoute = "/dashboard";
+            SelectedNavigationItem = NavigationItems[0];
             SelectNavigationCommand = new RelayCommand(item => SelectNavigation(item as ShellNavigationItem_v3));
             _clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _clock.Tick += (s, e) => ServerTime = DateTime.Now;
@@ -59,8 +59,12 @@ namespace V3SClient.viewModels
 
         private void SelectNavigation(ShellNavigationItem_v3 item)
         {
-            if (item == null || !item.HasRoute) return;
-            ActiveRoute = item.Route;
+            if (item == null) return;
+            var route = item.Route;
+            if (string.IsNullOrWhiteSpace(route) && item.IconKind == PackIconMaterialKind.ViewDashboardOutline) route = "/dashboard";
+            if (string.IsNullOrWhiteSpace(route) && item.IconKind == PackIconMaterialKind.RobotOutline) route = "/events";
+            if (string.IsNullOrWhiteSpace(route)) return;
+            ActiveRoute = route;
             SelectedNavigationItem = item;
         }
 

@@ -12,6 +12,18 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
         body { background: #0b0b0b; color: #ffffff; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        /* WebView2 is a native surface and cannot be clipped by the WPF
+           dashboard Border. Clip MapLibre inside the overview document so the
+           map touches its frame but its bottom corners remain genuinely round. */
+        html.map-overview, html.map-overview body {
+            background: #0A1C2B;
+            border-radius: 0 0 9px 9px;
+            overflow: hidden;
+        }
+        html.map-overview #map {
+            border-radius: 0 0 9px 9px;
+            overflow: hidden;
+        }
 
         #appVersionBadge {
             position: fixed;
