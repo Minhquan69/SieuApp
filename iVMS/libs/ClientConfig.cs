@@ -46,5 +46,8 @@ namespace V3SClient.libs
         // When absent the main ApiUrl is used as the endpoint root.
         public string DeviceStatusApiUrl { get; set; }
         public string DeviceStatusApiKey { get; set; }
+        // Fallback registry used when the Portal endpoint discovery is unavailable.
+        public string EndpointRegistryUrl { get; set; }
+        public string EndpointRegistryApiKey { get; set; }
     }
 }

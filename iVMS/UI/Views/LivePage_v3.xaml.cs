@@ -2011,8 +2011,16 @@ namespace V3SClient.UI.Views
                 foreach (var item in newItems.Concat(updatedItems))
                     _ = ClearAiFeedStatusAsync(item.ViewModel);
 
-                await Task.WhenAll(newItems.Concat(updatedItems)
+                var itemsNeedingImages = newItems.Concat(updatedItems)
                     .Where(item => !string.IsNullOrWhiteSpace(item.AssetId))
+                    .ToList();
+                var uncachedAssetIds = itemsNeedingImages
+                    .Where(item => !_aiFeedCropCache.ContainsKey(item.AssetId))
+                    .Select(item => item.AssetId)
+                    .ToList();
+                var accessUrls = await ApiManager.Instance.GetDashboardAssetAccessUrlsAsync(uncachedAssetIds, _lifetime.Token);
+
+                await Task.WhenAll(itemsNeedingImages
                     .Select(async item =>
                     {
                         if (_aiFeedCropCache.TryGetValue(item.AssetId, out var cached))
@@ -2021,7 +2029,8 @@ namespace V3SClient.UI.Views
                             return;
                         }
 
-                        var accessUrl = await ApiManager.Instance.GetDashboardAssetAccessUrlAsync(item.AssetId, _lifetime.Token);
+                        string accessUrl;
+                        if (!accessUrls.TryGetValue(item.AssetId, out accessUrl)) return;
                         if (string.IsNullOrWhiteSpace(accessUrl) || _disposed) return;
                         using (var client = new WebClient())
                         {

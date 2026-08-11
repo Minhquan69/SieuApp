@@ -21,11 +21,12 @@
     "CameraHealthTimeseriesApiUrl":  "https://portal.ivistatech.vn/api/camera-health/timeseries",
     "AiEventFeedPath": null,
     "VehicleStatsApiToken":  "Bearer st_5e5c88eea90f2a81b1a8100f9ab7a85b",
-    "StorageAccessUrlsApiUrl": "https://portal.ivistatech.vn/api/storage/get-access-urls",
+    "StorageAccessUrlsApiUrl": "http://192.168.1.199:8011",
     "StorageAccessUrlsApiToken":  "Bearer st_5e5c88eea90f2a81b1a8100f9ab7a85b",
     "DeviceReportEndpointKeyword": "_deviceReport",
     "NetworkMode":  "Public",
     "AiEventSummaryPath": null,
     "AiEventRoiObjectsPath": null,
     "DeviceStatusApiKey": "YGDweJ9Ucx58ZG8iW4fyTfx5KmSPAz4u"
+    ,"EndpointRegistryUrl": "http://192.168.1.199:8880"
 }
