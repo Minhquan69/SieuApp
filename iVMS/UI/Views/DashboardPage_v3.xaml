@@ -1490,7 +1490,7 @@
                     <TextBlock x:Name="AttentionCamera1IdCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
                     <TextBlock x:Name="AttentionCamera1UptimeCell" Grid.Column="1" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
                     <TextBlock x:Name="AttentionCamera1DowntimeCell" Grid.Column="2" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
-                    <Border Grid.Column="3" HorizontalAlignment="Left" BorderBrush="#FFFF8B9B" BorderThickness="1" CornerRadius="3" Padding="5,2">
+                    <Border x:Name="AttentionCamera1StatusBadge" Grid.Column="3" HorizontalAlignment="Left" BorderBrush="#FFFF8B9B" BorderThickness="1" CornerRadius="3" Padding="5,2">
                       <TextBlock x:Name="AttentionCamera1StatusCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
                     </Border>
                   </Grid>
@@ -1501,7 +1501,7 @@
                     <TextBlock x:Name="AttentionCamera2IdCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
                     <TextBlock x:Name="AttentionCamera2UptimeCell" Grid.Column="1" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
                     <TextBlock x:Name="AttentionCamera2DowntimeCell" Grid.Column="2" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
-                    <Border Grid.Column="3" HorizontalAlignment="Left" BorderBrush="#FFFF8B9B" BorderThickness="1" CornerRadius="3" Padding="5,2">
+                    <Border x:Name="AttentionCamera2StatusBadge" Grid.Column="3" HorizontalAlignment="Left" BorderBrush="#FFFF8B9B" BorderThickness="1" CornerRadius="3" Padding="5,2">
                       <TextBlock x:Name="AttentionCamera2StatusCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
                     </Border>
                   </Grid>
@@ -1512,7 +1512,7 @@
                     <TextBlock x:Name="AttentionCamera3IdCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
                     <TextBlock x:Name="AttentionCamera3UptimeCell" Grid.Column="1" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
                     <TextBlock x:Name="AttentionCamera3DowntimeCell" Grid.Column="2" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
-                    <Border Grid.Column="3" HorizontalAlignment="Left" BorderBrush="#FFFF8B9B" BorderThickness="1" CornerRadius="3" Padding="5,2">
+                    <Border x:Name="AttentionCamera3StatusBadge" Grid.Column="3" HorizontalAlignment="Left" BorderBrush="#FFFF8B9B" BorderThickness="1" CornerRadius="3" Padding="5,2">
                       <TextBlock x:Name="AttentionCamera3StatusCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
                     </Border>
                   </Grid>
@@ -1523,7 +1523,7 @@
                     <TextBlock x:Name="AttentionCamera4IdCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
                     <TextBlock x:Name="AttentionCamera4UptimeCell" Grid.Column="1" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
                     <TextBlock x:Name="AttentionCamera4DowntimeCell" Grid.Column="2" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
-                    <Border Grid.Column="3" HorizontalAlignment="Left" BorderBrush="#FFFF8B9B" BorderThickness="1" CornerRadius="3" Padding="5,2">
+                    <Border x:Name="AttentionCamera4StatusBadge" Grid.Column="3" HorizontalAlignment="Left" BorderBrush="#FFFF8B9B" BorderThickness="1" CornerRadius="3" Padding="5,2">
                       <TextBlock x:Name="AttentionCamera4StatusCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
                     </Border>
                   </Grid>
@@ -1534,7 +1534,7 @@
                     <TextBlock x:Name="AttentionCamera5IdCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
                     <TextBlock x:Name="AttentionCamera5UptimeCell" Grid.Column="1" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
                     <TextBlock x:Name="AttentionCamera5DowntimeCell" Grid.Column="2" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
-                    <Border Grid.Column="3" HorizontalAlignment="Left" BorderBrush="#FFFF8B9B" BorderThickness="1" CornerRadius="3" Padding="5,2">
+                    <Border x:Name="AttentionCamera5StatusBadge" Grid.Column="3" HorizontalAlignment="Left" BorderBrush="#FFFF8B9B" BorderThickness="1" CornerRadius="3" Padding="5,2">
                       <TextBlock x:Name="AttentionCamera5StatusCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
                     </Border>
                   </Grid>

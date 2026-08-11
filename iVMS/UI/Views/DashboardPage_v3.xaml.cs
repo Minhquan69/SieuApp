@@ -390,9 +390,9 @@ namespace V3SClient.UI.Views
 
             var rowsFromApi = (cameras ?? Enumerable.Empty<ApiManager.CameraHealthAttentionCamera>())
                 .Where(camera => camera != null)
-                .Where(camera => allowedCameraIds.Contains(camera.CameraId ?? string.Empty)
-                    || allowedCameraIds.Contains(camera.CameraCode ?? string.Empty))
-                .GroupBy(camera => string.IsNullOrWhiteSpace(camera.CameraId) ? camera.CameraCode : camera.CameraId,
+                .Where(camera => allowedCameraIds.Contains((camera.CameraId ?? string.Empty).Trim())
+                    || allowedCameraIds.Contains((camera.CameraCode ?? string.Empty).Trim()))
+                .GroupBy(camera => (string.IsNullOrWhiteSpace(camera.CameraId) ? camera.CameraCode : camera.CameraId)?.Trim(),
                     StringComparer.OrdinalIgnoreCase)
                 .Select(group => group.OrderBy(camera => camera.UptimePercent ?? double.MaxValue).First())
                 .OrderBy(camera => camera.UptimePercent ?? double.MaxValue)
@@ -416,6 +416,11 @@ namespace V3SClient.UI.Views
                 new[] { AttentionCamera4IdCell, AttentionCamera4UptimeCell, AttentionCamera4DowntimeCell, AttentionCamera4StatusCell },
                 new[] { AttentionCamera5IdCell, AttentionCamera5UptimeCell, AttentionCamera5DowntimeCell, AttentionCamera5StatusCell }
             };
+            var statusBadges = new[]
+            {
+                AttentionCamera1StatusBadge, AttentionCamera2StatusBadge, AttentionCamera3StatusBadge,
+                AttentionCamera4StatusBadge, AttentionCamera5StatusBadge
+            };
             for (var index = 0; index < cellRows.Length; index++)
             {
                 var camera = index < rowsFromApi.Count ? rowsFromApi[index] : null;
@@ -423,8 +428,12 @@ namespace V3SClient.UI.Views
                 cellRows[index][1].Text = camera != null && camera.UptimePercent.HasValue ? Math.Max(0, Math.Min(100, camera.UptimePercent.Value)).ToString("0.0") + "%" : string.Empty;
                 cellRows[index][2].Text = camera != null && camera.UnavailableSeconds.HasValue ? FormatDuration(camera.UnavailableSeconds.Value) : string.Empty;
                 cellRows[index][3].Text = camera == null ? string.Empty : GetAttentionCameraStatus(camera);
+                var statusBrush = camera == null ? new SolidColorBrush(Color.FromRgb(173, 190, 203)) : GetAttentionCameraStatusBrush(camera);
+                statusBadges[index].BorderBrush = statusBrush;
+                statusBadges[index].Background = camera == null ? Brushes.Transparent : new SolidColorBrush(Color.FromArgb(35, statusBrush.Color.R, statusBrush.Color.G, statusBrush.Color.B));
                 foreach (var cell in cellRows[index])
                     cell.Foreground = camera == null ? new SolidColorBrush(Color.FromRgb(213, 227, 238)) : new SolidColorBrush(Color.FromRgb(255, 160, 175));
+                cellRows[index][3].Foreground = statusBrush;
             }
         }
 
@@ -443,6 +452,15 @@ namespace V3SClient.UI.Views
             if (!camera.UptimePercent.HasValue) return "C\u1ea2NH B\u00c1O";
             if (camera.UptimePercent.Value >= 99) return "T\u1ed0T";
             return camera.UptimePercent.Value >= 95 ? "C\u1ea2NH B\u00c1O" : "NGHI\u00caM TR\u1eccNG";
+        }
+
+        private static SolidColorBrush GetAttentionCameraStatusBrush(ApiManager.CameraHealthAttentionCamera camera)
+        {
+            if (!camera.UptimePercent.HasValue) return new SolidColorBrush(Color.FromRgb(255, 154, 61));
+            if (camera.UptimePercent.Value >= 99) return new SolidColorBrush(Color.FromRgb(39, 201, 109));
+            return camera.UptimePercent.Value >= 95
+                ? new SolidColorBrush(Color.FromRgb(255, 154, 61))
+                : new SolidColorBrush(Color.FromRgb(255, 112, 133));
         }
 
         private static string FormatDuration(long totalSeconds)
@@ -748,7 +766,11 @@ namespace V3SClient.UI.Views
                 var now = DateTime.Now;
                 var trend = await ApiManager.Instance.GetCameraHealthTimeseriesAsync(
                     now.AddHours(-_cameraHistoryHours), now, GetCameraHistoryBucket(), cameraIds, _lifetime.Token);
-                var cameras = GlobalSystem.Instance.CameraList ?? new List<Camera>();
+                var profileCameraIds = new HashSet<string>(cameraIds, StringComparer.OrdinalIgnoreCase);
+                var cameras = (GlobalSystem.Instance.CameraList ?? new List<Camera>())
+                    .Where(camera => camera != null && !string.IsNullOrWhiteSpace(camera.camID)
+                        && profileCameraIds.Contains(camera.camID.Trim()))
+                    .ToList();
                 var online = cameras.Count(camera => camera != null && camera.is_online == true);
                 var offline = Math.Max(0, cameraIds.Count - online);
                 var uptime = cameraIds.Count == 0 ? 0 : online * 100d / cameraIds.Count;
