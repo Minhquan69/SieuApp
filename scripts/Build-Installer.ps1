@@ -13,6 +13,7 @@ $installerRoot = Join-Path $repoRoot 'installer'
 $stageRoot = Join-Path $installerRoot 'stage'
 $appStage = Join-Path $stageRoot 'App'
 $gstStage = Join-Path $stageRoot 'GStreamer'
+$buildOutput = Join-Path $installerRoot 'build-output'
 $gstRoot = if ($GStreamerRoot) { $GStreamerRoot } else { Join-Path $env:ProgramFiles 'gstreamer\1.0\msvc_x86_64' }
 $vsWhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
 $isccCandidates = @(
@@ -49,12 +50,18 @@ if (Test-Path $stageRoot) {
     }
     Remove-Item -LiteralPath $resolvedStage -Recurse -Force
 }
-New-Item -ItemType Directory -Force $appStage, $gstStage, $OutputDirectory | Out-Null
+if (Test-Path $buildOutput) { Remove-Item -LiteralPath $buildOutput -Recurse -Force }
+New-Item -ItemType Directory -Force $appStage, $gstStage, $buildOutput, $OutputDirectory | Out-Null
 
 Write-Host 'Khôi phục NuGet và build Release x64...'
 & $msBuild (Join-Path $repoRoot 'iVMS.sln') '-t:Restore' '-m' '-p:RestorePackagesConfig=true'
 if ($LASTEXITCODE -ne 0) { throw "NuGet restore lỗi: $LASTEXITCODE" }
-& $msBuild (Join-Path $projectRoot 'iVMS.csproj') '-t:Rebuild' '-m' '-p:Configuration=Release' '-p:Platform=x64' "-p:OutDir=$appStage\"
+& $msBuild (Join-Path $projectRoot 'iVMS.csproj') '-t:Rebuild' '-m' '-p:Configuration=Release' '-p:Platform=x64' "-p:OutDir=$buildOutput\"
+if ($LASTEXITCODE -ne 0) { throw "Build Release failed: $LASTEXITCODE" }
+Copy-Item (Join-Path $buildOutput '*') $appStage -Recurse -Force
+foreach ($runtimeFile in @('iVMS.exe', 'iVMS.exe.config', 'server_config.json')) {
+    if (-not (Test-Path (Join-Path $appStage $runtimeFile))) { throw "Missing runtime file: $runtimeFile" }
+}
 if ($LASTEXITCODE -ne 0) { throw "Build Release lỗi: $LASTEXITCODE" }
 
 Copy-Item (Join-Path $projectRoot 'icon.ico') $appStage -Force
@@ -113,4 +120,5 @@ Write-Host "SHA256: $($hash.Hash)"
 if (-not $KeepStage) {
     Remove-Item -LiteralPath $stageRoot -Recurse -Force
 }
+if (Test-Path $buildOutput) { Remove-Item -LiteralPath $buildOutput -Recurse -Force }
 

@@ -29,8 +29,8 @@ namespace V3SClient.viewModels
             };
             // Phân tích đứng trước Thiết bị như bố cục web.
             NavigationItems.Move(6, 5);
-            ActiveRoute = "/dashboard";
-            SelectedNavigationItem = NavigationItems[0];
+            ActiveRoute = "/live";
+            SelectedNavigationItem = NavigationItems[1];
             SelectNavigationCommand = new RelayCommand(item => SelectNavigation(item as ShellNavigationItem_v3));
             _clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _clock.Tick += (s, e) => ServerTime = DateTime.Now;

@@ -13,6 +13,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using V3SClient.libs;
 
 namespace V3SClient.UI.Views
@@ -35,6 +36,8 @@ namespace V3SClient.UI.Views
         public string VehicleType   { get; set; }
         public string RoiName       { get; set; }
         public string TimeIn        { get; set; }
+        public string TimeOnly => string.IsNullOrWhiteSpace(TimeIn) ? "—" : TimeIn.Split(' ')[0];
+        public string DateOnly => string.IsNullOrWhiteSpace(TimeIn) || TimeIn.Split(' ').Length < 2 ? string.Empty : TimeIn.Split(' ')[1];
         public string TimeOut       { get; set; }
         public string Duration      { get; set; }
         public string PlaybackUrl   { get; set; }
@@ -81,6 +84,9 @@ namespace V3SClient.UI.Views
 
         // State
         private CancellationTokenSource _cts        = new CancellationTokenSource();
+        private CancellationTokenSource _tableCts    = new CancellationTokenSource();
+        private readonly DispatcherTimer _fullRefreshTimer;
+        private bool _isFullRefreshRunning;
         private bool   _isPopulating  = false;
         private int    _currentPage   = 1;
         private int    _pageSize      = 10;
@@ -94,11 +100,16 @@ namespace V3SClient.UI.Views
         
         private DateTime _displayedCalendarMonth = DateTime.Today;
         private DateTime _selectedDate = DateTime.Today;
+        private VPlaybackHLS _detailPlayback;
+        private EventRow_v3 _detailRow;
 
         // ─────────────────────────────────────────────────────
         public EventCenterPage_v3()
         {
             InitializeComponent();
+
+            _fullRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+            _fullRefreshTimer.Tick += async (sender, args) => await RefreshAllAsync();
 
             // Keep labels readable even when legacy XAML has been saved using a
             // different code page on another workstation.
@@ -108,6 +119,7 @@ namespace V3SClient.UI.Views
 
             CompletedGrid.ItemsSource = _pageRows;
             RecordedGrid.ItemsSource  = _pageRows;
+            DetailList.ItemsSource = _pageRows;
 
             // Set up initial state for calendar
             _selectedDate = DateTime.Today;
@@ -124,11 +136,20 @@ namespace V3SClient.UI.Views
                 SearchPlaceholder.Visibility = string.IsNullOrEmpty(SearchBox.Text)
                     ? Visibility.Visible : Visibility.Collapsed;
 
-            Loaded   += async (_, __) => await InitAsync();
+            Loaded += async (_, __) =>
+            {
+                await InitAsync();
+                _fullRefreshTimer.Start();
+            };
             // A pending async refresh can resume after Unloaded (for example while
             // navigating quickly).  Cancelling is sufficient; disposing here races
             // with RefreshAllAsync and causes ObjectDisposedException on Cancel().
-            Unloaded += (_, __) => _cts.Cancel();
+            Unloaded += (_, __) =>
+            {
+                _fullRefreshTimer.Stop();
+                _cts.Cancel();
+                _tableCts.Cancel();
+            };
         }
 
         // ─────────────────────────────────────────────────────
@@ -155,9 +176,15 @@ namespace V3SClient.UI.Views
                 // Populate normal combobox for table filter
                 ListCameraCombo.Items.Clear();
                 ListCameraCombo.Items.Add(new ComboBoxItem { Content = "Tất cả camera", Tag = "all" });
+                DetailCameraCombo.Items.Clear();
+                DetailCameraCombo.Items.Add(new ComboBoxItem { Content = "Tất cả camera", Tag = "all" });
                 foreach (var id in ids)
+                {
                     ListCameraCombo.Items.Add(new ComboBoxItem { Content = id, Tag = id });
+                    DetailCameraCombo.Items.Add(new ComboBoxItem { Content = id, Tag = id });
+                }
                 ListCameraCombo.SelectedIndex = 0;
+                DetailCameraCombo.SelectedIndex = 0;
 
             // Populate multi-select for top filter
             _cameraFilters.Clear();
@@ -205,6 +232,8 @@ namespace V3SClient.UI.Views
         // ─────────────────────────────────────────────────────
         private async Task RefreshAllAsync()
         {
+            if (_isFullRefreshRunning) return;
+            _isFullRefreshRunning = true;
             var previousCts = _cts;
             previousCts.Cancel();
             _cts = new CancellationTokenSource();
@@ -215,6 +244,7 @@ namespace V3SClient.UI.Views
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { LoggerManager.LogException(ex, "EventCenter.RefreshAll"); }
+            finally { _isFullRefreshRunning = false; }
         }
 
         // ─────────────────────────────────────────────────────
@@ -536,6 +566,9 @@ namespace V3SClient.UI.Views
         private async Task LoadThumbnailsAsync(CancellationToken token)
         {
             var rows = _pageRows.ToList();
+            var assetIds = rows.Where(row => row != null && !string.IsNullOrWhiteSpace(row.AssetId) && row.AssetId != "—")
+                .Select(row => row.AssetId).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var accessUrls = await ApiManager.Instance.GetDashboardAssetAccessUrlsAsync(assetIds, token);
             await Task.WhenAll(rows.Select(async row =>
             {
                 if (token.IsCancellationRequested) return;
@@ -546,29 +579,33 @@ namespace V3SClient.UI.Views
                 }
                 try
                 {
-                    var url = await ApiManager.Instance.GetDashboardAssetAccessUrlAsync(row.AssetId, token);
+                    string url;
+                    if (accessUrls == null || !accessUrls.TryGetValue(row.AssetId, out url)) return;
                     if (string.IsNullOrWhiteSpace(url))
                     {
                         LoggerManager.LogWarn("EventCenter thumbnail URL unavailable for asset " + row.AssetId);
                         return;
                     }
-                    await Dispatcher.InvokeAsync(() =>
+                    using (var client = new WebClient())
+                    using (var imageStream = new MemoryStream(await client.DownloadDataTaskAsync(new Uri(url)), writable: false))
                     {
-                        try
+                        var bmp = new BitmapImage();
+                        bmp.BeginInit();
+                        bmp.CacheOption = BitmapCacheOption.OnLoad;
+                        bmp.DecodePixelWidth = 144;
+                        bmp.StreamSource = imageStream;
+                        bmp.EndInit();
+                        bmp.Freeze();
+                        await Dispatcher.InvokeAsync(() =>
                         {
-                            var bmp = new BitmapImage();
-                            bmp.BeginInit();
-                            bmp.UriSource       = new Uri(url);
-                            bmp.CacheOption     = BitmapCacheOption.OnLoad;
-                            bmp.DecodePixelWidth = 80;
-                            bmp.EndInit();
-                            bmp.Freeze();
                             row.ThumbnailSource = bmp;
-                        }
-                        catch { /* silent */ }
-                    });
+                        });
+                    }
                 }
-                catch { /* silent */ }
+                catch (Exception ex)
+                {
+                    LoggerManager.LogException(ex, "EventCenter thumbnail " + row.AssetId);
+                }
             }));
         }
 
@@ -590,6 +627,7 @@ namespace V3SClient.UI.Views
             int end = total == 0 ? 0 : Math.Min(start + _pageRows.Count - 1, total);
             PageInfoText.Text = $"Hiển thị {start}\u2013{end} của {total} sự kiện";
             PageLabel.Text    = $"{_currentPage} / {_totalPages}";
+            if (DetailPageLabel != null) DetailPageLabel.Text = $"{start}–{end} / {total} · {_currentPage}/{_totalPages}";
             PrevBtn.IsEnabled = _currentPage > 1;
             NextBtn.IsEnabled = _currentPage < _totalPages;
         }
@@ -659,11 +697,14 @@ namespace V3SClient.UI.Views
         private async Task ShowDetailAsync(EventRow_v3 row)
         {
             if (row == null) return;
+            if (ReferenceEquals(_detailRow, row) && DetailPanel.Visibility == Visibility.Visible) return;
+            _detailRow = row;
 
             // The detail panel is now a full-width overlay, matching the web
             // detail view. Keep the underlying list at its original width.
             DetailCol.Width       = new GridLength(0);
             DetailPanel.Visibility = Visibility.Visible;
+            DetailList.SelectedItem = row;
 
             DetailTitle.Text = "Biển số: " + row.Title;
             DTitle.Text      = row.Title;
@@ -676,38 +717,33 @@ namespace V3SClient.UI.Views
             DAssetId.Text    = row.AssetId;
 
             PreviewImage.Source         = null;
+            DetailImage.Source          = row.ThumbnailSource;
             PreviewImage.Visibility     = Visibility.Collapsed;
             PreviewPlaceholder.Visibility = Visibility.Visible;
-            DetailVideo.Stop();
-            DetailVideo.Source = null;
-            DetailVideoPlaceholder.Visibility = Visibility.Visible;
-
-            Uri playbackUri;
-            if (TryGetSupportedPlaybackUri(row.PlaybackUrl, out playbackUri))
-            {
-                try
-                {
-                    DetailVideo.Source = playbackUri;
-                    DetailVideoPlaceholder.Visibility = Visibility.Collapsed;
-                    DetailVideo.Play();
-                }
-                catch (Exception ex) { LoggerManager.LogException(ex, "EventCenter.Detail.Video"); }
-            }
+            await OpenDetailPlaybackAsync(row);
 
             if (row.AssetId != "—" && !string.IsNullOrWhiteSpace(row.AssetId))
             {
                 try
                 {
-                    var url = await ApiManager.Instance.GetDashboardAssetAccessUrlAsync(row.AssetId, _cts.Token);
+                    var urls = await ApiManager.Instance.GetDashboardAssetAccessUrlsAsync(new[] { row.AssetId }, _cts.Token);
+                    string url;
+                    if (urls == null || !urls.TryGetValue(row.AssetId, out url)) return;
                     if (!string.IsNullOrWhiteSpace(url))
                     {
-                        var bmp = new BitmapImage();
-                        bmp.BeginInit();
-                        bmp.UriSource   = new Uri(url);
-                        bmp.CacheOption = BitmapCacheOption.OnLoad;
-                        bmp.EndInit();
-                        bmp.Freeze();
+                        BitmapImage bmp;
+                        using (var client = new WebClient())
+                        using (var stream = new MemoryStream(await client.DownloadDataTaskAsync(new Uri(url)), writable: false))
+                        {
+                            bmp = new BitmapImage();
+                            bmp.BeginInit();
+                            bmp.CacheOption = BitmapCacheOption.OnLoad;
+                            bmp.StreamSource = stream;
+                            bmp.EndInit();
+                            bmp.Freeze();
+                        }
                         PreviewImage.Source          = bmp;
+                        DetailImage.Source           = bmp;
                         PreviewImage.Visibility      = Visibility.Visible;
                         PreviewPlaceholder.Visibility = Visibility.Collapsed;
                         if (row.ThumbnailSource == null)
@@ -732,43 +768,85 @@ namespace V3SClient.UI.Views
 
         private void CloseDetail()
         {
-            DetailVideo.Stop();
-            DetailVideo.Source = null;
+            DetailPlaybackHost.Content = null;
+            _detailPlayback = null;
+            _detailRow = null;
             DetailCol.Width       = new GridLength(0);
             DetailPanel.Visibility = Visibility.Collapsed;
             CompletedGrid.UnselectAll();
             RecordedGrid.UnselectAll();
         }
 
-        private static bool TryGetSupportedPlaybackUri(string value, out Uri uri)
+        private async Task OpenDetailPlaybackAsync(EventRow_v3 row)
         {
-            uri = null;
-            if (string.IsNullOrWhiteSpace(value)) return false;
-            Uri candidate;
-            if (!Uri.TryCreate(value.Trim(), UriKind.Absolute, out candidate)) return false;
-            if (!string.Equals(candidate.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(candidate.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
-                return false;
-            uri = candidate;
-            return true;
-        }
+            DateTime start;
+            if (!TryParseEventTime(row.TimeIn, out start))
+            {
+                DetailVideoPlaceholder.Text = "Không xác định được thời điểm sự kiện";
+                DetailVideoPlaceholder.Visibility = Visibility.Visible;
+                return;
+            }
+            DateTime end;
+            if (!TryParseEventTime(row.TimeOut, out end) || end <= start) end = start.AddMinutes(1);
+            start = start.AddSeconds(-15);
+            end = end.AddSeconds(15);
 
-        private void DetailVideo_MediaFailed(object sender, ExceptionRoutedEventArgs e)
-        {
             try
             {
-                DetailVideo.Stop();
-                DetailVideo.Source = null;
-                DetailVideoPlaceholder.Text = "Không thể phát video công đoạn";
+                DetailVideoPlaceholder.Text = "Đang tải video từ playback...";
                 DetailVideoPlaceholder.Visibility = Visibility.Visible;
-                LoggerManager.LogWarn("EventCenter.Detail.Video.MediaFailed: " +
-                                      (e == null || e.ErrorException == null ? "unknown error" : e.ErrorException.Message));
+                // A GStreamer playback page owns native decoder handles. Release the
+                // previous page before opening another event; otherwise only the first
+                // selected record can decode/seek reliably.
+                if (_detailPlayback != null)
+                {
+                    DetailPlaybackHost.Content = null;
+                    _detailPlayback = null;
+                    await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
+                }
+                _detailPlayback = new VPlaybackHLS(GlobalSystem.Instance.CameraGroups.CamGroupList);
+                _detailPlayback.SetEmbeddedMode();
+                DetailPlaybackHost.Navigate(_detailPlayback);
+                await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded);
+                _detailPlayback.OpenEventPlayback(row.Camera, start, end);
+                DetailVideoPlaceholder.Visibility = Visibility.Collapsed;
             }
             catch (Exception ex)
             {
-                LoggerManager.LogException(ex, "EventCenter.Detail.Video.MediaFailed");
+                DetailVideoPlaceholder.Text = "Không thể tải video playback";
+                DetailVideoPlaceholder.Visibility = Visibility.Visible;
+                LoggerManager.LogException(ex, "EventCenter.Detail.Playback");
             }
         }
+
+        private static bool TryParseEventTime(string value, out DateTime time)
+        {
+            return DateTime.TryParseExact(value, "HH:mm:ss dd/MM/yyyy", CultureInfo.InvariantCulture,
+                       DateTimeStyles.AllowWhiteSpaces, out time)
+                   || DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out time);
+        }
+
+        private async void DetailList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var row = DetailList.SelectedItem as EventRow_v3;
+            if (row != null) await ShowDetailAsync(row);
+        }
+
+        private void DetailSearch_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            DetailSearchPlaceholder.Visibility = string.IsNullOrEmpty(DetailSearchBox.Text) ? Visibility.Visible : Visibility.Collapsed;
+            if (SearchBox != null && SearchBox.Text != DetailSearchBox.Text) SearchBox.Text = DetailSearchBox.Text;
+        }
+
+        private void DetailCamera_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var tag = (DetailCameraCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "all";
+            var match = ListCameraCombo.Items.OfType<ComboBoxItem>().FirstOrDefault(item => string.Equals(item.Tag?.ToString(), tag, StringComparison.OrdinalIgnoreCase));
+            if (match != null) ListCameraCombo.SelectedItem = match;
+        }
+
+        private void DetailPrevPage_Click(object sender, RoutedEventArgs e) => PrevPage_Click(sender, e);
+        private void DetailNextPage_Click(object sender, RoutedEventArgs e) => NextPage_Click(sender, e);
 
         // ─────────────────────────────────────────────────────
         //  EVENT HANDLERS
@@ -778,12 +856,11 @@ namespace V3SClient.UI.Views
 
         private async void TableRefresh_Click(object s, RoutedEventArgs e)
         {
-            var previousCts = _cts;
+            var previousCts = _tableCts;
             previousCts.Cancel();
-            _cts = new CancellationTokenSource();
-            var token = _cts.Token;
+            _tableCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+            var token = _tableCts.Token;
             await LoadEventsAsync(token);
-            _ = LoadKpiAsync(token);
         }
 
         private void DateFilterToggle_Click(object s, RoutedEventArgs e)
@@ -920,6 +997,55 @@ namespace V3SClient.UI.Views
             if (!IsLoaded) return;
             _currentPage = 1;
             _ = LoadEventsAsync(_cts.Token);
+        }
+
+        private string _completedSortMember;
+        private bool _completedSortDescending;
+
+        private static DateTime SortEventTime(string value)
+        {
+            DateTime time;
+            return DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out time) ? time : DateTime.MinValue;
+        }
+
+        private static double SortDuration(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value) || value == "—") return 0;
+            var seconds = 0d;
+            foreach (var part in value.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                var digits = new string(part.TakeWhile(char.IsDigit).ToArray());
+                double number;
+                if (!double.TryParse(digits, NumberStyles.Any, CultureInfo.InvariantCulture, out number)) continue;
+                if (part.Contains("p")) seconds += number * 60;
+                else if (part.Contains("s")) seconds += number;
+            }
+            return seconds;
+        }
+
+        private void CompletedGrid_Sorting(object sender, DataGridSortingEventArgs e)
+        {
+            e.Handled = true;
+            var member = e.Column.SortMemberPath;
+            if (string.IsNullOrWhiteSpace(member)) return;
+            _completedSortDescending = string.Equals(_completedSortMember, member, StringComparison.Ordinal) && !_completedSortDescending;
+            _completedSortMember = member;
+            foreach (var column in CompletedGrid.Columns) column.SortDirection = null;
+            e.Column.SortDirection = _completedSortDescending ? ListSortDirection.Descending : ListSortDirection.Ascending;
+
+            IEnumerable<EventRow_v3> sorted;
+            switch (member)
+            {
+                case "TimeIn": sorted = _pageRows.OrderBy(row => SortEventTime(row.TimeIn)); break;
+                case "TimeOut": sorted = _pageRows.OrderBy(row => SortEventTime(row.TimeOut)); break;
+                case "Duration": sorted = _pageRows.OrderBy(row => SortDuration(row.Duration)); break;
+                case "ConfidenceRaw": sorted = _pageRows.OrderBy(row => row.ConfidenceRaw); break;
+                default: sorted = _pageRows.OrderBy(row => row.Title ?? string.Empty, StringComparer.OrdinalIgnoreCase); break;
+            }
+            if (_completedSortDescending) sorted = sorted.Reverse();
+            var rows = sorted.ToList();
+            _pageRows.Clear();
+            foreach (var row in rows) _pageRows.Add(row);
         }
 
         private async void Event_Selected(object s, SelectionChangedEventArgs e)

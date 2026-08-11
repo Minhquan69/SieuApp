@@ -559,15 +559,13 @@
                 </Style>
             </Grid.Resources>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition/>
+                <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="10"/>
-                <ColumnDefinition/>
+                <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="10"/>
-                <ColumnDefinition/>
+                <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="10"/>
-                <ColumnDefinition/>
-                <ColumnDefinition Width="10"/>
-                <ColumnDefinition/>
+                <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
             <!-- ── Card 1: Hôm nay (BLUE) ── -->
@@ -770,18 +768,21 @@
                         </Grid>
                     </Border>
 
-                    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <Grid Grid.Row="2" MinHeight="0">
                         <Grid>
                             <!-- Tab Completed: xe hoàn thành công đoạn -->
                             <DataGrid x:Name="CompletedGrid"
                                       AutoGenerateColumns="False" IsReadOnly="True"
                                       SelectionMode="Single" SelectionUnit="FullRow" RowHeight="58"
                                       SelectionChanged="Event_Selected"
+                                      Sorting="CompletedGrid_Sorting" CanUserSortColumns="True"
                                       CanUserReorderColumns="False" CanUserResizeRows="False"
                                       GridLinesVisibility="Horizontal"
                                       HorizontalGridLinesBrush="{StaticResource VmsBorderSubtleBrush_v3}"
                                       VerticalGridLinesBrush="Transparent"
                                       RowHeaderWidth="0" Background="Transparent"
+                                      ScrollViewer.VerticalScrollBarVisibility="Visible"
+                                      ScrollViewer.HorizontalScrollBarVisibility="Auto"
                                       HorizontalContentAlignment="Stretch"
                                       BorderThickness="0"
                                       Foreground="{StaticResource VmsTextPrimaryBrush_v3}"
@@ -789,30 +790,33 @@
                                       RowStyle="{StaticResource DgRow}">
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="BIỂN SỐ" Binding="{Binding Title}" Width="140">
-                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="12,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="FontSize" Value="12"/></Style></DataGridTextColumn.ElementStyle>
+                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="12,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="FontSize" Value="12"/><Setter Property="Foreground" Value="#3B82F6"/></Style></DataGridTextColumn.ElementStyle>
                                     </DataGridTextColumn>
                                     <DataGridTextColumn Header="LOẠI XE" Binding="{Binding VehicleType}" Width="110">
                                         <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="12,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontSize" Value="12"/></Style></DataGridTextColumn.ElementStyle>
                                     </DataGridTextColumn>
-                                    <DataGridTextColumn Header="CAMERA" Binding="{Binding Camera}" Width="160">
+                                    <DataGridTextColumn Header="CAMERA" Binding="{Binding Camera}" Width="130">
+                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="12,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontSize" Value="12"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Foreground" Value="#DCEBFA"/></Style></DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+                                    <DataGridTextColumn Header="CÔNG ĐOẠN" Binding="{Binding RoiName}" Width="2*">
                                         <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="12,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontSize" Value="12"/></Style></DataGridTextColumn.ElementStyle>
                                     </DataGridTextColumn>
-                                    <DataGridTextColumn Header="CÔNG ĐOẠN" Binding="{Binding RoiName}" Width="130">
-                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="12,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontSize" Value="12"/></Style></DataGridTextColumn.ElementStyle>
-                                    </DataGridTextColumn>
-                                    <DataGridTextColumn Header="T. VÀO" Binding="{Binding TimeIn}" Width="130">
+                                    <DataGridTemplateColumn Header="ĐỘ TIN CẬY" SortMemberPath="ConfidenceRaw" Width="120">
+                                        <DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Confidence}" Foreground="#35D07F" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" Margin="12,0"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTextColumn Header="THỜI GIAN VÀO" Binding="{Binding TimeIn}" SortMemberPath="TimeIn" Width="170">
                                         <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="12,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontSize" Value="12"/><Setter Property="Foreground" Value="{StaticResource VmsTextSecondaryBrush_v3}"/></Style></DataGridTextColumn.ElementStyle>
                                     </DataGridTextColumn>
-                                    <DataGridTextColumn Header="T. RA" Binding="{Binding TimeOut}" Width="130">
+                                    <DataGridTextColumn Header="THỜI GIAN RA" Binding="{Binding TimeOut}" SortMemberPath="TimeOut" Width="170">
                                         <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="12,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontSize" Value="12"/><Setter Property="Foreground" Value="{StaticResource VmsTextSecondaryBrush_v3}"/></Style></DataGridTextColumn.ElementStyle>
                                     </DataGridTextColumn>
-                                    <DataGridTextColumn Header="THỜI GIAN" Binding="{Binding Duration}" Width="*">
+                                    <DataGridTextColumn Header="THỜI GIAN THỰC HIỆN" Binding="{Binding Duration}" SortMemberPath="Duration" Width="160">
                                         <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="12,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontSize" Value="12"/></Style></DataGridTextColumn.ElementStyle>
                                     </DataGridTextColumn>
-                                    <DataGridTemplateColumn Header="ẢNH" Width="72">
+                                    <DataGridTemplateColumn Header="ẢNH" Width="88">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate>
-                                                <Border Margin="8,5" Width="64" Height="44" Background="{StaticResource VmsSurface2Brush_v3}" CornerRadius="5" ClipToBounds="True">
+                                                <Border Margin="8,5" Width="72" Height="46" Background="{StaticResource VmsSurface2Brush_v3}" CornerRadius="6" ClipToBounds="True">
                                                     <Image Source="{Binding ThumbnailSource}" Stretch="UniformToFill"/>
                                                 </Border>
                                             </DataTemplate>
@@ -832,6 +836,8 @@
                                       HorizontalGridLinesBrush="{StaticResource VmsBorderSubtleBrush_v3}"
                                       VerticalGridLinesBrush="Transparent"
                                       RowHeaderWidth="0" Background="Transparent"
+                                      ScrollViewer.VerticalScrollBarVisibility="Visible"
+                                      ScrollViewer.HorizontalScrollBarVisibility="Auto"
                                       HorizontalContentAlignment="Stretch"
                                       BorderThickness="0"
                                       Foreground="{StaticResource VmsTextPrimaryBrush_v3}"
@@ -878,7 +884,7 @@
                                 <TextBlock x:Name="EmptyStateDetail" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="12" TextWrapping="Wrap" MaxWidth="280" TextAlignment="Center" HorizontalAlignment="Center" Margin="0,6,0,0"/>
                             </StackPanel>
                         </Grid>
-                    </ScrollViewer>
+                    </Grid>
 
                     <Border Grid.Row="3" Padding="12,8" BorderBrush="{StaticResource VmsBorderSubtleBrush_v3}" BorderThickness="0,1,0,0">
                         <Grid>
@@ -939,13 +945,51 @@
                     <!-- Body -->
                     <Grid Grid.Row="1" Margin="16">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="2*"/>
+                            <ColumnDefinition Width="360"/>
                             <ColumnDefinition Width="14"/>
-                            <ColumnDefinition Width="*" MinWidth="330"/>
+                            <ColumnDefinition Width="*" MinWidth="620"/>
+                            <ColumnDefinition Width="14"/>
+                            <ColumnDefinition Width="284"/>
                         </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
+
+                        <Border Grid.Column="0" Background="{StaticResource VmsSurface2Brush_v3}" BorderBrush="{StaticResource VmsBorderSubtleBrush_v3}" BorderThickness="1" CornerRadius="7" Padding="8">
+                            <Grid>
+                                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                <TextBlock Text="DANH SÁCH PHƯƠNG TIỆN" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" FontWeight="SemiBold" FontSize="11" Margin="6,4,6,10"/>
+                                <StackPanel Grid.Row="1" Margin="0,0,0,8">
+                                    <Grid><TextBox x:Name="DetailSearchBox" Style="{StaticResource SearchTB}" TextChanged="DetailSearch_TextChanged"/><Path Data="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" Fill="{StaticResource VmsTextTertiaryBrush_v3}" Width="13" Height="13" Stretch="Uniform" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="10,0,0,0" IsHitTestVisible="False"/><TextBlock x:Name="DetailSearchPlaceholder" Text="Tìm biển số, camera..." Foreground="{StaticResource VmsTextDisabledBrush_v3}" FontSize="12" VerticalAlignment="Center" Margin="32,0,0,0" IsHitTestVisible="False"/></Grid>
+                                    <Grid Margin="0,7,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><ComboBox x:Name="DetailCameraCombo" Style="{StaticResource FilterCB}" IsTextSearchEnabled="True" SelectedIndex="0" SelectionChanged="DetailCamera_SelectionChanged"><ComboBoxItem Content="Tất cả camera" Tag="all"/></ComboBox><ComboBox Grid.Column="2" Style="{StaticResource FilterCB}" SelectedIndex="0" IsEnabled="False"><ComboBoxItem Content="Tất cả công đoạn"/></ComboBox></Grid>
+                                </StackPanel>
+                                <ListBox x:Name="DetailList" Grid.Row="2" Background="Transparent" BorderThickness="0" SelectionChanged="DetailList_SelectionChanged" ScrollViewer.VerticalScrollBarVisibility="Visible">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Padding="7" Margin="0,0,0,4" CornerRadius="5" Background="Transparent">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="58"/><ColumnDefinition Width="48"/></Grid.ColumnDefinitions>
+                                                    <StackPanel>
+                                                        <TextBlock Text="{Binding Title}" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontWeight="SemiBold" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Text="{Binding Camera}" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="10" Margin="0,3,0,0"/>
+                                                        <TextBlock Text="{Binding TimeIn}" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" FontSize="10" Margin="0,2,0,0"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" HorizontalAlignment="Right"><TextBlock Text="{Binding TimeOnly}" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontWeight="SemiBold" FontSize="11"/><TextBlock Text="{Binding DateOnly}" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="9" HorizontalAlignment="Right" Margin="0,3,0,0"/></StackPanel>
+                                                    <Border Grid.Column="2" Width="44" Height="34" CornerRadius="4" ClipToBounds="True" Background="{StaticResource VmsSurface3Brush_v3}" HorizontalAlignment="Right">
+                                                        <Image Source="{Binding ThumbnailSource}" Stretch="UniformToFill"/>
+                                                    </Border>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                    <ListBox.ItemContainerStyle>
+                                        <Style TargetType="ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border x:Name="ItemBorder" Background="{TemplateBinding Background}" CornerRadius="5"><ContentPresenter/></Border><ControlTemplate.Triggers><Trigger Property="IsSelected" Value="True"><Setter TargetName="ItemBorder" Property="Background" Value="#1D3D76C5"/></Trigger><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ItemBorder" Property="Background" Value="{StaticResource VmsSurface3Brush_v3}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>
+                                    </ListBox.ItemContainerStyle>
+                                </ListBox>
+                                <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="4,8,4,0"><Button Style="{StaticResource NavBtn}" Content="‹" Click="DetailPrevPage_Click"/><TextBlock x:Name="DetailPageLabel" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" FontSize="11" VerticalAlignment="Center" Margin="7,0"/><Button Style="{StaticResource NavBtn}" Content="›" Click="DetailNextPage_Click"/></StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <StackPanel Grid.Column="2">
                             <!-- Image preview -->
-                            <Border Background="{StaticResource VmsSurface2Brush_v3}"
+                            <Border Background="{StaticResource VmsSurface2Brush_v3}" Visibility="Collapsed"
                                     CornerRadius="6" Height="180" ClipToBounds="True"
                                     Margin="0,0,0,14">
                                 <Grid>
@@ -966,17 +1010,16 @@
 
                             <Border Background="{StaticResource VmsSurface2Brush_v3}"
                                     BorderBrush="{StaticResource VmsBorderSubtleBrush_v3}"
-                                    BorderThickness="1" CornerRadius="6" Padding="8" Margin="0,0,0,14">
-                                <StackPanel>
-                                    <TextBlock Text="Video công đoạn" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" FontSize="11" FontWeight="SemiBold" Margin="4,0,0,7"/>
-                                    <MediaElement x:Name="DetailVideo" Height="190" Stretch="Uniform" LoadedBehavior="Manual" UnloadedBehavior="Manual" ScrubbingEnabled="True" MediaFailed="DetailVideo_MediaFailed"/>
-                                    <TextBlock x:Name="DetailVideoPlaceholder" Text="Không có video công đoạn" Foreground="{StaticResource VmsTextDisabledBrush_v3}" FontSize="11" HorizontalAlignment="Center" Margin="0,7,0,0"/>
-                                </StackPanel>
+                                    BorderThickness="1" CornerRadius="6" Height="360" ClipToBounds="True">
+                                <Grid>
+                                    <Frame x:Name="DetailPlaybackHost" NavigationUIVisibility="Hidden"/>
+                                    <TextBlock x:Name="DetailVideoPlaceholder" Text="Đang chuẩn bị playback..." Foreground="{StaticResource VmsTextDisabledBrush_v3}" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Grid>
                             </Border>
 
                         </StackPanel>
 
-                        <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+                        <ScrollViewer Grid.Column="4" VerticalScrollBarVisibility="Auto">
                             <StackPanel>
                             <!-- Info card -->
                             <Border Background="{StaticResource VmsSurface2Brush_v3}"
@@ -1020,8 +1063,19 @@
                                 </StackPanel>
                             </Border>
 
-                            <!-- Metadata card -->
                             <Border Background="{StaticResource VmsSurface2Brush_v3}"
+                                    BorderBrush="{StaticResource VmsBorderSubtleBrush_v3}"
+                                    BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="ẢNH CHỤP BIỂN SỐ" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,9"/>
+                                    <Border Height="210" CornerRadius="5" ClipToBounds="True" Background="{StaticResource VmsSurface3Brush_v3}">
+                                        <Image x:Name="DetailImage" Stretch="UniformToFill"/>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Metadata card -->
+                            <Border Background="{StaticResource VmsSurface2Brush_v3}" Visibility="Collapsed"
                                     BorderBrush="{StaticResource VmsBorderSubtleBrush_v3}"
                                     BorderThickness="1" CornerRadius="6"
                                     Padding="14,12">

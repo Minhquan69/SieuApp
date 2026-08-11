@@ -301,6 +301,39 @@ namespace V3SClient.UI.Views
             Loaded += Page_Loaded;
         }
 
+        /// <summary>
+        /// Opens the existing playback surface for one camera and a bounded event range.
+        /// This is intentionally additive so the normal Playback page keeps its current
+        /// camera selection, shortcuts and native player behaviour.
+        /// </summary>
+        public void OpenEventPlayback(string cameraId, System.DateTime startTime, System.DateTime endTime)
+        {
+            if (string.IsNullOrWhiteSpace(cameraId)) return;
+            var camera = (GlobalSystem.Instance.CameraList ?? new List<models.Camera>())
+                .FirstOrDefault(item => item != null && string.Equals(item.camID, cameraId, StringComparison.OrdinalIgnoreCase));
+            if (camera == null)
+            {
+                ShowPlaybackToast("Không tìm thấy camera", "Camera " + cameraId + " không còn trong danh sách.", PlaybackToastKind.Warning);
+                return;
+            }
+
+            if (endTime <= startTime) endTime = startTime.AddMinutes(1);
+            SelecedCameraList.Clear();
+            SelecedCameraList.Add(camera);
+            PlaybackCameraList.SetSelectedCameras(SelecedCameraList);
+            Dispatcher.BeginInvoke(new Action(() => btnSearch_Click(this,
+                new List<System.DateTime?> { startTime, endTime })), DispatcherPriority.Loaded);
+        }
+
+        /// <summary>Shows only the player and aggregate timeline when embedded in event detail.</summary>
+        public void SetEmbeddedMode()
+        {
+            PlaybackControlHeader.Visibility = Visibility.Collapsed;
+            PlaybackSidebar.Visibility = Visibility.Collapsed;
+            PlaybackSidebarColumn.Width = new GridLength(0);
+            PlaybackSidebarOpenButton.Visibility = Visibility.Collapsed;
+        }
+
         private void Page_Loaded(object sender, RoutedEventArgs e)
         {
             CreateNativePlaybackToolbar();

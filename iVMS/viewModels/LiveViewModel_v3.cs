@@ -413,6 +413,17 @@ namespace V3SClient.viewModels
         public static CameraStreamInfo SelectGridStream(Camera camera)
         {
             if (camera == null) return null;
+            var isAiCamera = camera.HasAIStream ||
+                string.Equals(camera.type, "ai_processed", StringComparison.OrdinalIgnoreCase) ||
+                (camera.Streams != null && camera.Streams.Any(stream => stream != null && stream.IsAiMode == true));
+            if (isAiCamera)
+            {
+                // Bbox is transported in AI metadata/SEI. Some sub1 streams
+                // omit that metadata, so prefer the explicit AI stream and
+                // otherwise main for every AI camera displayed in the grid.
+                var aiStream = camera.Streams == null ? null : camera.Streams.FirstOrDefault(stream => stream != null && stream.IsAiMode == true);
+                return aiStream ?? SelectMainStream(camera);
+            }
             var sub1 = camera.Streams == null ? null : camera.Streams.FirstOrDefault(stream => stream != null &&
                 string.Equals((stream.StreamType ?? string.Empty).Trim(), "sub1", StringComparison.OrdinalIgnoreCase));
             return sub1 ?? SelectMainStream(camera);
