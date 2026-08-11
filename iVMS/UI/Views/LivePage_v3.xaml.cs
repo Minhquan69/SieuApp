@@ -34,6 +34,7 @@ namespace V3SClient.UI.Views
         public string EventSummary { get; set; }
         public string ObjectType { get; set; }
         public string EventKey { get; set; }
+        public string RevisionKey { get; set; }
         private bool _isNew;
         public bool IsNew
         {
@@ -43,6 +44,17 @@ namespace V3SClient.UI.Views
                 if (_isNew == value) return;
                 _isNew = value;
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsNew)));
+            }
+        }
+        private bool _isUpdated;
+        public bool IsUpdated
+        {
+            get { return _isUpdated; }
+            set
+            {
+                if (_isUpdated == value) return;
+                _isUpdated = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsUpdated)));
             }
         }
         public double ConfidencePercent { get; set; }
@@ -113,6 +125,8 @@ namespace V3SClient.UI.Views
         private bool _aiFeedCollapsed;
         private bool _aiFeedInitialized;
         private readonly Dictionary<string, ImageSource> _aiFeedCropCache = new Dictionary<string, ImageSource>(StringComparer.OrdinalIgnoreCase);
+        private readonly Queue<string> _aiFeedCropCacheOrder = new Queue<string>();
+        private const int MaxAiFeedCropCacheEntries = 100;
         private readonly Stopwatch _resizeStopwatch = new Stopwatch();
         private bool _resizeOverlaysSuspended;
         private bool _geometryTransitionInProgress;
@@ -196,14 +210,17 @@ namespace V3SClient.UI.Views
             UpdateSidebarOpenButtons();
             BuildGrid();
             QueueHeaderActionCentering();
-            await RefreshAiSummaryAsync();
-            if (!_disposed) _aiSummaryRefreshTimer.Start();
-            await RefreshLiveTrafficDensityAsync();
-            if (!_disposed) _liveTrafficDensityRefreshTimer.Start();
-            await RefreshAiEventFeedAsync();
-            if (!_disposed && _aiEventFeedAutoRefresh) _aiEventFeedRefreshTimer.Start();
+            // Camera state is required to render the live grid. Resolve it
+            // before non-critical AI dashboard requests.
             await RefreshDeviceStatusesAsync();
             if (!_disposed) _deviceStatusRefreshTimer.Start();
+
+            _ = RefreshAiSummaryAsync();
+            if (!_disposed) _aiSummaryRefreshTimer.Start();
+            _ = RefreshLiveTrafficDensityAsync();
+            if (!_disposed) _liveTrafficDensityRefreshTimer.Start();
+            _ = RefreshAiEventFeedAsync();
+            if (!_disposed && _aiEventFeedAutoRefresh) _aiEventFeedRefreshTimer.Start();
         }
 
         private async void DeviceStatusRefreshTimer_Tick(object sender, EventArgs e)
@@ -241,7 +258,7 @@ namespace V3SClient.UI.Views
                     .ToList();
                 if (deviceIds.Count == 0) return false;
 
-                var statuses = await ApiManager.Instance.GetDeviceStatusBatchAsync(deviceIds, _lifetime.Token);
+                var statuses = await ApiManager.Instance.GetPortalDeviceStatusBatchAsync(deviceIds, _lifetime.Token);
                 if (_disposed || statuses == null || statuses.Count == 0) return false;
 
                 _viewModel.ApplyDeviceStatuses(statuses);
@@ -1828,10 +1845,22 @@ namespace V3SClient.UI.Views
                     : endAt.AddMinutes(-15);
                 var profileCameraIds = _viewModel.CameraGroups
                     .SelectMany(group => group.Cameras ?? Enumerable.Empty<Camera>())
-                    .Where(camera => camera != null && !string.IsNullOrWhiteSpace(camera.camID))
+                    .Where(camera => camera != null && !string.IsNullOrWhiteSpace(camera.camID) &&
+                        (camera.HasAIStream ||
+                         string.Equals(camera.type, "ai_processed", StringComparison.OrdinalIgnoreCase) ||
+                         (camera.Streams != null && camera.Streams.Any(stream => stream != null && stream.IsAiMode == true))))
                     .Select(camera => camera.camID.Trim())
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList();
+                if (profileCameraIds.Count == 0)
+                {
+                    profileCameraIds = _viewModel.CameraGroups
+                        .SelectMany(group => group.Cameras ?? Enumerable.Empty<Camera>())
+                        .Where(camera => camera != null && !string.IsNullOrWhiteSpace(camera.camID))
+                        .Select(camera => camera.camID.Trim())
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+                }
 
                 if (profileCameraIds.Count == 0)
                 {
@@ -1907,13 +1936,29 @@ namespace V3SClient.UI.Views
                 if (profileCameraIds.Count == 0)
                     return;
 
+                // Web AI Feed reads crop history, not the legacy live-feed API.
+                // Keep its exact contract: today's range, page 1, exactly ten
+                // newest entries, and only detections with confidence >= 99%.
                 var now = DateTime.Now;
-                var response = await ApiManager.Instance.GetLiveAiEventFeedAsync(
-                    now.Date, now, profileCameraIds, _lifetime.Token);
+                var response = await ApiManager.Instance.GetAiEventObjectCropHistoryAsync(
+                    now.Date,
+                    now,
+                    profileCameraIds,
+                    page: 1,
+                    pageSize: 10,
+                    objectId: string.Empty,
+                    minConfidence: 0.99,
+                    cancellationToken: _lifetime.Token);
                 if (_disposed || response == null)
                     return;
 
-                var nextItems = (response.Items ?? new List<ApiManager.LiveAiEventFeedItem>())
+                // The service normally returns descending timestamps. Sort and
+                // de-duplicate here as well so polling always keeps the newest ten.
+                var nextItems = (response.Items ?? new List<ApiManager.AiEventObjectCropItem>())
+                    .OrderByDescending(item => ParseAiFeedEventTime(item.EventTime))
+                    .ThenByDescending(item => item.DetectionId ?? item.MessageId ?? item.AssetId)
+                    .GroupBy(GetAiFeedSourceKey, StringComparer.OrdinalIgnoreCase)
+                    .Select(group => group.First())
                     .Take(10)
                     .Select(CreateAiFeedItem)
                     .ToList();
@@ -1922,21 +1967,39 @@ namespace V3SClient.UI.Views
                     .Where(item => !string.IsNullOrWhiteSpace(item.EventKey))
                     .GroupBy(item => item.EventKey)
                     .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
-                var nextKeys = nextItems.Select(item => item.ViewModel.EventKey).ToList();
-                var currentKeys = AiEventFeedItems.Select(item => item.EventKey).ToList();
-                if (_aiFeedInitialized && nextKeys.SequenceEqual(currentKeys, StringComparer.OrdinalIgnoreCase))
+                var feedUnchanged = _aiFeedInitialized &&
+                    nextItems.Count == AiEventFeedItems.Count &&
+                    nextItems.All(item =>
+                    {
+                        LiveAiFeedItemViewModel_v3 existing;
+                        return currentItemsByKey.TryGetValue(item.ViewModel.EventKey, out existing) &&
+                            string.Equals(existing.RevisionKey, item.ViewModel.RevisionKey, StringComparison.Ordinal);
+                    });
+                if (feedUnchanged)
                     return;
 
                 var newItems = nextItems
                     .Where(item => !currentItemsByKey.ContainsKey(item.ViewModel.EventKey))
                     .ToList();
+                var updatedItems = new List<AiFeedItemSource>();
                 foreach (var item in nextItems)
                 {
                     LiveAiFeedItemViewModel_v3 existing;
                     if (currentItemsByKey.TryGetValue(item.ViewModel.EventKey, out existing))
-                        item.ViewModel = existing;
+                    {
+                        if (string.Equals(existing.RevisionKey, item.ViewModel.RevisionKey, StringComparison.Ordinal))
+                        {
+                            item.ViewModel = existing;
+                        }
+                        else
+                        {
+                            item.ViewModel.IsUpdated = true;
+                            item.ViewModel.CropImage = existing.CropImage;
+                            updatedItems.Add(item);
+                        }
+                    }
                     else
-                        item.ViewModel.IsNew = _aiFeedInitialized;
+                        item.ViewModel.IsNew = true;
                 }
 
                 AiEventFeedItems.Clear();
@@ -1944,7 +2007,11 @@ namespace V3SClient.UI.Views
                     AiEventFeedItems.Add(item.ViewModel);
                 _aiFeedInitialized = true;
 
-                await Task.WhenAll(newItems
+                // Match the web: new and changed records are highlighted for 5s.
+                foreach (var item in newItems.Concat(updatedItems))
+                    _ = ClearAiFeedStatusAsync(item.ViewModel);
+
+                await Task.WhenAll(newItems.Concat(updatedItems)
                     .Where(item => !string.IsNullOrWhiteSpace(item.AssetId))
                     .Select(async item =>
                     {
@@ -1958,7 +2025,7 @@ namespace V3SClient.UI.Views
                         if (string.IsNullOrWhiteSpace(accessUrl) || _disposed) return;
                         using (var client = new WebClient())
                         {
-                            var imageBytes = await client.DownloadDataTaskAsync(new Uri(accessUrl, UriKind.Absolute));
+                            var imageBytes = await client.DownloadDataTaskAsync(new Uri(accessUrl));
                             using (var imageStream = new MemoryStream(imageBytes, writable: false))
                             {
                                 var crop = new BitmapImage();
@@ -1966,8 +2033,15 @@ namespace V3SClient.UI.Views
                                 crop.CacheOption = BitmapCacheOption.OnLoad;
                                 crop.StreamSource = imageStream;
                                 crop.EndInit();
+                                crop.Freeze();
                                 if (_disposed) return;
                                 _aiFeedCropCache[item.AssetId] = crop;
+                                _aiFeedCropCacheOrder.Enqueue(item.AssetId);
+                                while (_aiFeedCropCacheOrder.Count > MaxAiFeedCropCacheEntries)
+                                {
+                                    var expiredAssetId = _aiFeedCropCacheOrder.Dequeue();
+                                    _aiFeedCropCache.Remove(expiredAssetId);
+                                }
                                 item.ViewModel.CropImage = crop;
                             }
                         }
@@ -1984,34 +2058,81 @@ namespace V3SClient.UI.Views
             }
         }
 
+        private async Task ClearAiFeedStatusAsync(LiveAiFeedItemViewModel_v3 item)
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(5), _lifetime.Token);
+                if (!_disposed && item != null)
+                {
+                    item.IsNew = false;
+                    item.IsUpdated = false;
+                }
+            }
+            catch (OperationCanceledException) { }
+        }
+
         private sealed class AiFeedItemSource
         {
             public LiveAiFeedItemViewModel_v3 ViewModel { get; set; }
             public string AssetId { get; set; }
         }
 
-        private static AiFeedItemSource CreateAiFeedItem(ApiManager.LiveAiEventFeedItem item)
+        private static DateTime ParseAiFeedEventTime(string eventTime)
         {
-            var confidence = Math.Max(0, Math.Min(100, item.Confidence * 100));
+            DateTime parsed;
+            return !string.IsNullOrWhiteSpace(eventTime) && DateTime.TryParse(eventTime, out parsed)
+                ? parsed
+                : DateTime.MinValue;
+        }
+
+        private static string GetAiFeedSourceKey(ApiManager.AiEventObjectCropItem item)
+        {
+            // Match the web event identity: one tracked object per camera.
+            var objectId = !string.IsNullOrWhiteSpace(item.ObjectId) ? item.ObjectId.Trim() : item.Plate?.Trim();
+            var cameraId = item.CameraId == null ? string.Empty : item.CameraId.Trim();
+            if (!string.IsNullOrWhiteSpace(objectId) && !string.IsNullOrWhiteSpace(cameraId))
+                return objectId + "::" + cameraId;
+            if (!string.IsNullOrWhiteSpace(item.MessageId)) return item.MessageId;
+            if (!string.IsNullOrWhiteSpace(item.DetectionId)) return item.DetectionId;
+            if (!string.IsNullOrWhiteSpace(item.AssetId)) return item.AssetId;
+            if (!string.IsNullOrWhiteSpace(item.CropAssetId)) return item.CropAssetId;
+            return string.Format("{0}|{1}|{2}", item.CameraId, item.EventTime, item.ObjectId ?? item.Plate);
+        }
+
+        private static AiFeedItemSource CreateAiFeedItem(ApiManager.AiEventObjectCropItem item)
+        {
+            // The report API returns a ratio (0.99), while the UI uses percent.
+            // Normalise defensively in case an older report returns 99 directly.
+            var rawConfidence = item.Confidence ?? 0;
+            var confidence = rawConfidence <= 1 ? rawConfidence * 100 : rawConfidence;
+            confidence = Math.Max(0, Math.Min(100, confidence));
             DateTime eventTime = DateTime.MinValue;
             var parsed = !string.IsNullOrWhiteSpace(item.EventTime) && DateTime.TryParse(item.EventTime, out eventTime);
             var title = !string.IsNullOrWhiteSpace(item.ObjectId)
                 ? item.ObjectId
+                : !string.IsNullOrWhiteSpace(item.Plate) ? item.Plate
                 : !string.IsNullOrWhiteSpace(item.MetaType) ? item.MetaType : "Không xác định";
             var eventType = string.IsNullOrWhiteSpace(item.EventType) ? "AI detection" : item.EventType;
             return new AiFeedItemSource
             {
-                AssetId = item.AssetId,
+                AssetId = !string.IsNullOrWhiteSpace(item.AssetId) ? item.AssetId : item.CropAssetId,
                 ViewModel = new LiveAiFeedItemViewModel_v3
                 {
-                    EventKey = !string.IsNullOrWhiteSpace(item.DetectionId) ? item.DetectionId
-                        : !string.IsNullOrWhiteSpace(item.MessageId) ? item.MessageId
-                        : !string.IsNullOrWhiteSpace(item.AssetId) ? item.AssetId
-                        : string.Format("{0}|{1}|{2}", item.CameraId, item.EventTime, title),
+                    EventKey = GetAiFeedSourceKey(item),
+                    RevisionKey = string.Join("|", new[]
+                    {
+                        item.EventTime ?? string.Empty,
+                        rawConfidence.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+                        !string.IsNullOrWhiteSpace(item.AssetId) ? item.AssetId : item.CropAssetId ?? string.Empty,
+                        item.EventType ?? string.Empty,
+                        item.MetaType ?? string.Empty,
+                        item.ObjectKey == null ? string.Empty : item.ObjectKey.ToString()
+                    }),
                     Title = title,
                     CameraId = string.IsNullOrWhiteSpace(item.CameraId) ? "Camera không xác định" : item.CameraId,
                     EventTime = parsed ? eventTime.ToString("HH:mm:ss dd/MM/yyyy") : (item.EventTime ?? string.Empty),
-                    EventSummary = string.Format("{0} · {1:0.#}%", eventType, confidence),
+                    EventSummary = string.Format("{0} · {1:0}%", eventType, confidence),
                     ObjectType = string.IsNullOrWhiteSpace(item.MetaType) ? "Không xác định" : item.MetaType,
                     ConfidencePercent = confidence
                 }
@@ -2278,7 +2399,11 @@ namespace V3SClient.UI.Views
             {
                 tile.RemoveRequested -= Tile_RemoveRequested;
                 tile.FullscreenRequested -= Tile_FullscreenRequested;
+                tile.SnapshotRequested -= Tile_SnapshotRequested;
                 tile.StateChanged -= Tile_StateChanged;
+                tile.PreviewMouseLeftButtonDown -= Tile_PreviewMouseLeftButtonDown;
+                tile.PreviewMouseMove -= Tile_PreviewMouseMove;
+                tile.Drop -= Tile_Drop;
                 tile.Dispose();
             }
             _tiles.Clear();
@@ -2314,7 +2439,12 @@ namespace V3SClient.UI.Views
             LivePageHeader.SizeChanged -= LivePageHeader_SizeChanged;
             CameraGrid.SizeChanged -= CameraGrid_SizeChanged;
             SizeChanged -= LivePage_SizeChanged;
+            if (_removeErrorsHeaderButton != null)
+                _removeErrorsHeaderButton.Click -= RemoveErrors_Click;
             DisposeTiles();
+            AiEventFeedItems.Clear();
+            _aiFeedCropCache.Clear();
+            _aiFeedCropCacheOrder.Clear();
         }
     }
 }

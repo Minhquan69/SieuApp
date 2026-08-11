@@ -762,7 +762,7 @@ namespace V3SClient
                     var deviceIds = ActiveCamInfo.Select(c => c.CamInfo_CamId).ToList();
                     LoggerManager.LogInfo($"Đang đồng bộ trạng thái ban đầu cho {deviceIds.Count} thiết bị...");
                     
-                    var statusList = await ApiManager.Instance.GetDeviceStatusBatchAsync(deviceIds);
+                    var statusList = await ApiManager.Instance.GetPortalDeviceStatusBatchAsync(deviceIds);
                     if (statusList != null)
                     {
                         foreach (var statusInfo in statusList)

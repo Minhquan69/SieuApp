@@ -48,6 +48,9 @@
         </Style>
         <Style x:Key="AiFeedCardStyle_v3" TargetType="Border">
             <Setter Property="Opacity" Value="1"/>
+            <Setter Property="Background"><Setter.Value><SolidColorBrush Color="#0E2234"/></Setter.Value></Setter>
+            <Setter Property="BorderBrush"><Setter.Value><SolidColorBrush Color="#38546A"/></Setter.Value></Setter>
+            <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="RenderTransform"><Setter.Value><TranslateTransform Y="0"/></Setter.Value></Setter>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsNew}" Value="True">
@@ -56,6 +59,18 @@
                             <Storyboard>
                                 <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.32"/>
                                 <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(TranslateTransform.Y)" From="16" To="0" Duration="0:0:0.32"><DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction></DoubleAnimation>
+                                <ColorAnimation Storyboard.TargetProperty="BorderBrush.(SolidColorBrush.Color)" From="#38BDF8" To="#38546A" Duration="0:0:2.8"/>
+                                <ColorAnimation Storyboard.TargetProperty="Background.(SolidColorBrush.Color)" From="#123D57" To="#0E2234" Duration="0:0:2.8"/>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.EnterActions>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsUpdated}" Value="True">
+                    <DataTrigger.EnterActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <ColorAnimation Storyboard.TargetProperty="BorderBrush.(SolidColorBrush.Color)" From="#38BDF8" To="#38546A" Duration="0:0:2.8"/>
+                                <ColorAnimation Storyboard.TargetProperty="Background.(SolidColorBrush.Color)" From="#123D57" To="#0E2234" Duration="0:0:2.8"/>
                             </Storyboard>
                         </BeginStoryboard>
                     </DataTrigger.EnterActions>
@@ -399,17 +414,17 @@
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBox x:Name="AiFeedRefreshText" Text="5" Width="34" Height="24" Padding="5,1" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Background="#0B2032" Foreground="#CBD5E1" BorderBrush="#24445E" FontSize="10" VerticalAlignment="Center" Margin="0,0,3,0" ToolTip="Nhập số giây rồi bấm Enter" KeyDown="AiFeedRefreshSeconds_KeyDown"/>
                     <TextBlock Text="s" Foreground="#CBD5E1" FontSize="10" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <Button Click="OpenAiFeedDetails_Click" Content="Xem chi tiết" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="8,3" Margin="0,0,4,0" ToolTip="Mở trang Sự kiện" FontSize="10"/>
-                    <Button x:Name="AiFeedPauseButton" Click="ToggleAiFeedRefresh_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="6,3" Margin="0,0,4,0" ToolTip="Dừng tự làm mới"><Icon:PackIconMaterial x:Name="AiFeedPauseIcon" Kind="Pause" Width="13" Height="13"/></Button>
-                    <Button Click="RefreshAiEventFeed_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="6,3" ToolTip="Làm mới AI Feed"><Icon:PackIconMaterial Kind="Refresh" Width="13" Height="13"/></Button>
-                    <Button x:Name="AiFeedCollapseButton" Click="ToggleAiFeedCollapsed_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Padding="6,3" Margin="4,0,0,0" ToolTip="Thu gọn AI Feed"><Icon:PackIconMaterial x:Name="AiFeedCollapseIcon" Kind="ChevronUp" Width="13" Height="13"/></Button>
+                    <Button Click="OpenAiFeedDetails_Click" Content="Xem chi tiết" Style="{StaticResource SecondaryButtonStyle_v3}" Background="Transparent" BorderBrush="Transparent" BorderThickness="0" Padding="8,3" Margin="0,0,4,0" ToolTip="Mở trang Sự kiện" FontSize="10"/>
+                    <Button x:Name="AiFeedPauseButton" Click="ToggleAiFeedRefresh_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Background="Transparent" BorderBrush="Transparent" BorderThickness="0" Padding="6,3" Margin="0,0,4,0" ToolTip="Dừng tự làm mới"><Icon:PackIconMaterial x:Name="AiFeedPauseIcon" Kind="Pause" Width="13" Height="13"/></Button>
+                    <Button Click="RefreshAiEventFeed_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Background="Transparent" BorderBrush="Transparent" BorderThickness="0" Padding="6,3" ToolTip="Làm mới AI Feed"><Icon:PackIconMaterial Kind="Refresh" Width="13" Height="13"/></Button>
+                    <Button x:Name="AiFeedCollapseButton" Click="ToggleAiFeedCollapsed_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Background="Transparent" BorderBrush="Transparent" BorderThickness="0" Padding="6,3" Margin="4,0,0,0" ToolTip="Thu gọn AI Feed"><Icon:PackIconMaterial x:Name="AiFeedCollapseIcon" Kind="ChevronUp" Width="13" Height="13"/></Button>
                 </StackPanel>
                 <ScrollViewer x:Name="AiFeedScroller" Grid.Row="1" Grid.ColumnSpan="2" Margin="0,7,0,0" HorizontalScrollBarVisibility="Visible" VerticalScrollBarVisibility="Disabled" CanContentScroll="False" PanningMode="HorizontalOnly" PanningDeceleration="0.001" HorizontalContentAlignment="Left">
                     <ItemsControl ItemsSource="{Binding AiEventFeedItems, ElementName=LivePageRoot}">
                         <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Border Width="270" Height="112" Style="{StaticResource AiFeedCardStyle_v3}" Background="#0E2234" BorderBrush="#38546A" BorderThickness="1" CornerRadius="10" Margin="0,0,10,0" Padding="9" Cursor="Hand" MouseLeftButtonUp="AiFeedItem_Click">
+                                <Border Width="270" Height="112" Style="{StaticResource AiFeedCardStyle_v3}" CornerRadius="10" Margin="0,0,10,0" Padding="9" Cursor="Hand" MouseLeftButtonUp="AiFeedItem_Click">
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="84"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                         <Border Width="78" Height="78" CornerRadius="7" Background="#172E42" ClipToBounds="True" VerticalAlignment="Top">
@@ -427,6 +442,24 @@
                                             <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,4,0,0"><Icon:PackIconMaterial Kind="ClockOutline" Width="12" Height="12" Foreground="#8FA9BE" Margin="0,0,5,0"/><TextBlock Text="{Binding EventTime}" Foreground="#92A7BA" FontSize="10" TextTrimming="CharacterEllipsis"/></StackPanel>
                                             <Grid Grid.Row="3" Margin="0,7,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Icon:PackIconMaterial Kind="ShieldCheckOutline" Width="13" Height="13" Foreground="#10C985" Margin="0,0,5,0"/><TextBlock Grid.Column="1" Text="{Binding ConfidencePercent, StringFormat={}{0:F0}%}" Foreground="#34D399" FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center"/><ProgressBar Grid.Column="2" Value="{Binding ConfidencePercent}" Maximum="100" Height="4" Margin="5,0,0,0" Foreground="#10C985" Background="#24445A" BorderThickness="0" VerticalAlignment="Center"/></Grid>
                                         </Grid>
+                                        <Border HorizontalAlignment="Right" VerticalAlignment="Top" Background="#0E7490" CornerRadius="7" Padding="6,2" Margin="0,1,1,0">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers><DataTrigger Binding="{Binding IsNew}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <TextBlock Text="MỚI" Foreground="White" FontSize="8" FontWeight="Bold"/>
+                                        </Border>
+                                        <Border HorizontalAlignment="Right" VerticalAlignment="Top" Background="#1D4ED8" CornerRadius="7" Padding="6,2" Margin="0,1,1,0">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers><DataTrigger Binding="{Binding IsUpdated}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <TextBlock Text="ĐÃ CẬP NHẬT" Foreground="White" FontSize="8" FontWeight="Bold"/>
+                                        </Border>
                                     </Grid>
                                 </Border>
                             </DataTemplate>
@@ -444,7 +477,7 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel>
                     <Grid Margin="0,0,0,16"><StackPanel><TextBlock Text="AI EVENT" Foreground="#3B82F6" FontSize="10" FontWeight="SemiBold"/><TextBlock Text="{Binding Title}" Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,5,0,0"/></StackPanel><Button HorizontalAlignment="Right" Click="CloseAiFeedDetails_Click" Background="#1B354B" BorderBrush="#3B5B73" BorderThickness="1" Width="36" Height="36" Padding="8" ToolTip="Đóng"><Icon:PackIconMaterial Kind="Close" Width="16" Height="16"/></Button></Grid>
                     <Border Height="260" CornerRadius="12" Background="#172E42" ClipToBounds="True"><Grid><Image Source="{Binding CropImage}" Stretch="UniformToFill"/><Icon:PackIconMaterial Kind="CameraOutline" Width="38" Height="38" Foreground="#66839B" HorizontalAlignment="Center" VerticalAlignment="Center"><Icon:PackIconMaterial.Style><Style TargetType="Icon:PackIconMaterial"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding CropImage}" Value="{x:Null}"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Icon:PackIconMaterial.Style></Icon:PackIconMaterial></Grid></Border>
-                    <UniformGrid Columns="2" Margin="0,18,0,0"><Border Background="#10283A" BorderBrush="#24445E" BorderThickness="1" CornerRadius="10" Margin="0,0,8,8" Padding="12"><StackPanel><TextBlock Text="Đối tượng" Foreground="#9FB3C8" FontSize="10"/><TextBlock Text="{Binding ObjectType}" Foreground="White" FontWeight="SemiBold" Margin="0,5,0,0"/></StackPanel></Border><Border Background="#10283A" BorderBrush="#24445E" BorderThickness="1" CornerRadius="10" Margin="0,0,0,8" Padding="12"><StackPanel><TextBlock Text="Biển số" Foreground="#9FB3C8" FontSize="10"/><TextBlock Text="{Binding Title}" Foreground="White" FontWeight="SemiBold" Margin="0,5,0,0"/></StackPanel></Border><Border Background="#10283A" BorderBrush="#24445E" BorderThickness="1" CornerRadius="10" Margin="0,0,8,8" Padding="12"><StackPanel><TextBlock Text="Camera" Foreground="#9FB3C8" FontSize="10"/><TextBlock Text="{Binding CameraId}" Foreground="White" FontWeight="SemiBold" Margin="0,5,0,0"/></StackPanel></Border><Border Background="#10283A" BorderBrush="#24445E" BorderThickness="1" CornerRadius="10" Margin="0,0,0,8" Padding="12"><StackPanel><TextBlock Text="Độ tin cậy" Foreground="#9FB3C8" FontSize="10"/><TextBlock Text="{Binding ConfidencePercent, StringFormat={}{0:F2}%}" Foreground="White" FontWeight="SemiBold" Margin="0,5,0,0"/><ProgressBar Value="{Binding ConfidencePercent}" Maximum="100" Height="5" Margin="0,7,0,0" Foreground="#2775FF" Background="#24445A" BorderThickness="0"/></StackPanel></Border></UniformGrid>
+                    <UniformGrid Columns="2" Margin="0,18,0,0"><Border Background="#10283A" BorderBrush="#24445E" BorderThickness="1" CornerRadius="10" Margin="0,0,8,8" Padding="12"><StackPanel><TextBlock Text="Đối tượng" Foreground="#9FB3C8" FontSize="10"/><TextBlock Text="{Binding ObjectType}" Foreground="White" FontWeight="SemiBold" Margin="0,5,0,0"/></StackPanel></Border><Border Background="#10283A" BorderBrush="#24445E" BorderThickness="1" CornerRadius="10" Margin="0,0,0,8" Padding="12"><StackPanel><TextBlock Text="Biển số" Foreground="#9FB3C8" FontSize="10"/><TextBlock Text="{Binding Title}" Foreground="White" FontWeight="SemiBold" Margin="0,5,0,0"/></StackPanel></Border><Border Background="#10283A" BorderBrush="#24445E" BorderThickness="1" CornerRadius="10" Margin="0,0,8,8" Padding="12"><StackPanel><TextBlock Text="Camera" Foreground="#9FB3C8" FontSize="10"/><TextBlock Text="{Binding CameraId}" Foreground="White" FontWeight="SemiBold" Margin="0,5,0,0"/></StackPanel></Border><Border Background="#10283A" BorderBrush="#24445E" BorderThickness="1" CornerRadius="10" Margin="0,0,0,8" Padding="12"><StackPanel><TextBlock Text="Độ tin cậy" Foreground="#9FB3C8" FontSize="10"/><TextBlock Text="{Binding ConfidencePercent, StringFormat={}{0:F0}%}" Foreground="White" FontWeight="SemiBold" Margin="0,5,0,0"/><ProgressBar Value="{Binding ConfidencePercent}" Maximum="100" Height="5" Margin="0,7,0,0" Foreground="#2775FF" Background="#24445A" BorderThickness="0"/></StackPanel></Border></UniformGrid>
                     <Border Background="#10283A" BorderBrush="#24445E" BorderThickness="1" CornerRadius="10" Padding="12"><StackPanel><TextBlock Text="Thời gian" Foreground="#9FB3C8" FontSize="10"/><TextBlock Text="{Binding EventTime}" Foreground="White" FontWeight="SemiBold" Margin="0,5,0,0"/></StackPanel></Border>
                 </StackPanel></ScrollViewer>
             </Border>

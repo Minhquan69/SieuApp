@@ -1015,9 +1015,10 @@ namespace V3SClient.UI.Views
 
         private void UpdateMetadataSubscription()
         {
-            // WebApp subscribes per logical camera, not per stream currently
-            // selected. A camera can expose its raw stream while AI metadata
-            // is produced by its paired AI stream.
+            // AI overlay is carried inside the RTSP stream as SEI metadata.
+            // RtspPlayer extracts that metadata through its pipeline identity
+            // callback and draws it on d3d11overlay, matching the original app.
+            // Do not subscribe to the external metadata/Kafka bridge here.
             var isAi = Slot != null && Slot.Camera != null &&
                 (Slot.Camera.HasAIStream ||
                  (Slot.SelectedStream != null && Slot.SelectedStream.IsAiMode == true) ||
@@ -1031,19 +1032,6 @@ namespace V3SClient.UI.Views
             MainPlayer.ClearAiMetadata();
             _metadataSubscription?.Dispose();
             _metadataSubscription = null;
-            if (!isAi || string.IsNullOrWhiteSpace(Slot.Camera.camID)) return;
-
-            var cameraId = Slot.Camera.camID;
-            var streamCameraId = Slot.SelectedStream == null ? null : Slot.SelectedStream.RtspRelayRaw;
-            var primarySubscription = MetadataSocketService_v3.Instance.Subscribe(cameraId, OnAiMetadataFrame);
-            // WebApp changes its logical camera ID to relayRawPath when a
-            // stream is selected. Subscribe to that alias too, otherwise a
-            // camera can play normally but silently drop its ai_metadata.
-            _metadataSubscription = string.IsNullOrWhiteSpace(streamCameraId) ||
-                string.Equals(cameraId, streamCameraId, StringComparison.OrdinalIgnoreCase)
-                ? primarySubscription
-                : new SubscriptionGroup(primarySubscription,
-                    MetadataSocketService_v3.Instance.Subscribe(streamCameraId, OnAiMetadataFrame));
         }
 
         private void OnAiMetadataFrame(AiMetadataFrame_v3 frame)

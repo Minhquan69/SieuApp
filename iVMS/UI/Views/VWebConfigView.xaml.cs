@@ -165,5 +165,17 @@ namespace V3SClient.UI.Views
             LoggerManager.LogInfo($"WebView navigating to: {fullUrl}");
             webView.Source = new Uri(fullUrl);
         }
+
+        private void UserControl_Unloaded(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                webView?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Failed to dispose WebView2");
+            }
+        }
     }
 }

@@ -91,29 +91,14 @@ namespace V3SClient.UI.Views
 
         private void SubscribeAiMetadata(models.Camera camera, CameraStreamInfo stream)
         {
-            if (!HasAiStream(camera) || string.IsNullOrWhiteSpace(camera.camID)) return;
-
-            var player = _cameraPlayer;
-            var cameraId = camera.camID;
-            var streamCameraId = stream == null ? null : stream.RtspRelayRaw;
-            var primary = MetadataSocketService_v3.Instance.Subscribe(cameraId, frame =>
-            {
-                if (!ReferenceEquals(player, _cameraPlayer) || frame == null) return;
-                player.Send2Draw(frame);
-            });
-            if (string.IsNullOrWhiteSpace(streamCameraId) ||
-                string.Equals(cameraId, streamCameraId, StringComparison.OrdinalIgnoreCase))
-            {
-                _metadataSubscription = primary;
-                return;
-            }
-
-            var alias = MetadataSocketService_v3.Instance.Subscribe(streamCameraId, frame =>
-            {
-                if (!ReferenceEquals(player, _cameraPlayer) || frame == null) return;
-                player.Send2Draw(frame);
-            });
-            _metadataSubscription = new CompositeSubscription(primary, alias);
+            // Bounding boxes are read from SEI metadata in the RTSP pipeline by
+            // RtspPlayer.  Floating playback must not open a Kafka/WebSocket
+            // metadata subscription, otherwise it races the stream's own frames.
+            _metadataSubscription?.Dispose();
+            _metadataSubscription = null;
+            if (_cameraPlayer == null) return;
+            _cameraPlayer.AiOverlayEnabled = HasAiStream(camera);
+            _cameraPlayer.ClearAiMetadata();
         }
 
         private sealed class CompositeSubscription : IDisposable

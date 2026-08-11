@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System.Linq;
 using System.IO;
 
@@ -76,6 +77,12 @@ namespace V3SClient.libs
             [JsonProperty("custom_total")]
             public int CustomTotal { get; set; }
 
+            [JsonProperty("today_total")]
+            public int TodayTotal { get; set; }
+
+            [JsonProperty("yesterday_total")]
+            public int YesterdayTotal { get; set; }
+
             [JsonProperty("cameras")]
             public List<CameraVehicleCount> Cameras { get; set; } = new List<CameraVehicleCount>();
 
@@ -119,14 +126,28 @@ namespace V3SClient.libs
         private string _frameDetectionCountsApiUrl;
         private string _liveFrameDetectionCountsApiUrl;
         private string _cameraVehicleCountsApiUrl;
+        private string _aiReportEndpointKeyword = "_aiEventReport";
+        private string _deviceReportEndpointKeyword = "_deviceReport";
+        private string _roiConfigEndpointKeyword = "_devicePTZ";
+        private string _storageEndpointKeyword = "Storage";
+        private string _assetsEndpointKeyword = "Assets";
+        private string _reportEndpointKeyword = "Report";
+        private string _mapEndpointKeyword = "Map";
+        private string _roiConfigApiUrl;
+        private string _roiConfigApiToken;
+        private double _roiThresholdSeconds = 5;
+        private double _roiMergeGapSeconds = 200;
         private string _cameraHealthTimeseriesApiUrl;
         private string _aiEventFeedPath;
+        private string _aiEventSummaryPath;
+        private string _aiEventRoiObjectsPath;
         private string _storageAccessUrlsApiUrl;
         private string _storageAccessUrlsApiToken;
         // This gateway key is deliberately separate from _backendToken.
         // _backendToken is replaced by the interactive-login JWT, whereas the
         // status gateway always expects its own X-API-Key.
         private string _deviceStatusApiKey;
+        private string _vehicleStatsApiToken;
         private string _metadataWsUrl;
         private string _backendToken;
 
@@ -163,8 +184,6 @@ namespace V3SClient.libs
      
         private const string ConfigFile = "server_config.json";
         private const string BackendTokenEnvironmentVariable = "IVISTA_BACKEND_TOKEN";
-        private const string DeviceStatusApiUrlEnvironmentVariable = "IVISTA_DEVICE_STATUS_API_URL";
-        private const string DeviceStatusApiKeyEnvironmentVariable = "IVISTA_DEVICE_STATUS_API_KEY";
         private const string FrameDetectionCountsApiUrlEnvironmentVariable = "IVISTA_FRAME_DETECTION_COUNTS_API_URL";
         private const string LiveFrameDetectionCountsApiUrlEnvironmentVariable = "IVISTA_LIVE_FRAME_DETECTION_COUNTS_API_URL";
         private const string CameraVehicleCountsApiUrlEnvironmentVariable = "IVISTA_CAMERA_VEHICLE_COUNTS_API_URL";
@@ -181,10 +200,7 @@ namespace V3SClient.libs
             _deviceStatusHttpClient = new HttpClient(statusHandler);
             _deviceStatusHttpClient.Timeout = TimeSpan.FromSeconds(12);
             LoadConfig();
-            LoadDeviceStatusLocalConfig();
             LoadBackendTokenFromEnvironment();
-            LoadDeviceStatusApiUrlFromEnvironment();
-            LoadDeviceStatusApiKeyFromEnvironment();
             LoadFrameDetectionCountsApiUrlFromEnvironment();
         }
 
@@ -203,35 +219,6 @@ namespace V3SClient.libs
                 SetBackendToken(token.Trim());
         }
 
-        private void LoadDeviceStatusApiUrlFromEnvironment()
-        {
-            if (!string.IsNullOrWhiteSpace(_deviceStatusApiUrl))
-                return;
-            var url = Environment.GetEnvironmentVariable(DeviceStatusApiUrlEnvironmentVariable, EnvironmentVariableTarget.Process);
-            if (string.IsNullOrWhiteSpace(url))
-                url = Environment.GetEnvironmentVariable(DeviceStatusApiUrlEnvironmentVariable, EnvironmentVariableTarget.User);
-            _deviceStatusApiUrl = string.IsNullOrWhiteSpace(url) ? null : url.Trim().TrimEnd('/');
-        }
-
-        private void LoadDeviceStatusApiKeyFromEnvironment()
-        {
-            if (!string.IsNullOrWhiteSpace(_deviceStatusApiKey))
-                return;
-            var key = Environment.GetEnvironmentVariable(DeviceStatusApiKeyEnvironmentVariable, EnvironmentVariableTarget.Process);
-            if (string.IsNullOrWhiteSpace(key))
-                key = Environment.GetEnvironmentVariable(DeviceStatusApiKeyEnvironmentVariable, EnvironmentVariableTarget.User);
-
-            // Compatibility with the original deployment setting.  Keep this
-            // value in a separate field so SetBackendToken(loginJwt) cannot
-            // replace it after the user signs in.
-            if (string.IsNullOrWhiteSpace(key))
-                key = Environment.GetEnvironmentVariable(BackendTokenEnvironmentVariable, EnvironmentVariableTarget.Process);
-            if (string.IsNullOrWhiteSpace(key))
-                key = Environment.GetEnvironmentVariable(BackendTokenEnvironmentVariable, EnvironmentVariableTarget.User);
-
-            _deviceStatusApiKey = string.IsNullOrWhiteSpace(key) ? null : key.Trim();
-        }
-
         private void LoadFrameDetectionCountsApiUrlFromEnvironment()
         {
             var url = Environment.GetEnvironmentVariable(FrameDetectionCountsApiUrlEnvironmentVariable, EnvironmentVariableTarget.Process);
@@ -244,7 +231,7 @@ namespace V3SClient.libs
             if (string.IsNullOrWhiteSpace(liveUrl))
                 liveUrl = Environment.GetEnvironmentVariable(LiveFrameDetectionCountsApiUrlEnvironmentVariable, EnvironmentVariableTarget.User);
             if (!string.IsNullOrWhiteSpace(liveUrl))
-                _liveFrameDetectionCountsApiUrl = liveUrl.Trim().TrimEnd('/');
+                _liveFrameDetectionCountsApiUrl = NormalizeServiceBaseUrl(liveUrl);
 
             var vehicleCountsUrl = Environment.GetEnvironmentVariable(CameraVehicleCountsApiUrlEnvironmentVariable, EnvironmentVariableTarget.Process);
             if (string.IsNullOrWhiteSpace(vehicleCountsUrl))
@@ -315,16 +302,47 @@ namespace V3SClient.libs
                             : config.FrameDetectionCountsApiUrl.Trim().TrimEnd('/');
                         _liveFrameDetectionCountsApiUrl = string.IsNullOrWhiteSpace(config.LiveFrameDetectionCountsApiUrl)
                             ? null
-                            : config.LiveFrameDetectionCountsApiUrl.Trim().TrimEnd('/');
+                            : NormalizeServiceBaseUrl(config.LiveFrameDetectionCountsApiUrl);
                         _cameraVehicleCountsApiUrl = string.IsNullOrWhiteSpace(config.CameraVehicleCountsApiUrl)
                             ? null
                             : config.CameraVehicleCountsApiUrl.Trim().TrimEnd('/');
+                        if (!string.IsNullOrWhiteSpace(config.AiReportEndpointKeyword))
+                            _aiReportEndpointKeyword = config.AiReportEndpointKeyword.Trim();
+                        if (!string.IsNullOrWhiteSpace(config.DeviceReportEndpointKeyword))
+                            _deviceReportEndpointKeyword = config.DeviceReportEndpointKeyword.Trim();
+                        if (!string.IsNullOrWhiteSpace(config.RoiConfigEndpointKeyword))
+                            _roiConfigEndpointKeyword = config.RoiConfigEndpointKeyword.Trim();
+                        if (!string.IsNullOrWhiteSpace(config.StorageEndpointKeyword))
+                            _storageEndpointKeyword = config.StorageEndpointKeyword.Trim();
+                        if (!string.IsNullOrWhiteSpace(config.AssetsEndpointKeyword))
+                            _assetsEndpointKeyword = config.AssetsEndpointKeyword.Trim();
+                        if (!string.IsNullOrWhiteSpace(config.ReportEndpointKeyword))
+                            _reportEndpointKeyword = config.ReportEndpointKeyword.Trim();
+                        if (!string.IsNullOrWhiteSpace(config.MapEndpointKeyword))
+                            _mapEndpointKeyword = config.MapEndpointKeyword.Trim();
+                        _roiConfigApiUrl = string.IsNullOrWhiteSpace(config.RoiConfigApiUrl)
+                            ? null
+                            : config.RoiConfigApiUrl.Trim().TrimEnd('/');
+                        _roiConfigApiToken = string.IsNullOrWhiteSpace(config.RoiConfigApiToken)
+                            ? null
+                            : config.RoiConfigApiToken.Trim();
+                        _roiThresholdSeconds = config.RoiThresholdSeconds > 0 ? config.RoiThresholdSeconds : 5;
+                        _roiMergeGapSeconds = config.RoiMergeGapSeconds >= 0 ? config.RoiMergeGapSeconds : 200;
                         _cameraHealthTimeseriesApiUrl = string.IsNullOrWhiteSpace(config.CameraHealthTimeseriesApiUrl)
                             ? null
                             : config.CameraHealthTimeseriesApiUrl.Trim().TrimEnd('/');
+                        _vehicleStatsApiToken = string.IsNullOrWhiteSpace(config.VehicleStatsApiToken)
+                            ? null
+                            : config.VehicleStatsApiToken.Trim();
                         _aiEventFeedPath = string.IsNullOrWhiteSpace(config.AiEventFeedPath)
                             ? null
                             : config.AiEventFeedPath.Trim();
+                        _aiEventSummaryPath = string.IsNullOrWhiteSpace(config.AiEventSummaryPath)
+                            ? null
+                            : config.AiEventSummaryPath.Trim();
+                        _aiEventRoiObjectsPath = string.IsNullOrWhiteSpace(config.AiEventRoiObjectsPath)
+                            ? null
+                            : config.AiEventRoiObjectsPath.Trim();
                         _storageAccessUrlsApiUrl = string.IsNullOrWhiteSpace(config.StorageAccessUrlsApiUrl)
                             ? null
                             : config.StorageAccessUrlsApiUrl.Trim().TrimEnd('/');
@@ -332,6 +350,12 @@ namespace V3SClient.libs
                             ? null
                             : config.StorageAccessUrlsApiToken.Trim();
                         _networkMode = config.NetworkMode;
+                        // Device-status endpoint: local-config and environment variables take
+                        // priority (they are loaded in the constructor before LoadConfig runs).
+                        if (string.IsNullOrWhiteSpace(_deviceStatusApiUrl) && !string.IsNullOrWhiteSpace(config.DeviceStatusApiUrl))
+                            _deviceStatusApiUrl = config.DeviceStatusApiUrl.Trim().TrimEnd('/');
+                        if (string.IsNullOrWhiteSpace(_deviceStatusApiKey) && !string.IsNullOrWhiteSpace(config.DeviceStatusApiKey))
+                            _deviceStatusApiKey = config.DeviceStatusApiKey.Trim();
                     }
                 }
             }
@@ -357,10 +381,22 @@ namespace V3SClient.libs
                     FrameDetectionCountsApiUrl = _frameDetectionCountsApiUrl,
                     LiveFrameDetectionCountsApiUrl = _liveFrameDetectionCountsApiUrl,
                     CameraVehicleCountsApiUrl = _cameraVehicleCountsApiUrl,
+                    AiReportEndpointKeyword = _aiReportEndpointKeyword,
+                    StorageEndpointKeyword = _storageEndpointKeyword,
+                    AssetsEndpointKeyword = _assetsEndpointKeyword,
+                    ReportEndpointKeyword = _reportEndpointKeyword,
+                    MapEndpointKeyword = _mapEndpointKeyword,
+                    RoiConfigEndpointKeyword = _roiConfigEndpointKeyword,
+                    RoiConfigApiUrl = _roiConfigApiUrl,
+                    RoiConfigApiToken = _roiConfigApiToken,
+                    RoiThresholdSeconds = _roiThresholdSeconds,
+                    RoiMergeGapSeconds = _roiMergeGapSeconds,
                     CameraHealthTimeseriesApiUrl = _cameraHealthTimeseriesApiUrl,
                     AiEventFeedPath = _aiEventFeedPath,
                     StorageAccessUrlsApiUrl = _storageAccessUrlsApiUrl,
                     StorageAccessUrlsApiToken = _storageAccessUrlsApiToken,
+                    DeviceReportEndpointKeyword = _deviceReportEndpointKeyword,
+                    DeviceStatusApiKey = _deviceStatusApiKey,
                     NetworkMode = networkMode
                 };
                 string json = JsonConvert.SerializeObject(config, Formatting.Indented);
@@ -371,6 +407,14 @@ namespace V3SClient.libs
             {
                 System.Diagnostics.Debug.WriteLine($"Error saving config: {ex.Message}");
             }
+        }
+
+        private static string NormalizeServiceBaseUrl(string value)
+        {
+            if (Uri.TryCreate(value, UriKind.Absolute, out var uri))
+                return uri.GetLeftPart(UriPartial.Authority).TrimEnd('/');
+
+            return string.IsNullOrWhiteSpace(value) ? null : value.Trim().TrimEnd('/');
         }
 
         public void Configure(string host, int port)
@@ -494,7 +538,7 @@ namespace V3SClient.libs
             {
                 var credentials = new { username = username, password = password };
                 var json = JsonConvert.SerializeObject(credentials);
-                var response = await SendWithTransientRetryAsync(async requestToken =>
+                using (var response = await SendWithTransientRetryAsync(async requestToken =>
                 {
                     // A fresh connection avoids reusing a gateway connection that
                     // has already been closed while the login window was idle.
@@ -504,27 +548,33 @@ namespace V3SClient.libs
                         request.Content = new StringContent(json, Encoding.UTF8, "application/json");
                         return await _loginHttpClient.SendAsync(request, requestToken).ConfigureAwait(false);
                     }
-                }, cancellationToken, "Login", maxAttempts: 2, timeoutSeconds: 3);
-                if (response.IsSuccessStatusCode)
+                }, cancellationToken, "Login", maxAttempts: 2, timeoutSeconds: 3))
                 {
-                    var resultJson = await response.Content.ReadAsStringAsync();
-                    var result = JsonConvert.DeserializeObject<LoginResponse>(resultJson);
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var resultJson = await response.Content.ReadAsStringAsync();
+                        var result = JsonConvert.DeserializeObject<LoginResponse>(resultJson);
 
-                    if (result == null || string.IsNullOrWhiteSpace(result.access_token))
-                        return new LoginResult(false, null, "Máy chủ không trả về phiên đăng nhập hợp lệ.");
+                        if (result == null || string.IsNullOrWhiteSpace(result.access_token))
+                            return new LoginResult(false, null, "Máy chủ không trả về phiên đăng nhập hợp lệ.");
 
-                    SetBackendToken(result.access_token);
+                        SetBackendToken(result.access_token);
 
-                    // Discovery is useful for Playback/Storage, but it must never
-                    // keep the user on the login screen. It completes in the
-                    // background before those pages are normally opened.
-                    StartEndpointDiscoveryInBackground();
-                    LoggerManager.LogInfo($"Gửi yêu cầu đăng nhập thành công cho: {username}");
-                    return new LoginResult(true, result.user_id, "Success");
+                        // Load endpoint profiles before returning from login. The live
+                        // dashboard can request AI vehicle counts immediately after
+                        // login, so running discovery only in the background creates a
+                        // race where the old configured URL/token is used.
+                        var endpointsDiscovered = await DiscoverEndpointsAsync(cancellationToken)
+                            .ConfigureAwait(false);
+                        if (!endpointsDiscovered)
+                            LoggerManager.LogWarn("Endpoint discovery failed after login; public AI report fallback will be used.");
+                        LoggerManager.LogInfo($"Gửi yêu cầu đăng nhập thành công cho: {username}");
+                        return new LoginResult(true, result.user_id, "Success");
+                    }
+
+                    LoggerManager.LogWarn($"Đăng nhập không thành công (HTTP {response.StatusCode}) cho user: {username}");
+                    return new LoginResult(false, null, "Invalid username or password");
                 }
-
-                LoggerManager.LogWarn($"Đăng nhập không thành công (HTTP {response.StatusCode}) cho user: {username}");
-                return new LoginResult(false, null, "Invalid username or password");
             }
             catch (Exception ex)
             {
@@ -1286,40 +1336,80 @@ namespace V3SClient.libs
         /// <summary>Gets a short-lived dashboard thumbnail URL using the same batch contract as the web app.</summary>
         public async Task<string> GetDashboardAssetAccessUrlAsync(string assetId, CancellationToken cancellationToken = default(CancellationToken))
         {
-            if (string.IsNullOrWhiteSpace(assetId) || string.IsNullOrWhiteSpace(_storageAccessUrlsApiUrl)) return null;
+            if (string.IsNullOrWhiteSpace(assetId)) return null;
+
+            // The web client uses a dedicated storage proxy route.  Keep the
+            // configured route first, then use the Storage endpoint obtained
+            // from Portal (public URL before internal URL).
+            var storageRoutes = new List<string>();
+            foreach (var route in new[]
+            {
+                _storageAccessUrlsApiUrl,
+                GetEndpointProfile(_storageEndpointKeyword)?.PublicUrl,
+                GetEndpointProfile(_storageEndpointKeyword)?.InternalUrl,
+                _storageUrl
+            })
+            {
+                if (string.IsNullOrWhiteSpace(route)) continue;
+                var normalized = route.Trim().TrimEnd('/');
+                if (!normalized.EndsWith("/api/storage/get-access-urls", StringComparison.OrdinalIgnoreCase))
+                    normalized += "/api/storage/get-access-urls";
+                if (!storageRoutes.Any(value => string.Equals(value, normalized, StringComparison.OrdinalIgnoreCase)))
+                    storageRoutes.Add(normalized);
+            }
+            if (storageRoutes.Count == 0) return null;
+
             try
             {
                 var body = new { asset_ids = new[] { assetId }, access_scope = "file", duration = 3600, as_attachment = false, page = 1, page_size = 1 };
-                using (var request = new HttpRequestMessage(HttpMethod.Post, _storageAccessUrlsApiUrl))
+                var accessToken = !string.IsNullOrWhiteSpace(_storageAccessUrlsApiToken)
+                    ? _storageAccessUrlsApiToken
+                    : _storageToken;
+                foreach (var storageAccessUrlsApiUrl in storageRoutes)
                 {
-                    request.Content = new StringContent(JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json");
-                    var accessToken = !string.IsNullOrWhiteSpace(_storageAccessUrlsApiToken)
-                        ? _storageAccessUrlsApiToken
-                        : _storageToken;
-                    if (!string.IsNullOrWhiteSpace(accessToken)) request.Headers.TryAddWithoutValidation("Authorization", accessToken);
-                    using (var response = await _httpClient.SendAsync(request, cancellationToken))
+                    try
                     {
-                        if (!response.IsSuccessStatusCode) return null;
-                        var json = await response.Content.ReadAsStringAsync();
-                        var payload = JsonConvert.DeserializeObject<dynamic>(json);
-                        var items = payload?.items;
-                        if (items == null || items.Count == 0) return null;
-                        var accessUrl = (string)items[0].access_url;
-                        if (string.IsNullOrWhiteSpace(accessUrl)) return null;
+                        using (var request = new HttpRequestMessage(HttpMethod.Post, storageAccessUrlsApiUrl))
+                        using (var requestTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+                        {
+                            requestTimeout.CancelAfter(TimeSpan.FromSeconds(7));
+                            request.Content = new StringContent(JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json");
+                            if (!string.IsNullOrWhiteSpace(accessToken)) request.Headers.TryAddWithoutValidation("Authorization", accessToken);
+                            using (var response = await _httpClient.SendAsync(request, requestTimeout.Token))
+                            {
+                                if (!response.IsSuccessStatusCode)
+                                {
+                                    LoggerManager.LogWarn($"Storage thumbnail access returned {(int)response.StatusCode} from {storageAccessUrlsApiUrl}.");
+                                    continue;
+                                }
+                                var json = await response.Content.ReadAsStringAsync();
+                                var payload = JsonConvert.DeserializeObject<dynamic>(json);
+                                var items = payload?.items;
+                                if (items == null || items.Count == 0) continue;
+                                var accessUrl = (string)items[0].access_url;
+                                if (string.IsNullOrWhiteSpace(accessUrl)) continue;
 
-                        // The storage service returns a relative path (for example "/files/...").
-                        // Browsers resolve it through the web proxy, but WPF BitmapImage requires an
-                        // absolute URI, so anchor it to the configured storage service origin.
-                        Uri absoluteUrl;
-                        if (Uri.TryCreate(accessUrl, UriKind.Absolute, out absoluteUrl)) return absoluteUrl.AbsoluteUri;
+                                // The storage service returns a relative path (for example "/files/...").
+                                // Browsers resolve it through the web proxy, but WPF BitmapImage requires an
+                                // absolute URI, so anchor it to the responding storage service origin.
+                                Uri absoluteUrl;
+                                if (Uri.TryCreate(accessUrl, UriKind.Absolute, out absoluteUrl)) return absoluteUrl.AbsoluteUri;
 
-                        Uri storageApiUri;
-                        if (!Uri.TryCreate(_storageAccessUrlsApiUrl, UriKind.Absolute, out storageApiUri)) return null;
-                        var storageOrigin = new Uri(storageApiUri.GetLeftPart(UriPartial.Authority) + "/");
-                        return new Uri(storageOrigin, accessUrl.TrimStart('/')).AbsoluteUri;
+                                Uri storageApiUri;
+                                if (!Uri.TryCreate(storageAccessUrlsApiUrl, UriKind.Absolute, out storageApiUri)) continue;
+                                var storageOrigin = new Uri(storageApiUri.GetLeftPart(UriPartial.Authority) + "/");
+                                return new Uri(storageOrigin, accessUrl.TrimStart('/')).AbsoluteUri;
+                            }
+                        }
+                    }
+                    catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                    {
+                        LoggerManager.LogWarn($"Storage thumbnail access timed out via {storageAccessUrlsApiUrl}; trying fallback.");
                     }
                 }
+                return null;
             }
+            catch (OperationCanceledException) { return null; }
             catch (Exception ex)
             {
                 LoggerManager.LogException(ex, "Dashboard storage thumbnail");
@@ -1329,6 +1419,14 @@ namespace V3SClient.libs
 
         // ============ Storage / Playback Server API ============
         public List<EndpointProfile> GetDiscoveredEndpoints() => _endpointRegistry;
+
+        private EndpointProfile GetEndpointProfile(string keyword)
+        {
+            if (string.IsNullOrWhiteSpace(keyword)) return null;
+            return _endpointRegistry.FirstOrDefault(x => x != null &&
+                !string.IsNullOrWhiteSpace(x.Keyword) &&
+                x.Keyword.Equals(keyword, StringComparison.OrdinalIgnoreCase));
+        }
 
         public string GetEndpointUrl(string keyword)
         {
@@ -1343,10 +1441,12 @@ namespace V3SClient.libs
                 return playbackUrl;
             }
 
-            var profile = _endpointRegistry.FirstOrDefault(x => x.Keyword.Equals(keyword, StringComparison.OrdinalIgnoreCase));
+            var profile = GetEndpointProfile(keyword);
             if (profile == null) return null;
 
-            return _networkMode == "Public" ? profile.PublicUrl : profile.InternalUrl;
+            // Desktop clients reach services through their public endpoint;
+            // never fall back to a discovered private LAN address.
+            return string.IsNullOrWhiteSpace(profile.PublicUrl) ? null : profile.PublicUrl.TrimEnd('/');
         }
 
         public string GetEndpointToken(string keyword)
@@ -1360,8 +1460,133 @@ namespace V3SClient.libs
                 }
             }
 
-            var profile = _endpointRegistry.FirstOrDefault(x => x.Keyword.Equals(keyword, StringComparison.OrdinalIgnoreCase));
+            var profile = GetEndpointProfile(keyword);
             return (profile != null && !string.IsNullOrEmpty(profile.Token)) ? profile.Token : _backendToken;
+        }
+
+        private string ResolveAiReportBaseUrl(out string token)
+        {
+            var report = GetEndpointProfile(_aiReportEndpointKeyword);
+            if (report != null && !string.IsNullOrWhiteSpace(report.PublicUrl))
+            {
+                token = (report.Token ?? string.Empty).Trim();
+                if (token.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                    token = token.Substring("Bearer ".Length).Trim();
+                // Desktop clients must use the endpoint's public URL. The
+                // internal URL is only for service-to-service traffic.
+                var reportUrl = report.PublicUrl;
+                return reportUrl.TrimEnd('/');
+            }
+
+            token = (_vehicleStatsApiToken ?? _backendToken ?? string.Empty).Trim();
+            if (token.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                token = token.Substring("Bearer ".Length).Trim();
+
+            // Until endpoint discovery completes, keep the public AI report
+            // service as the safe fallback instead of using an internal host.
+            return "https://report.ivistatech.vn";
+        }
+
+        private List<string> ResolveAiReportEndpointBases(out string token)
+        {
+            var report = GetEndpointProfile(_aiReportEndpointKeyword);
+            var rawToken = report != null && !string.IsNullOrWhiteSpace(report.Token)
+                ? report.Token
+                : (_vehicleStatsApiToken ?? _backendToken ?? string.Empty);
+            token = rawToken.Trim();
+            if (token.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                token = token.Substring("Bearer ".Length).Trim();
+
+            var endpointBases = new List<string>();
+            var publicUrl = report != null && !string.IsNullOrWhiteSpace(report.PublicUrl)
+                ? report.PublicUrl.TrimEnd('/')
+                : "https://report.ivistatech.vn";
+            endpointBases.Add(publicUrl);
+
+            if (report != null && !string.IsNullOrWhiteSpace(report.InternalUrl))
+            {
+                var internalUrl = report.InternalUrl.TrimEnd('/');
+                if (!endpointBases.Any(url => string.Equals(url, internalUrl, StringComparison.OrdinalIgnoreCase)))
+                    endpointBases.Add(internalUrl);
+            }
+
+            return endpointBases;
+        }
+
+        private async Task<string> GetAiReportJsonWithFallbackAsync(
+            string routeAndQuery,
+            string operationName,
+            CancellationToken cancellationToken)
+        {
+            var endpointBases = ResolveAiReportEndpointBases(out var reportToken);
+            for (var index = 0; index < endpointBases.Count; index++)
+            {
+                var endpointBase = endpointBases[index];
+                var url = endpointBase + "/" + routeAndQuery.TrimStart('/');
+                var source = index == 0 ? "public" : "internal";
+                LoggerManager.LogDebug($"{operationName} endpoint ({source}, {_aiReportEndpointKeyword}): {url}");
+                try
+                {
+                    using (var request = new HttpRequestMessage(HttpMethod.Get, url))
+                    {
+                        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                        if (!string.IsNullOrWhiteSpace(reportToken))
+                            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", reportToken);
+
+                        using (var response = await _deviceStatusHttpClient.SendAsync(request, cancellationToken))
+                        {
+                            var json = await response.Content.ReadAsStringAsync();
+                            if (!response.IsSuccessStatusCode)
+                            {
+                                LoggerManager.LogWarn($"{operationName} returned {(int)response.StatusCode} via {source} endpoint; trying fallback.");
+                                continue;
+                            }
+
+                            if (string.IsNullOrWhiteSpace(json))
+                            {
+                                LoggerManager.LogWarn($"{operationName} returned an empty response via {source} endpoint; trying fallback.");
+                                continue;
+                            }
+
+                            try
+                            {
+                                var payload = Newtonsoft.Json.Linq.JToken.Parse(json) as Newtonsoft.Json.Linq.JObject;
+                                var endpointError = payload?["error"]?.ToString();
+                                if (!string.IsNullOrWhiteSpace(endpointError))
+                                {
+                                    LoggerManager.LogWarn($"{operationName} returned an API error via {source} endpoint: {endpointError}");
+                                    continue;
+                                }
+                            }
+                            catch (JsonException ex)
+                            {
+                                LoggerManager.LogWarn($"{operationName} returned invalid JSON via {source} endpoint: {ex.Message}");
+                                continue;
+                            }
+
+                            return json;
+                        }
+                    }
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                    LoggerManager.LogWarn($"{operationName} timed out via {source} endpoint; trying fallback.");
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (HttpRequestException ex)
+                {
+                    LoggerManager.LogWarn($"{operationName} connection failed via {source} endpoint: {ex.Message}");
+                }
+                catch (Exception ex)
+                {
+                    LoggerManager.LogException(ex, $"{operationName} failed via {source} endpoint");
+                }
+            }
+
+            return null;
         }
 
         public async Task<bool> DiscoverEndpointsAsync(CancellationToken cancellationToken = default(CancellationToken))
@@ -1371,63 +1596,67 @@ namespace V3SClient.libs
             {
                 // Endpoint discovery is optional and must not hold the login
                 // screen indefinitely when the discovery route is slow.
-                var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                timeout.CancelAfter(TimeSpan.FromSeconds(4));
-                var response = await _httpClient.GetAsync($"{_baseUrl}/api/system/endpoints", timeout.Token);
-                if (response.IsSuccessStatusCode)
+                using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
                 {
-                    var json = await response.Content.ReadAsStringAsync();
-                    var discoveryData = JsonConvert.DeserializeObject<SystemEndpoints>(json);
-
-                    if (discoveryData != null && discoveryData.Endpoints != null)
+                    timeout.CancelAfter(TimeSpan.FromSeconds(4));
+                    using (var response = await _httpClient.GetAsync($"{_baseUrl}/api/system/endpoints", timeout.Token))
                     {
-                        _endpointRegistry = discoveryData.Endpoints;
+                        if (response.IsSuccessStatusCode)
+                        {
+                            var json = await response.Content.ReadAsStringAsync();
+                            var discoveryData = JsonConvert.DeserializeObject<SystemEndpoints>(json);
 
-                        // Sync primary storage fields for backward compatibility
-                        var storageEp = _endpointRegistry.FirstOrDefault(x => x.Keyword.Equals("Storage", StringComparison.OrdinalIgnoreCase));
-                        if (storageEp != null)
-                        {
-                            _storageUrl = _networkMode == "Public" ? storageEp.PublicUrl : storageEp.InternalUrl;
-                            _storageToken = string.IsNullOrEmpty(storageEp.Token) ? "your-super-secret-private-token-2026" : storageEp.Token;
-                        }
+                            if (discoveryData != null && discoveryData.Endpoints != null)
+                            {
+                                _endpointRegistry = discoveryData.Endpoints;
 
-                        // Sync New Endpoints
-                        var assetsEp = _endpointRegistry.FirstOrDefault(x => x.Keyword.Equals("Assets", StringComparison.OrdinalIgnoreCase));
-                        if (assetsEp != null)
-                        {
-                            _assetsUrl = _networkMode == "Public" ? assetsEp.PublicUrl : assetsEp.InternalUrl;
-                            _assetsToken = string.IsNullOrEmpty(assetsEp.Token) ? "your-super-secret-private-token-2026" : assetsEp.Token;
-                        }
+                                // Sync primary storage fields for backward compatibility
+                                var storageEp = GetEndpointProfile(_storageEndpointKeyword);
+                                if (storageEp != null)
+                                {
+                                    _storageUrl = GetEndpointUrl(storageEp.Keyword);
+                                    _storageToken = string.IsNullOrEmpty(storageEp.Token) ? "your-super-secret-private-token-2026" : storageEp.Token;
+                                }
 
-                        var reportEp = _endpointRegistry.FirstOrDefault(x => x.Keyword.Equals("Report", StringComparison.OrdinalIgnoreCase));
-                        if (reportEp != null)
-                        {
-                            _reportUrl = _networkMode == "Public" ? reportEp.PublicUrl : reportEp.InternalUrl;
-                            _reportToken = string.IsNullOrEmpty(reportEp.Token) ? "your-super-secret-private-token-2026" : reportEp.Token;
-                        }
+                                // Sync New Endpoints
+                                var assetsEp = GetEndpointProfile(_assetsEndpointKeyword);
+                                if (assetsEp != null)
+                                {
+                                    _assetsUrl = GetEndpointUrl(assetsEp.Keyword);
+                                    _assetsToken = string.IsNullOrEmpty(assetsEp.Token) ? "your-super-secret-private-token-2026" : assetsEp.Token;
+                                }
 
-                        var mapEp = _endpointRegistry.FirstOrDefault(x => x.Keyword.Equals("Map", StringComparison.OrdinalIgnoreCase));
-                        if (mapEp != null)
-                        {
-                            _mapUrl = _networkMode == "Public" ? mapEp.PublicUrl : mapEp.InternalUrl;
-                        }
+                                var reportEp = GetEndpointProfile(_reportEndpointKeyword);
+                                if (reportEp != null)
+                                {
+                                    _reportUrl = GetEndpointUrl(reportEp.Keyword);
+                                    _reportToken = string.IsNullOrEmpty(reportEp.Token) ? "your-super-secret-private-token-2026" : reportEp.Token;
+                                }
 
-                        var redisEp = _endpointRegistry.FirstOrDefault(x => x.Keyword.Equals("Redis", StringComparison.OrdinalIgnoreCase));
-                        if (redisEp != null)
-                        {
-                            _redisUrl = _networkMode == "Public" ? redisEp.PublicUrl : redisEp.InternalUrl;
+                                var mapEp = GetEndpointProfile(_mapEndpointKeyword);
+                                if (mapEp != null)
+                                {
+                                    _mapUrl = GetEndpointUrl(mapEp.Keyword);
+                                }
+
+                                var redisEp = GetEndpointProfile("Redis");
+                                if (redisEp != null)
+                                {
+                                    _redisUrl = GetEndpointUrl(redisEp.Keyword);
+                                }
+
+                                foreach (var ep in _endpointRegistry)
+                                {
+                                    LoggerManager.LogDebug($"Khám phá [{ep.Keyword}]: {ep.Name} -> {GetEndpointUrl(ep.Keyword)}");
+                                }
+                                return true;
+                            }
                         }
-                     
-                        foreach (var ep in _endpointRegistry)
+                        else
                         {
-                            LoggerManager.LogDebug($"Khám phá [{ep.Keyword}]: {ep.Name} -> {GetEndpointUrl(ep.Keyword)}");
+                            LoggerManager.LogWarn($"Khám phá endpoint thất bại: HTTP {response.StatusCode}");
                         }
-                        return true;
                     }
-                }
-                else
-                {
-                    LoggerManager.LogWarn($"Khám phá endpoint thất bại: HTTP {response.StatusCode}");
                 }
             }
             catch (Exception ex)
@@ -1922,6 +2151,10 @@ namespace V3SClient.libs
         {
             [JsonProperty("items")]
             public List<LiveAiEventFeedItem> Items { get; set; } = new List<LiveAiEventFeedItem>();
+            [JsonProperty("total_items")]
+            public int? TotalItems { get; set; }
+            [JsonProperty("total_pages")]
+            public int? TotalPages { get; set; }
         }
 
         public sealed class LiveAiEventFeedItem
@@ -2033,36 +2266,55 @@ namespace V3SClient.libs
             System.DateTime startAt,
             System.DateTime endAt,
             IEnumerable<string> cameraIds,
+            int page = 1,
+            int pageSize = 10,
+            string objectId = "",
             CancellationToken cancellationToken = default(CancellationToken))
         {
             try
             {
-                var endpoint = ResolveConfiguredEndpoint(_aiEventFeedPath);
-                if (string.IsNullOrWhiteSpace(endpoint))
-                {
-                    LoggerManager.LogWarn("Live AI event feed is not configured. Set AiEventFeedPath in server_config.json.");
-                    return null;
-                }
+                // Match the web app: AI notifications are served by the
+                // portal proxy, not by the configured private AI host.
+                var reportBase = ResolveAiReportBaseUrl(out var reportToken);
+                var reportProfile = GetEndpointProfile(_aiReportEndpointKeyword);
+                var endpointBases = new List<string> { reportBase };
+                if (reportProfile != null && !string.IsNullOrWhiteSpace(reportProfile.InternalUrl) &&
+                    !string.Equals(reportProfile.InternalUrl.TrimEnd('/'), reportBase, StringComparison.OrdinalIgnoreCase))
+                    endpointBases.Add(reportProfile.InternalUrl.TrimEnd('/'));
                 var cameraIdsParameter = string.Join(",", (cameraIds ?? Enumerable.Empty<string>())
                     .Where(id => !string.IsNullOrWhiteSpace(id))
                     .Select(id => id.Trim())
                     .Distinct(StringComparer.OrdinalIgnoreCase));
-                var url = string.Format(
-                    "{0}?start_at={1}&end_at={2}&object_id=&min_confidence=0&page=1&page_size=10&cam_ids={3}",
-                    endpoint,
+                var query = string.Format(
+                    "?start_at={0}&end_at={1}&object_id={2}&min_confidence=0&page={3}&page_size={4}&cam_ids={5}",
                     Uri.EscapeDataString(startAt.ToString("yyyy-MM-ddTHH:mm:ss")),
                     Uri.EscapeDataString(endAt.ToString("yyyy-MM-ddTHH:mm:ss")),
+                    Uri.EscapeDataString(objectId ?? ""), page, pageSize,
                     Uri.EscapeDataString(cameraIdsParameter));
-                using (var response = await _httpClient.GetAsync(url, cancellationToken))
+                foreach (var endpointBase in endpointBases)
                 {
-                    if (!response.IsSuccessStatusCode)
+                    var url = endpointBase + "/api/object-crops/history" + query;
+                    try
                     {
-                        LoggerManager.LogWarn($"Live AI event feed returned {(int)response.StatusCode}.");
-                        return null;
+                        using (var request = new HttpRequestMessage(HttpMethod.Get, url))
+                        {
+                            if (!string.IsNullOrWhiteSpace(reportToken))
+                                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", reportToken.Trim());
+                            using (var response = await _deviceStatusHttpClient.SendAsync(request, cancellationToken))
+                            {
+                                var json = await response.Content.ReadAsStringAsync();
+                                if (response.IsSuccessStatusCode)
+                                    return JsonConvert.DeserializeObject<LiveAiEventFeedResponse>(json);
+                                LoggerManager.LogWarn($"Live AI event feed returned {(int)response.StatusCode} via {endpointBase}: {json}");
+                            }
+                        }
                     }
-                    var json = await response.Content.ReadAsStringAsync();
-                    return JsonConvert.DeserializeObject<LiveAiEventFeedResponse>(json);
+                    catch (HttpRequestException ex)
+                    {
+                        LoggerManager.LogWarn($"Live AI event feed connection failed via {endpointBase}: {ex.Message}");
+                    }
                 }
+                return null;
             }
             catch (OperationCanceledException) { return null; }
             catch (Exception ex)
@@ -2115,28 +2367,57 @@ namespace V3SClient.libs
             string cameraId,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            if (string.IsNullOrWhiteSpace(_cameraVehicleCountsApiUrl) || string.IsNullOrWhiteSpace(cameraId))
+            if (string.IsNullOrWhiteSpace(cameraId))
                 return null;
 
             try
             {
-                var url = string.Format(
-                    "{0}?date={1}&start_date={2}&end_date={3}&cam_id={4}",
-                    _cameraVehicleCountsApiUrl,
-                    Uri.EscapeDataString(endAt.ToString("yyyy-MM-dd")),
+                var reportBase = ResolveAiReportBaseUrl(out var reportToken);
+                var reportProfile = GetEndpointProfile(_aiReportEndpointKeyword);
+                var endpointBases = new List<string> { reportBase };
+                // Some deployments publish the DNS endpoint before its reverse
+                // proxy route is reachable from the desktop network. Keep the
+                // public endpoint first, then fall back to the discovered LAN
+                // endpoint so live statistics remain available.
+                if (reportProfile != null && !string.IsNullOrWhiteSpace(reportProfile.InternalUrl) &&
+                    !string.Equals(reportProfile.InternalUrl.TrimEnd('/'), reportBase, StringComparison.OrdinalIgnoreCase))
+                    endpointBases.Add(reportProfile.InternalUrl.TrimEnd('/'));
+                // The AI report service expects the complete camera list in one
+                // request.  This is the same contract used by the web client;
+                // do not call the legacy summary endpoint here.
+                var query = string.Format(
+                    "?start_date={0}&end_date={1}&cam_id={2}",
                     Uri.EscapeDataString(startAt.ToString("yyyy-MM-ddTHH:mm:ss")),
                     Uri.EscapeDataString(endAt.ToString("yyyy-MM-ddTHH:mm:ss")),
-                    Uri.EscapeDataString(cameraId.Trim()));
-                using (var response = await _deviceStatusHttpClient.GetAsync(url, cancellationToken))
+                    Uri.EscapeDataString(string.Join(",", cameraId.Split(',')
+                        .Select(id => id.Trim())
+                        .Where(id => !string.IsNullOrWhiteSpace(id))
+                        .Distinct(StringComparer.OrdinalIgnoreCase))));
+                foreach (var endpointBase in endpointBases)
                 {
-                    if (!response.IsSuccessStatusCode)
+                    var url = endpointBase + "/api/camera-vehicle-counts" + query;
+                    LoggerManager.LogDebug($"AI vehicle report endpoint: {url}; report={reportProfile?.Keyword ?? "fallback"}");
+                    try
                     {
-                        LoggerManager.LogWarn($"Camera vehicle counts returned {(int)response.StatusCode} for {cameraId}.");
-                        return null;
+                        using (var request = new HttpRequestMessage(HttpMethod.Get, url))
+                        {
+                            if (!string.IsNullOrWhiteSpace(reportToken))
+                                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", reportToken.Trim());
+                            using (var response = await _deviceStatusHttpClient.SendAsync(request, cancellationToken))
+                            {
+                                var json = await response.Content.ReadAsStringAsync();
+                                if (response.IsSuccessStatusCode)
+                                    return JsonConvert.DeserializeObject<CameraVehicleCountsResponse>(json);
+                                LoggerManager.LogWarn($"Camera vehicle counts returned {(int)response.StatusCode} via {endpointBase}: {json}");
+                            }
+                        }
                     }
-                    var json = await response.Content.ReadAsStringAsync();
-                    return JsonConvert.DeserializeObject<CameraVehicleCountsResponse>(json);
+                    catch (HttpRequestException ex)
+                    {
+                        LoggerManager.LogWarn($"Camera vehicle counts connection failed via {endpointBase}: {ex.Message}");
+                    }
                 }
+                return null;
             }
             catch (OperationCanceledException) { return null; }
             catch (Exception ex)
@@ -2185,18 +2466,36 @@ namespace V3SClient.libs
                     .Select(id => id.Trim())
                     .Distinct(StringComparer.OrdinalIgnoreCase));
                 var cameras = Uri.EscapeDataString(cameraIdsParameter);
-                var url = string.Format("{0}?cam_ids={1}", _liveFrameDetectionCountsApiUrl, cameras);
-                using (var response = await _deviceStatusHttpClient.GetAsync(url, cancellationToken))
+                var reportBase = ResolveAiReportBaseUrl(out var reportToken);
+                var reportProfile = GetEndpointProfile(_aiReportEndpointKeyword);
+                var endpointBases = new List<string> { reportBase };
+                if (reportProfile != null && !string.IsNullOrWhiteSpace(reportProfile.InternalUrl) &&
+                    !string.Equals(reportProfile.InternalUrl.TrimEnd('/'), reportBase, StringComparison.OrdinalIgnoreCase))
+                    endpointBases.Add(reportProfile.InternalUrl.TrimEnd('/'));
+                foreach (var endpointBase in endpointBases)
                 {
-                    if (!response.IsSuccessStatusCode)
+                    var url = endpointBase + "/api/live-frame-detection-counts?cam_ids=" + cameras;
+                    try
                     {
-                        LoggerManager.LogWarn($"Live frame detection counts returned {(int)response.StatusCode}.");
-                        return null;
+                        using (var request = new HttpRequestMessage(HttpMethod.Get, url))
+                        {
+                            if (!string.IsNullOrWhiteSpace(reportToken))
+                                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", reportToken.Trim());
+                            using (var response = await _deviceStatusHttpClient.SendAsync(request, cancellationToken))
+                            {
+                                var json = await response.Content.ReadAsStringAsync();
+                                if (response.IsSuccessStatusCode)
+                                    return JsonConvert.DeserializeObject<LiveFrameDetectionCountsResponse>(json);
+                                LoggerManager.LogWarn($"Live frame detection counts returned {(int)response.StatusCode} via {endpointBase}: {json}");
+                            }
+                        }
                     }
-
-                    var json = await response.Content.ReadAsStringAsync();
-                    return JsonConvert.DeserializeObject<LiveFrameDetectionCountsResponse>(json);
+                    catch (HttpRequestException ex)
+                    {
+                        LoggerManager.LogWarn($"Live frame detection connection failed via {endpointBase}: {ex.Message}");
+                    }
                 }
+                return null;
             }
             catch (Exception ex)
             {
@@ -2205,34 +2504,102 @@ namespace V3SClient.libs
             }
         }
 
+        private sealed class DeviceReportEndpointCandidate
+        {
+            public string BaseUrl { get; set; }
+            public string Token { get; set; }
+            public bool IsDiscoveredEndpoint { get; set; }
+        }
+
+        public sealed class CameraHealthAttentionCamera
+        {
+            [JsonProperty("camera_id")]
+            public string CameraId { get; set; }
+            [JsonProperty("cam_id")]
+            public string CameraCode { get; set; }
+            [JsonProperty("uptime_percent")]
+            public double? UptimePercent { get; set; }
+            [JsonProperty("unavailable_seconds")]
+            public long? UnavailableSeconds { get; set; }
+        }
+
+        private List<DeviceReportEndpointCandidate> GetDeviceReportEndpointCandidates()
+        {
+            // Dashboard reports are served by the _deviceReport service. Keep
+            // its public endpoint first and use the discovered LAN endpoint
+            // only if the public route fails.
+            var candidates = new List<DeviceReportEndpointCandidate>();
+            var profile = GetEndpointProfile(_deviceReportEndpointKeyword);
+            foreach (var baseUrl in new[] { profile?.PublicUrl, profile?.InternalUrl })
+            {
+                if (string.IsNullOrWhiteSpace(baseUrl)) continue;
+                var normalized = baseUrl.Trim().TrimEnd('/');
+                if (candidates.Any(item => string.Equals(item.BaseUrl, normalized, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+
+                candidates.Add(new DeviceReportEndpointCandidate
+                {
+                    BaseUrl = normalized,
+                    Token = profile?.Token,
+                    IsDiscoveredEndpoint = true
+                });
+            }
+
+            return candidates;
+        }
+
+        private static void ApplyDeviceReportAuthorization(HttpRequestMessage request, DeviceReportEndpointCandidate endpoint)
+        {
+            if (request == null || endpoint == null || string.IsNullOrWhiteSpace(endpoint.Token)) return;
+            var token = endpoint.Token.Trim();
+            if (endpoint.IsDiscoveredEndpoint || token.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                var bearerToken = token.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+                    ? token.Substring(7).Trim()
+                    : token;
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+                return;
+            }
+            request.Headers.TryAddWithoutValidation("X-API-KEY", token);
+        }
+
         /// <summary>Gets the aggregated online/offline trend used by the Dashboard chart.</summary>
         public async Task<CameraHealthTimeseriesResponse> GetCameraHealthTimeseriesAsync(
             DateTime from, DateTime to, string bucket, IEnumerable<string> cameraIds, CancellationToken cancellationToken = default)
         {
-            if (string.IsNullOrWhiteSpace(_cameraHealthTimeseriesApiUrl))
-                return null;
-
             try
             {
                 var ids = string.Join(",", (cameraIds ?? Enumerable.Empty<string>())
                     .Where(id => !string.IsNullOrWhiteSpace(id))
                     .Select(id => id.Trim())
                     .Distinct(StringComparer.OrdinalIgnoreCase));
-                var endpoint = _cameraHealthTimeseriesApiUrl + "?from=" + Uri.EscapeDataString(from.ToString("o"))
-                    + "&to=" + Uri.EscapeDataString(to.ToString("o"))
+                var query = "?from=" + Uri.EscapeDataString(from.ToUniversalTime().ToString("o"))
+                    + "&to=" + Uri.EscapeDataString(to.ToUniversalTime().ToString("o"))
                     + "&bucket=" + Uri.EscapeDataString(string.IsNullOrWhiteSpace(bucket) ? "2h" : bucket);
                 if (!string.IsNullOrWhiteSpace(ids))
-                    endpoint += "&camera_ids=" + Uri.EscapeDataString(ids);
+                    query += "&camera_ids=" + Uri.EscapeDataString(ids);
 
-                var response = await _httpClient.GetAsync(endpoint, cancellationToken);
-                if (!response.IsSuccessStatusCode)
+                foreach (var endpoint in GetDeviceReportEndpointCandidates())
                 {
-                    LoggerManager.LogWarn($"Camera health timeseries returned {(int)response.StatusCode}.");
-                    return null;
+                    var url = endpoint.BaseUrl + "/api/uptime/timeseries" + query;
+                    LoggerManager.LogDebug($"Camera health endpoint ({_deviceReportEndpointKeyword}): {url}");
+                    using (var request = new HttpRequestMessage(HttpMethod.Get, url))
+                    {
+                        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                        ApplyDeviceReportAuthorization(request, endpoint);
+                        using (var response = await _deviceStatusHttpClient.SendAsync(request, cancellationToken))
+                        {
+                            if (!response.IsSuccessStatusCode)
+                            {
+                                LoggerManager.LogWarn($"Camera health timeseries returned {(int)response.StatusCode} from {endpoint.BaseUrl}.");
+                                continue;
+                            }
+                            var json = await response.Content.ReadAsStringAsync();
+                            return JsonConvert.DeserializeObject<CameraHealthTimeseriesResponse>(json);
+                        }
+                    }
                 }
-
-                var json = await response.Content.ReadAsStringAsync();
-                return JsonConvert.DeserializeObject<CameraHealthTimeseriesResponse>(json);
+                return null;
             }
             catch (OperationCanceledException) { return null; }
             catch (Exception ex)
@@ -2250,37 +2617,119 @@ namespace V3SClient.libs
             try
             {
                 var body = new { device_ids = deviceIds };
-                var endpointRoot = string.IsNullOrWhiteSpace(_deviceStatusApiUrl) ? _baseUrl : _deviceStatusApiUrl;
-                using (var request = new HttpRequestMessage(HttpMethod.Post, $"{endpointRoot}/api/v1/devices/status/batch"))
+                foreach (var endpoint in GetDeviceReportEndpointCandidates())
                 {
-                    // This nginx gateway closes pooled keep-alive sockets.
-                    // curl works because it opens a fresh connection; do the
-                    // same for status polling instead of reusing a stale one.
-                    request.Headers.ConnectionClose = true;
-                    request.Content = new StringContent(JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json");
-                    // Never use the login JWT here: this endpoint requires
-                    // the deployment X-API-Key and login replaces
-                    // _backendToken at runtime.
-                    if (!string.IsNullOrWhiteSpace(_deviceStatusApiKey))
-                        request.Headers.TryAddWithoutValidation("X-API-Key", _deviceStatusApiKey);
-                    // Do not use _httpClient: it owns the interactive-login
-                    // Bearer header and may retain a stale gateway socket.
-                    var response = await _deviceStatusHttpClient.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken);
-
-                    if (response.IsSuccessStatusCode)
+                    var endpointUrl = endpoint.BaseUrl + "/api/v1/devices/status/batch";
+                    LoggerManager.LogDebug($"Device status endpoint ({_deviceReportEndpointKeyword}): {endpointUrl}");
+                    using (var request = new HttpRequestMessage(HttpMethod.Post, endpointUrl))
                     {
-                        var resultJson = await response.Content.ReadAsStringAsync();
-                        var result = JsonConvert.DeserializeObject<List<DeviceStatusResponse>>(resultJson) ?? new List<DeviceStatusResponse>();
-                        LoggerManager.LogInfo($"Device status batch succeeded: {result.Count}/{deviceIds.Count} records.");
-                        return result;
+                        // This nginx gateway closes pooled keep-alive sockets.
+                        request.Headers.ConnectionClose = true;
+                        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                        request.Content = new StringContent(JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json");
+                        ApplyDeviceReportAuthorization(request, endpoint);
+                        using (var response = await _deviceStatusHttpClient.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken))
+                        {
+                            if (response.IsSuccessStatusCode)
+                            {
+                                var resultJson = await response.Content.ReadAsStringAsync();
+                                var result = JsonConvert.DeserializeObject<List<DeviceStatusResponse>>(resultJson) ?? new List<DeviceStatusResponse>();
+                                LoggerManager.LogInfo($"Device status batch succeeded: {result.Count}/{deviceIds.Count} records.");
+                                return result;
+                            }
+                            LoggerManager.LogWarn($"Device status batch returned {(int)response.StatusCode} from {endpointUrl}.");
+                        }
                     }
-                    LoggerManager.LogWarn($"Device status batch returned {(int)response.StatusCode} from {endpointRoot}.");
                 }
                 return new List<DeviceStatusResponse>();
             }
             catch (Exception ex)
             {
                 LoggerManager.LogException(ex, "Lỗi khi gọi GetDeviceStatusBatchAsync");
+                return new List<DeviceStatusResponse>();
+            }
+        }
+
+        /// <summary>Gets the lowest-uptime cameras from the same endpoint used by the web dashboard.</summary>
+        public async Task<List<CameraHealthAttentionCamera>> GetCameraHealthAttentionCamerasAsync(
+            int limit = 5, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            try
+            {
+                var query = "?limit=" + Math.Max(1, limit) + "&offset=0&sort=uptime_percent&order=asc";
+                foreach (var endpoint in GetDeviceReportEndpointCandidates())
+                {
+                    var endpointUrl = endpoint.BaseUrl + "/api/uptime/cameras" + query;
+                    LoggerManager.LogDebug($"Camera attention endpoint ({_deviceReportEndpointKeyword}): {endpointUrl}");
+                    using (var request = new HttpRequestMessage(HttpMethod.Get, endpointUrl))
+                    {
+                        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                        ApplyDeviceReportAuthorization(request, endpoint);
+                        using (var response = await _deviceStatusHttpClient.SendAsync(request, cancellationToken))
+                        {
+                            if (!response.IsSuccessStatusCode)
+                            {
+                                LoggerManager.LogWarn($"Camera attention returned {(int)response.StatusCode} from {endpoint.BaseUrl}.");
+                                continue;
+                            }
+                            var payload = JObject.Parse(await response.Content.ReadAsStringAsync());
+                            var items = payload["data"] as JArray
+                                ?? payload["cameras"] as JArray
+                                ?? payload["data"]?["cameras"] as JArray;
+                            var cameras = items?.ToObject<List<CameraHealthAttentionCamera>>();
+                            if (cameras != null)
+                                return cameras;
+                        }
+                    }
+                }
+                return new List<CameraHealthAttentionCamera>();
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { LoggerManager.LogException(ex, "Lỗi khi gọi GetCameraHealthAttentionCamerasAsync"); }
+            return new List<CameraHealthAttentionCamera>();
+        }
+
+        /// <summary>
+        /// Camera state used by the Live and Map views. This route belongs to
+        /// Portal directly and intentionally does not use _deviceReport.
+        /// </summary>
+        public async Task<List<DeviceStatusResponse>> GetPortalDeviceStatusBatchAsync(List<string> deviceIds, CancellationToken cancellationToken = default)
+        {
+            if (deviceIds == null || deviceIds.Count == 0)
+                return new List<DeviceStatusResponse>();
+
+            try
+            {
+                const string endpointUrl = "https://portal.ivistatech.vn/api/v1/devices/status/batch";
+                var body = new { device_ids = deviceIds };
+                LoggerManager.LogDebug($"Portal device status endpoint: {endpointUrl}");
+                using (var request = new HttpRequestMessage(HttpMethod.Post, endpointUrl))
+                {
+                    request.Headers.ConnectionClose = true;
+                    request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                    request.Content = new StringContent(JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json");
+                    if (!string.IsNullOrWhiteSpace(_deviceStatusApiKey))
+                        request.Headers.TryAddWithoutValidation("X-API-KEY", _deviceStatusApiKey.Trim());
+
+                    using (var response = await _deviceStatusHttpClient.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken))
+                    {
+                        if (!response.IsSuccessStatusCode)
+                        {
+                            LoggerManager.LogWarn($"Portal device status batch returned {(int)response.StatusCode} from {endpointUrl}.");
+                            return new List<DeviceStatusResponse>();
+                        }
+
+                        var json = await response.Content.ReadAsStringAsync();
+                        var result = JsonConvert.DeserializeObject<List<DeviceStatusResponse>>(json) ?? new List<DeviceStatusResponse>();
+                        LoggerManager.LogInfo($"Portal device status batch succeeded: {result.Count}/{deviceIds.Count} records.");
+                        return result;
+                    }
+                }
+            }
+            catch (OperationCanceledException) { return new List<DeviceStatusResponse>(); }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Lỗi khi gọi GetPortalDeviceStatusBatchAsync");
                 return new List<DeviceStatusResponse>();
             }
         }
@@ -2296,6 +2745,345 @@ namespace V3SClient.libs
             {
                 LoggerManager.LogException(ex, $"Lỗi khi gọi ChangeCameraTalkGroupAsync cho camera {cameraId} tới nhóm {groupId}");
                 return false;
+            }
+        }
+        public sealed class RoiObjectsResponse
+        {
+            [JsonProperty("over_threshold")]
+            public List<RoiObjectItem> OverThreshold { get; set; } = new List<RoiObjectItem>();
+            [JsonProperty("total_items")]
+            public int? TotalItems { get; set; }
+            [JsonProperty("total_pages")]
+            public int? TotalPages { get; set; }
+        }
+
+        public sealed class RoiObjectItem
+        {
+            [JsonProperty("roi_id")]
+            public string RoiId { get; set; }
+            [JsonProperty("cam_id")]
+            public string CameraId { get; set; }
+            [JsonProperty("plate")]
+            public string Plate { get; set; }
+            [JsonProperty("label")]
+            public string Label { get; set; }
+            [JsonProperty("name")]
+            public string Name { get; set; }
+            [JsonProperty("detected_object_ids")]
+            public string DetectedObjectIds { get; set; }
+            [JsonProperty("object_type")]
+            public string ObjectType { get; set; }
+            [JsonProperty("entered_at")]
+            public string EnteredAt { get; set; }
+            [JsonProperty("exited_at")]
+            public string ExitedAt { get; set; }
+            [JsonProperty("dwell_ms")]
+            public long? DwellMilliseconds { get; set; }
+            [JsonProperty("dwell_seconds")]
+            public double? DwellSeconds { get; set; }
+            [JsonProperty("dwell_human")]
+            public string DwellHuman { get; set; }
+            [JsonProperty("object_key")]
+            public string ObjectKey { get; set; }
+            [JsonProperty("confidence")]
+            public double? Confidence { get; set; }
+            [JsonProperty("plate_confidence")]
+            public double? PlateConfidence { get; set; }
+            private string _cropAssetId;
+            [JsonProperty("crop_asset_id")]
+            public string CropAssetId
+            {
+                get { return !string.IsNullOrWhiteSpace(_cropAssetId) ? _cropAssetId : GetAssetIdFromCropImageUrl(CropImageUrl); }
+                set { _cropAssetId = value; }
+            }
+            [JsonProperty("crop_image_url")]
+            public string CropImageUrl { get; set; }
+            [JsonProperty("playback_url")]
+            public string PlaybackUrl { get; set; }
+            [JsonProperty("event_time")]
+            public string EventTime { get; set; }
+            [JsonProperty("object_id")]
+            public string ObjectId { get; set; }
+            [JsonProperty("event_type")]
+            public string EventType { get; set; }
+            [JsonProperty("meta_type")]
+            public string MetaType { get; set; }
+            [JsonProperty("duration")]
+            public string Duration { get; set; }
+            [JsonProperty("asset_id")]
+            public string AssetId { get; set; }
+
+            private static string GetAssetIdFromCropImageUrl(string value)
+            {
+                if (string.IsNullOrWhiteSpace(value)) return null;
+                var marker = "asset_id=";
+                var index = value.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+                if (index < 0) return null;
+                var encoded = value.Substring(index + marker.Length).Split('&')[0];
+                return string.IsNullOrWhiteSpace(encoded) ? null : Uri.UnescapeDataString(encoded);
+            }
+        }
+
+        public sealed class AiEventCenterSummary
+        {
+            [JsonProperty("today")]
+            public AiEventCenterSummaryKpi Today { get; set; }
+            [JsonProperty("in_station")]
+            public AiEventCenterSummaryKpi InStation { get; set; }
+            [JsonProperty("last_7_days")]
+            public AiEventCenterSummaryKpi Last7Days { get; set; }
+            [JsonProperty("month")]
+            public AiEventCenterSummaryKpi Month { get; set; }
+        }
+
+        public sealed class AiEventCenterSummaryKpi
+        {
+            [JsonProperty("value")]
+            public int Value { get; set; }
+            [JsonProperty("previous_value")]
+            public int? PreviousValue { get; set; }
+            [JsonProperty("trend")]
+            public string Trend { get; set; }
+            [JsonProperty("percentage")]
+            public double? Percentage { get; set; }
+        }
+
+        /// <summary>
+        /// Tab "Đã hoàn thành" — xe đã qua đủ công đoạn ROI.
+        /// Khớp với /api/ai-event-center/roi-objects của web app.
+        /// </summary>
+        public async Task<RoiObjectsResponse> GetRoiObjectsAsync(
+            System.DateTime referenceDate,
+            IEnumerable<string> cameraIds,
+            int page = 1,
+            int pageSize = 10,
+            string search = "",
+            string roiId = null,
+            bool forceRefresh = false,
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
+            try
+            {
+                var cameraIdsParameter = string.Join(",", (cameraIds ?? Enumerable.Empty<string>())
+                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                    .Select(id => id.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase));
+
+                var qs = new System.Text.StringBuilder();
+                qs.Append("?date=").Append(Uri.EscapeDataString(referenceDate.ToString("yyyy-MM-dd")));
+                qs.Append("&threshold_seconds=").Append(_roiThresholdSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                qs.Append("&merge_gap_seconds=").Append(_roiMergeGapSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                qs.Append("&search=").Append(Uri.EscapeDataString(search ?? ""));
+                qs.Append("&duration_filter=all");
+                // Request the crop asset identifiers used by the web event
+                // table so thumbnails can be resolved through Storage.
+                qs.Append("&img=true");
+                qs.Append("&page=").Append(page);
+                qs.Append("&page_size=").Append(pageSize);
+                if (!string.IsNullOrWhiteSpace(cameraIdsParameter))
+                    qs.Append("&cam_id=").Append(Uri.EscapeDataString(cameraIdsParameter));
+                if (!string.IsNullOrWhiteSpace(roiId))
+                    qs.Append("&roi_id=").Append(Uri.EscapeDataString(roiId));
+                if (forceRefresh)
+                    qs.Append("&refresh=true");
+
+                var json = await GetAiReportJsonWithFallbackAsync(
+                    "/api/roi-objects" + qs,
+                    "AI Event ROI Objects",
+                    cancellationToken);
+                return string.IsNullOrWhiteSpace(json)
+                    ? null
+                    : JsonConvert.DeserializeObject<RoiObjectsResponse>(json);
+            }
+            catch (OperationCanceledException) { return null; }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Lỗi khi gọi GetRoiObjectsAsync");
+                return null;
+            }
+        }
+
+        // ============ AI Event Center — 3 API endpoints khớp với web app ============
+
+        /// <summary>
+        /// KPI tổng hợp (hôm nay, tháng, 7 ngày, trong trạm).
+        /// Gọi thẳng /api/ai-event-center/summary nếu có cấu hình,
+        /// fallback tổng hợp thủ công từ vehicle-counts + frame-counts.
+        /// </summary>
+        public async Task<AiEventCenterSummary> GetAiEventSummaryAsync(
+            System.DateTime referenceDate,
+            IEnumerable<string> cameraIds,
+            bool forceRefresh = false,
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
+            // Resolve the service by _aiEventReport. The shared request helper
+            // always tries public_url first, then internal_url on failure.
+            try
+            {
+                var cameraIdsList = (cameraIds ?? Enumerable.Empty<string>())
+                    .Where(id => !string.IsNullOrWhiteSpace(id)).Select(id => id.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+                var qs = new System.Text.StringBuilder();
+                qs.Append("?date=").Append(Uri.EscapeDataString(referenceDate.ToString("yyyy-MM-dd")));
+                if (cameraIdsList.Count > 0)
+                    qs.Append("&cam_id=").Append(Uri.EscapeDataString(string.Join(",", cameraIdsList)));
+                if (forceRefresh)
+                    qs.Append("&refresh=true");
+
+                var summaryJson = await GetAiReportJsonWithFallbackAsync(
+                    "/api/ai-event-center/summary" + qs,
+                    "AI Event Summary",
+                    cancellationToken);
+                if (!string.IsNullOrWhiteSpace(summaryJson))
+                {
+                    var result = JsonConvert.DeserializeObject<AiEventCenterSummary>(summaryJson);
+                    // The summary endpoint may return current values without
+                    // comparison percentages. Continue to the vehicle-counts
+                    // fallback in that case so the UI can show prior-period data.
+                    if (result != null &&
+                        result.Today?.Percentage.HasValue == true &&
+                        result.Last7Days?.Percentage.HasValue == true &&
+                        result.Month?.Percentage.HasValue == true)
+                        return result;
+                }
+            }
+            catch (OperationCanceledException) { return null; }
+            catch (Exception ex) { LoggerManager.LogException(ex, "GetAiEventSummaryAsync via dedicated endpoint"); }
+
+            // --- Fallback: tổng hợp thủ công từ vehicle-counts + frame-counts ---
+            try
+            {
+                var cameraIdsList = (cameraIds ?? Enumerable.Empty<string>())
+                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                    .Select(id => id.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                var cameraIdsParameter = string.Join(",", cameraIdsList);
+
+                // 1. Fetch camera-vehicle-counts
+                var startAt = referenceDate.Date;
+                var endAt = referenceDate.Date == System.DateTime.Today
+                    ? System.DateTime.Now
+                    : referenceDate.Date.AddDays(1).AddTicks(-1);
+                var vehicleRoute = "/api/camera-vehicle-counts" +
+                    $"?start_date={Uri.EscapeDataString(startAt.ToString("yyyy-MM-ddTHH:mm:ss"))}" +
+                    $"&end_date={Uri.EscapeDataString(endAt.ToString("yyyy-MM-ddTHH:mm:ss"))}";
+                if (!string.IsNullOrWhiteSpace(cameraIdsParameter))
+                    vehicleRoute += $"&cam_id={Uri.EscapeDataString(cameraIdsParameter)}";
+
+                Newtonsoft.Json.Linq.JObject vehiclePayload = null;
+                var vehicleJson = await GetAiReportJsonWithFallbackAsync(
+                    vehicleRoute,
+                    "AI Event vehicle counts",
+                    cancellationToken);
+                if (!string.IsNullOrWhiteSpace(vehicleJson))
+                    vehiclePayload = Newtonsoft.Json.Linq.JObject.Parse(vehicleJson);
+
+                // 2. Fetch live-frame-detection-counts
+                var frameRoute = "/api/live-frame-detection-counts";
+                if (!string.IsNullOrWhiteSpace(cameraIdsParameter))
+                    frameRoute += $"?cam_ids={Uri.EscapeDataString(cameraIdsParameter)}";
+
+                int inRoiTotal = 0;
+                var frameJson = await GetAiReportJsonWithFallbackAsync(
+                    frameRoute,
+                    "AI Event live frame counts",
+                    cancellationToken);
+                if (!string.IsNullOrWhiteSpace(frameJson))
+                {
+                    var framePayload = Newtonsoft.Json.Linq.JObject.Parse(frameJson);
+
+                    string[] possibleKeys = { "total_detection_count", "total", "total_count", "count", "current_vehicle_total" };
+                    bool found = false;
+                    foreach (var key in possibleKeys)
+                    {
+                        if (framePayload[key] != null && int.TryParse(framePayload[key].ToString(), out int val))
+                        {
+                            inRoiTotal = val;
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if (!found && framePayload["cameras"] != null)
+                    {
+                        var camerasToken = framePayload["cameras"];
+                        if (camerasToken is Newtonsoft.Json.Linq.JArray camArray)
+                        {
+                            foreach (var cam in camArray)
+                            {
+                                if (cam["source_detection_count"] != null && int.TryParse(cam["source_detection_count"].ToString(), out int cVal))
+                                    inRoiTotal += cVal;
+                                else if (cam["count"] != null && int.TryParse(cam["count"].ToString(), out int cVal2))
+                                    inRoiTotal += cVal2;
+                            }
+                        }
+                        else if (camerasToken is Newtonsoft.Json.Linq.JObject camObj)
+                        {
+                            foreach (var prop in camObj.Properties())
+                            {
+                                if (prop.Value is Newtonsoft.Json.Linq.JObject subObj)
+                                {
+                                    if (subObj["source_detection_count"] != null && int.TryParse(subObj["source_detection_count"].ToString(), out int cVal))
+                                        inRoiTotal += cVal;
+                                    else if (subObj["count"] != null && int.TryParse(subObj["count"].ToString(), out int cVal2))
+                                        inRoiTotal += cVal2;
+                                }
+                                else if (int.TryParse(prop.Value.ToString(), out int cVal))
+                                {
+                                    inRoiTotal += cVal;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (vehiclePayload == null)
+                    return null;
+
+                int todayTotal = vehiclePayload["today_total"]?.ToObject<int>() ?? 0;
+                int yesterdayTotal = vehiclePayload["yesterday_total"]?.ToObject<int>() ?? 0;
+                int currentWeekTotal = vehiclePayload["current_week_total"]?.ToObject<int>() ?? 0;
+                int previousWeekTotal = vehiclePayload["previous_week_total"]?.ToObject<int>() ?? 0;
+                int currentMonthTotal = vehiclePayload["current_month_total"]?.ToObject<int>() ?? 0;
+                int previousMonthTotal = vehiclePayload["previous_month_total"]?.ToObject<int>() ?? 0;
+
+                AiEventCenterSummaryKpi MakeComparison(int current, int? previous)
+                {
+                    if (previous == null)
+                        return new AiEventCenterSummaryKpi { Value = current, Percentage = null, Trend = "flat" };
+                    if (previous.Value == 0)
+                    {
+                        return new AiEventCenterSummaryKpi
+                        {
+                            Value = current,
+                            Percentage = current > 0 ? (double?)null : 0,
+                            Trend = current > 0 ? "up" : "flat"
+                        };
+                    }
+                    double pct = Math.Round(((current - previous.Value) / (double)previous.Value) * 100.0, 1);
+                    return new AiEventCenterSummaryKpi
+                    {
+                        Value = current,
+                        Percentage = pct,
+                        Trend = pct > 0 ? "up" : (pct < 0 ? "down" : "flat")
+                    };
+                }
+
+                return new AiEventCenterSummary
+                {
+                    Today = MakeComparison(todayTotal, yesterdayTotal),
+                    InStation = MakeComparison(inRoiTotal, null),
+                    Last7Days = MakeComparison(currentWeekTotal, previousWeekTotal),
+                    Month = MakeComparison(currentMonthTotal, previousMonthTotal)
+                };
+            }
+            catch (OperationCanceledException) { return null; }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Lỗi khi tổng hợp AiEventSummary");
+                return null;
             }
         }
 
@@ -2316,6 +3104,216 @@ namespace V3SClient.libs
 
             [JsonProperty("api_key")]
             public string ApiKey { get; set; }
+        }
+        /// <summary>
+        /// Tab "Ghi nhận" — lịch sử crop AI theo khoảng thời gian.
+        /// Khớp với /api/ai-event-center/object-crops/history của web app.
+        /// </summary>
+        public sealed class AiEventObjectCropHistoryResponse
+        {
+            [JsonProperty("items")]
+            public List<AiEventObjectCropItem> Items { get; set; } = new List<AiEventObjectCropItem>();
+            [JsonProperty("total_items")]
+            public int? TotalItems { get; set; }
+            [JsonProperty("total_pages")]
+            public int? TotalPages { get; set; }
+        }
+
+        public sealed class AiEventObjectCropItem
+        {
+            [JsonProperty("message_id")]
+            public string MessageId { get; set; }
+            [JsonProperty("detection_id")]
+            public string DetectionId { get; set; }
+            [JsonProperty("cam_id")]
+            public string CameraId { get; set; }
+            [JsonProperty("event_time")]
+            public string EventTime { get; set; }
+            [JsonProperty("event_type")]
+            public string EventType { get; set; }
+            [JsonProperty("meta_type")]
+            public string MetaType { get; set; }
+            [JsonProperty("object_id")]
+            public string ObjectId { get; set; }
+            [JsonProperty("confidence")]
+            public double? Confidence { get; set; }
+            [JsonProperty("asset_id")]
+            public string AssetId { get; set; }
+            [JsonProperty("object_key")]
+            public object ObjectKey { get; set; }
+            [JsonProperty("plate")]
+            public string Plate { get; set; }
+            [JsonProperty("roi_id")]
+            public string RoiId { get; set; }
+            [JsonProperty("crop_asset_id")]
+            public string CropAssetId { get; set; }
+        }
+
+        public async Task<AiEventObjectCropHistoryResponse> GetAiEventObjectCropHistoryAsync(
+            System.DateTime startAt,
+            System.DateTime endAt,
+            IEnumerable<string> cameraIds,
+            int page = 1,
+            int pageSize = 10,
+            string objectId = "",
+            double minConfidence = 0.0,
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
+            try
+            {
+                var cameraIdsParameter = string.Join(",", (cameraIds ?? Enumerable.Empty<string>())
+                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                    .Select(id => id.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase));
+
+                // Thời gian theo định dạng ISO+07:00 như web app
+                string FormatVnTime(System.DateTime dt) =>
+                    dt.ToString("yyyy-MM-ddTHH:mm:ss") + "+07:00";
+
+                var qs = new System.Text.StringBuilder();
+                qs.Append("?start_at=").Append(Uri.EscapeDataString(FormatVnTime(startAt)));
+                qs.Append("&end_at=").Append(Uri.EscapeDataString(FormatVnTime(endAt)));
+                qs.Append("&object_id=").Append(Uri.EscapeDataString(objectId ?? ""));
+                qs.Append("&min_confidence=").Append(minConfidence.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                qs.Append("&page=").Append(page);
+                qs.Append("&page_size=").Append(pageSize);
+                if (!string.IsNullOrWhiteSpace(cameraIdsParameter))
+                    qs.Append("&cam_ids=").Append(Uri.EscapeDataString(cameraIdsParameter));
+
+                var json = await GetAiReportJsonWithFallbackAsync(
+                    "/api/object-crops/history" + qs,
+                    "AI Event object crop history",
+                    cancellationToken);
+                return string.IsNullOrWhiteSpace(json)
+                    ? null
+                    : JsonConvert.DeserializeObject<AiEventObjectCropHistoryResponse>(json);
+            }
+            catch (OperationCanceledException) { return null; }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Lỗi khi gọi GetAiEventObjectCropHistoryAsync");
+                return null;
+            }
+        }
+
+        public async Task<JObject> GetRoiMonitoringSummaryAsync(DateTime start, DateTime end, IEnumerable<string> cameraIds, IEnumerable<string> roiIds, string bucket, double thresholdSeconds, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            var query = "?start_at=" + Uri.EscapeDataString(start.ToString("o")) + "&end_at=" + Uri.EscapeDataString(end.ToString("o")) + "&cam_ids=" + Uri.EscapeDataString(string.Join(",", cameraIds ?? Enumerable.Empty<string>())) + "&roi_ids=" + Uri.EscapeDataString(string.Join(",", roiIds ?? Enumerable.Empty<string>())) + "&bucket=" + Uri.EscapeDataString(string.IsNullOrWhiteSpace(bucket) ? "auto" : bucket) + "&threshold_seconds=" + thresholdSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var json = await GetAiReportJsonWithFallbackAsync("/api/roi-monitoring/summary" + query, "ROI monitoring summary", cancellationToken);
+            return string.IsNullOrWhiteSpace(json) ? null : JObject.Parse(json);
+        }
+
+        // ============ ROI Batch — lấy danh sách công đoạn theo nhóm camera ============
+
+        public sealed class RoiBatchResponse
+        {
+            [JsonProperty("data")]
+            public List<RoiBatchItem> Data { get; set; } = new List<RoiBatchItem>();
+        }
+
+        public sealed class RoiBatchItem
+        {
+            [JsonProperty("cam_id")]
+            public string CameraId { get; set; }
+            [JsonProperty("roi")]
+            public RoiBatchRoiDetail Roi { get; set; }
+        }
+
+        public sealed class RoiBatchRoiDetail
+        {
+            [JsonProperty("id")]
+            public string Id { get; set; }
+            [JsonProperty("roi_id")]
+            public string RoiId { get; set; }
+            [JsonProperty("name")]
+            public string Name { get; set; }
+            // roiRule.name dùng làm fallback tên công đoạn
+            [JsonProperty("roiRule")]
+            public RoiBatchRoiRule RoiRule { get; set; }
+        }
+
+        public sealed class RoiBatchRoiRule
+        {
+            [JsonProperty("name")]
+            public string Name { get; set; }
+        }
+
+        /// <summary>
+        /// Lấy danh sách ROI (công đoạn) theo batch camera.
+        /// Khớp với POST /api/rois/batch/cameras của web app.
+        /// </summary>
+        public async Task<RoiBatchResponse> GetRoiBatchByCamerasAsync(
+            IEnumerable<string> cameraIds,
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
+            try
+            {
+                var camList = (cameraIds ?? Enumerable.Empty<string>())
+                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                    .Select(id => id.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                if (camList.Count == 0) return new RoiBatchResponse();
+
+                var body = new { active_only = true, cam_ids = camList, limit = 100, page = 0, scaled = true };
+                var bodyJson = JsonConvert.SerializeObject(body);
+                var profile = GetEndpointProfile(_roiConfigEndpointKeyword);
+                var endpointBases = new List<string>();
+                foreach (var candidate in new[] { profile?.PublicUrl, profile?.InternalUrl, _roiConfigApiUrl })
+                {
+                    if (string.IsNullOrWhiteSpace(candidate)) continue;
+                    var normalized = candidate.Trim().TrimEnd('/');
+                    if (!endpointBases.Any(value => string.Equals(value, normalized, StringComparison.OrdinalIgnoreCase)))
+                        endpointBases.Add(normalized);
+                }
+
+                var authTokens = new List<string>();
+                foreach (var candidate in new[] { profile?.Token, _roiConfigApiToken, _backendToken })
+                {
+                    if (string.IsNullOrWhiteSpace(candidate)) continue;
+                    var normalized = candidate.Trim();
+                    if (!authTokens.Any(value => string.Equals(value, normalized, StringComparison.Ordinal)))
+                        authTokens.Add(normalized);
+                }
+                if (authTokens.Count == 0) authTokens.Add(null);
+
+                foreach (var endpointBase in endpointBases)
+                {
+                    foreach (var authToken in authTokens)
+                    {
+                        var url = endpointBase + "/api/rois/batch/cameras";
+                        LoggerManager.LogDebug($"ROI configuration endpoint ({_roiConfigEndpointKeyword}): {url}");
+                        using (var request = new HttpRequestMessage(HttpMethod.Post, url))
+                        {
+                            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                            if (!string.IsNullOrWhiteSpace(authToken))
+                                request.Headers.TryAddWithoutValidation("Authorization", authToken);
+                            request.Content = new StringContent(bodyJson, Encoding.UTF8, "application/json");
+
+                            using (var response = await _deviceStatusHttpClient.SendAsync(request, cancellationToken))
+                            {
+                                if (response.IsSuccessStatusCode)
+                                {
+                                    var json = await response.Content.ReadAsStringAsync();
+                                    return JsonConvert.DeserializeObject<RoiBatchResponse>(json) ?? new RoiBatchResponse();
+                                }
+
+                                LoggerManager.LogWarn($"GetRoiBatchByCamerasAsync returned {(int)response.StatusCode} from {url}.");
+                                if ((int)response.StatusCode != 401 && (int)response.StatusCode != 403)
+                                    break;
+                            }
+                        }
+                    }
+                }
+
+                return null;
+            }
+            catch (OperationCanceledException) { return null; }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Lỗi khi gọi GetRoiBatchByCamerasAsync");
+                return null;
+            }
         }
     }
 }

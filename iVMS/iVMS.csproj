@@ -446,6 +446,8 @@
       <DependentUpon>MapPage_v3.xaml</DependentUpon>
     </Compile>
     <Compile Include="UI\Views\DashboardPage_v3.xaml.cs"><DependentUpon>DashboardPage_v3.xaml</DependentUpon></Compile>
+    <Compile Include="UI\Views\AnalysisPage_v3.xaml.cs"><DependentUpon>AnalysisPage_v3.xaml</DependentUpon></Compile>
+    <Compile Include="UI\Views\SystemMetricsPage_v3.xaml.cs"><DependentUpon>SystemMetricsPage_v3.xaml</DependentUpon></Compile>
     <Compile Include="UI\Views\EventCenterPage_v3.xaml.cs"><DependentUpon>EventCenterPage_v3.xaml</DependentUpon></Compile>
     <Compile Include="viewModels\PlaybackViewModel_v3.cs" />
     <Compile Include="viewModels\MapViewModel_v3.cs" />
@@ -909,6 +911,8 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="UI\Views\DashboardPage_v3.xaml"><Generator>MSBuild:Compile</Generator><SubType>Designer</SubType></Page>
+    <Page Include="UI\Views\AnalysisPage_v3.xaml"><Generator>MSBuild:Compile</Generator><SubType>Designer</SubType></Page>
+    <Page Include="UI\Views\SystemMetricsPage_v3.xaml"><Generator>MSBuild:Compile</Generator><SubType>Designer</SubType></Page>
     <Page Include="UI\Views\EventCenterPage_v3.xaml"><Generator>MSBuild:Compile</Generator><SubType>Designer</SubType></Page>
     <Page Include="UI\Views\WhepPlayer_v3.xaml">
       <Generator>MSBuild:Compile</Generator>

@@ -25,8 +25,10 @@ namespace V3SClient.viewModels
                 new ShellNavigationItem_v3("Phân tích", PackIconMaterialKind.ChartBar, null, null),
                 new ShellNavigationItem_v3("Báo cáo", PackIconMaterialKind.FileDocumentOutline, null, null),
                 new ShellNavigationItem_v3("Cấu hình", PackIconMaterialKind.CogOutline, null, null),
-                new ShellNavigationItem_v3("Hệ thống", PackIconMaterialKind.Server, null, null)
+                new ShellNavigationItem_v3("Hệ thống", PackIconMaterialKind.Server, "/system", null)
             };
+            // Phân tích đứng trước Thiết bị như bố cục web.
+            NavigationItems.Move(6, 5);
             ActiveRoute = "/dashboard";
             SelectedNavigationItem = NavigationItems[0];
             SelectNavigationCommand = new RelayCommand(item => SelectNavigation(item as ShellNavigationItem_v3));
@@ -63,6 +65,7 @@ namespace V3SClient.viewModels
             var route = item.Route;
             if (string.IsNullOrWhiteSpace(route) && item.IconKind == PackIconMaterialKind.ViewDashboardOutline) route = "/dashboard";
             if (string.IsNullOrWhiteSpace(route) && item.IconKind == PackIconMaterialKind.RobotOutline) route = "/events";
+            if (string.IsNullOrWhiteSpace(route) && item.IconKind == PackIconMaterialKind.ChartBar) route = "/analysis";
             if (string.IsNullOrWhiteSpace(route)) return;
             ActiveRoute = route;
             SelectedNavigationItem = item;

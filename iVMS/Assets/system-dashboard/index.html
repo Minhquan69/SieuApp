@@ -1,0 +1,760 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hệ thống</title>
+  <style>
+    :root{
+      color-scheme:dark;
+      --bg:#08111f;
+      --panel:#101b2c;
+      --panel2:#0d1726;
+      --line:#22354d;
+      --text:#eaf2ff;
+      --muted:#8fa4bf;
+      --good:#31d07f;
+      --warn:#f6bd54;
+      --bad:#ff656f;
+      --accent:#5b9cff;
+      --purple:#9b7bff;
+      --cyan:#39c6d8;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      background:
+        radial-gradient(circle at 20% -10%,#163055 0,transparent 33%),
+        radial-gradient(circle at 95% 0,#142540 0,transparent 28%),
+        var(--bg);
+      color:var(--text);
+      font:14px system-ui,-apple-system,Segoe UI,sans-serif;
+    }
+    main{max-width:1540px;margin:auto;padding:24px}
+    .top{display:flex;justify-content:space-between;gap:18px;align-items:end;margin-bottom:18px}
+    h1{font-size:28px;margin:0 0 4px}
+    h2{font-size:16px;margin:0}
+    .subtitle,.muted,.updated{color:var(--muted)}
+    .controls,.panel,.card{
+      background:rgba(16,27,44,.94);
+      border:1px solid var(--line);
+      border-radius:14px;
+      box-shadow:0 12px 34px rgba(0,0,0,.15);
+    }
+    .controls{
+      display:grid;
+      grid-template-columns:minmax(220px,1.4fr) minmax(180px,1fr) minmax(160px,1fr) auto;
+      gap:10px;
+      padding:14px;
+      margin-bottom:14px;
+      align-items:end;
+    }
+    input,select,button{
+      width:100%;
+      background:#0a1423;
+      color:var(--text);
+      border:1px solid #355071;
+      border-radius:8px;
+      padding:9px 10px;
+      outline:none;
+    }
+    button{
+      width:auto;
+      min-width:150px;
+      background:var(--accent);
+      border:0;
+      font-weight:700;
+      cursor:pointer;
+    }
+    button:disabled{opacity:.55;cursor:not-allowed}
+    label{display:flex;flex-direction:column;gap:5px;color:var(--muted);font-size:12px}
+    .notice{
+      padding:12px 14px;
+      border:1px solid #7a5129;
+      border-radius:10px;
+      background:#35251c;
+      color:#ffd09b;
+      margin-bottom:14px
+    }
+    .hidden{display:none!important}
+
+    .cards{
+      display:grid;
+      grid-template-columns:repeat(5,minmax(0,1fr));
+      gap:10px;
+      margin-bottom:14px
+    }
+    .card{padding:14px;min-width:0}
+    .card .label{color:var(--muted);font-size:11px;letter-spacing:.05em}
+    .value{font-size:24px;font-weight:750;margin-top:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .subvalue{font-size:11px;color:var(--muted);margin-top:4px}
+    .good{color:var(--good)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+
+    .section-title{
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      align-items:center;
+      margin:22px 2px 10px;
+    }
+    .section-title .meta{font-size:12px;color:var(--muted)}
+    .grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:14px}
+    .panel{padding:16px;min-width:0}
+    .span-4{grid-column:span 4}
+    .span-5{grid-column:span 5}
+    .span-6{grid-column:span 6}
+    .span-7{grid-column:span 7}
+    .span-8{grid-column:span 8}
+    .span-12{grid-column:1/-1}
+    .panel-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}
+    .pill{
+      border:1px solid var(--line);
+      background:var(--panel2);
+      border-radius:999px;
+      padding:4px 8px;
+      font-size:11px;
+      color:var(--muted)
+    }
+
+    .metric-list{display:grid;gap:12px}
+    .metric-row{display:grid;grid-template-columns:120px 1fr 72px;gap:10px;align-items:center}
+    .metric-name{color:var(--muted)}
+    .bar{height:9px;background:#091321;border:1px solid #1e314a;border-radius:999px;overflow:hidden}
+    .bar>i{display:block;height:100%;width:0;border-radius:999px;background:linear-gradient(90deg,var(--accent),var(--cyan))}
+    .metric-val{text-align:right;font-weight:700}
+    .network-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .network-kpi{background:#0a1423;border:1px solid #1f334c;border-radius:10px;padding:12px}
+    .network-kpi span{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.04em}
+    .network-kpi b{display:block;font-size:18px;margin-top:5px}
+    .network-note{color:var(--muted);font-size:11px;margin-top:10px}
+
+    .chart{width:100%;height:245px;display:block}
+    .legend{display:flex;flex-wrap:wrap;gap:14px;color:var(--muted);font-size:11px;margin-top:8px}
+    .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
+
+    .table-wrap{overflow:auto;max-height:430px}
+    table{border-collapse:collapse;width:100%}
+    th,td{text-align:left;padding:10px 9px;border-bottom:1px solid var(--line);white-space:nowrap}
+    th{color:var(--muted);font-size:11px;font-weight:600;position:sticky;top:0;background:var(--panel);z-index:1}
+    tbody tr:hover{background:#132238}
+    .status{font-weight:700}
+    .tiny{font-size:11px}
+    .mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+    .empty{color:var(--muted);padding:20px 8px}
+    .gpu-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .gpu-card{border:1px solid var(--line);background:var(--panel2);border-radius:12px;padding:12px}
+    .gpu-top{display:flex;justify-content:space-between;gap:10px;align-items:start;margin-bottom:10px}
+    .gpu-name{font-weight:700}
+    .gpu-model{color:var(--muted);font-size:11px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:300px}
+    .gpu-metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+    .mini{background:#0a1423;border-radius:8px;padding:8px}
+    .mini b{display:block;font-size:15px;margin-top:3px}
+    .mini span{color:var(--muted);font-size:10px}
+
+    @media(max-width:1200px){
+      .controls{grid-template-columns:repeat(3,1fr)}
+      .cards{grid-template-columns:repeat(3,1fr)}
+      .span-4,.span-5,.span-6,.span-7,.span-8{grid-column:span 12}
+    }
+    @media(max-width:700px){
+      main{padding:14px}
+      .top{display:block}
+      .updated{margin-top:8px}
+      .controls{grid-template-columns:1fr}
+      button{width:100%}
+      .cards{grid-template-columns:repeat(2,1fr)}
+      .gpu-grid{grid-template-columns:1fr}
+      .network-kpis{grid-template-columns:repeat(2,1fr)}
+      .metric-row{grid-template-columns:90px 1fr 66px}
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <div>
+      <h1>Hệ thống</h1>
+      <div class="subtitle">Theo dõi tài nguyên máy chủ vật lý, mạng và GPU.</div>
+    </div>
+    <div class="updated" id="updated">Chưa đồng bộ</div>
+  </header>
+
+  <section class="controls">
+    <input id="api" type="hidden" value="">
+    <input id="token" type="hidden" value="">
+    <label>Máy chủ
+      <select id="node"><option value="*">Tất cả máy chủ</option></select>
+    </label>
+    <label>Khoảng lịch sử
+      <select id="range">
+        <option value="1800">30 phút</option>
+        <option value="3600">1 giờ</option>
+        <option value="21600">6 giờ</option>
+        <option value="86400">24 giờ</option>
+      </select>
+    </label>
+    <label>Tự động làm mới
+      <select id="refresh">
+        <option value="0">Thủ công</option>
+        <option value="10000" selected>10 giây</option>
+        <option value="30000">30 giây</option>
+        <option value="60000">1 phút</option>
+      </select>
+    </label>
+    <button id="load">Làm mới</button>
+  </section>
+
+  <div id="notice" class="notice hidden"></div>
+
+  <section class="cards">
+    <div class="card"><div class="label">TỔNG MÁY CHỦ</div><div class="value" id="total">—</div><div class="subvalue">hạ tầng vật lý</div></div>
+    <div class="card"><div class="label">TRỰC TUYẾN</div><div class="value good" id="online">—</div><div class="subvalue">host đang phản hồi</div></div>
+    <div class="card"><div class="label">NGOẠI TUYẾN</div><div class="value bad" id="offline">—</div><div class="subvalue">cần kiểm tra</div></div>
+    <div class="card"><div class="label">CPU</div><div class="value" id="cpu">—</div><div class="subvalue" id="cores">— lõi</div></div>
+    <div class="card"><div class="label">NHIỆT CPU</div><div class="value" id="cpuTemp">—</div><div class="subvalue">cảm biến host</div></div>
+    <div class="card"><div class="label">BỘ NHỚ</div><div class="value" id="memory">—</div><div class="subvalue" id="hostMemory">—</div></div>
+    <div class="card"><div class="label">Ổ ĐĨA</div><div class="value" id="disk">—</div><div class="subvalue">phân vùng cao nhất</div></div>
+
+    <div class="card"><div class="label">THIẾT BỊ GPU</div><div class="value" id="gpuCount">—</div><div class="subvalue" id="gpuExporter">GPU telemetry</div></div>
+    <div class="card"><div class="label">GPU SỬ DỤNG</div><div class="value" id="gpuUtil">—</div><div class="subvalue">trung bình các GPU</div></div>
+    <div class="card"><div class="label">BỘ NHỚ GPU</div><div class="value" id="gpuMemory">—</div><div class="subvalue" id="gpuMemoryUsed">—</div></div>
+    <div class="card"><div class="label">NHIỆT GPU</div><div class="value" id="gpuTemp">—</div><div class="subvalue">nhiệt độ trung bình</div></div>
+  </section>
+
+  <div class="section-title">
+    <h2>Sức khỏe hiện tại</h2>
+    <div class="meta">Bộ lọc máy chủ áp dụng cho chỉ số host; chỉ số GPU được hiển thị riêng.</div>
+  </div>
+
+  <section class="grid">
+    <div class="panel span-5">
+      <div class="panel-head"><h2>Máy chủ</h2><span class="pill">node vật lý</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Máy chủ</th><th>Trạng thái</th></tr></thead>
+          <tbody id="nodes"><tr><td colspan="2" class="muted">Đang tải…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel span-7">
+      <div class="panel-head"><h2>Mức sử dụng tài nguyên</h2><span class="pill">host + GPU</span></div>
+      <div class="metric-list">
+        <div class="metric-row"><div class="metric-name">CPU</div><div class="bar"><i id="barCpu"></i></div><div class="metric-val" id="barCpuVal">—</div></div>
+        <div class="metric-row"><div class="metric-name">Bộ nhớ</div><div class="bar"><i id="barMem"></i></div><div class="metric-val" id="barMemVal">—</div></div>
+        <div class="metric-row"><div class="metric-name">Ổ đĩa</div><div class="bar"><i id="barDisk"></i></div><div class="metric-val" id="barDiskVal">—</div></div>
+        <div class="metric-row"><div class="metric-name">GPU</div><div class="bar"><i id="barGpu"></i></div><div class="metric-val" id="barGpuVal">—</div></div>
+        <div class="metric-row"><div class="metric-name">Bộ nhớ GPU</div><div class="bar"><i id="barGpuMem"></i></div><div class="metric-val" id="barGpuMemVal">—</div></div>
+      </div>
+    </div>
+
+    <div class="panel span-12">
+      <div class="panel-head">
+        <h2>Lưu lượng mạng</h2>
+        <span class="pill" id="networkDevicePill">NIC vật lý: tự động</span>
+      </div>
+      <div class="network-kpis">
+        <div class="network-kpi"><span>Host nhận (RX)</span><b id="hostRx">—</b></div>
+        <div class="network-kpi"><span>Host gửi (TX)</span><b id="hostTx">—</b></div>
+      </div>
+      <div class="network-note">
+        Lưu lượng host sử dụng một card mạng vật lý, không phải interface ảo, được chọn tự động với tốc độ theo phút.
+      </div>
+    </div>
+
+    <div class="panel span-12">
+      <div class="panel-head"><h2>GPU NVIDIA</h2><span class="pill">phần cứng</span></div>
+      <div id="gpuGrid" class="gpu-grid"><div class="empty">Đang tải chỉ số GPU…</div></div>
+    </div>
+
+  </section>
+
+  <div class="section-title">
+    <h2>Lịch sử</h2>
+    <div class="meta">Chuỗi thời gian hạ tầng vật lý</div>
+  </div>
+
+  <section class="grid">
+    <div class="panel span-6">
+      <div class="panel-head"><h2>CPU & bộ nhớ</h2><span class="pill">%</span></div>
+      <canvas class="chart" id="resourcesChart"></canvas>
+      <div class="legend">
+        <span><i class="dot" style="background:#5b9cff"></i>CPU</span>
+        <span><i class="dot" style="background:#31d07f"></i>Bộ nhớ</span>
+      </div>
+    </div>
+    <div class="panel span-6">
+      <div class="panel-head"><h2>Nhiệt CPU</h2><span class="pill">°C</span></div>
+      <canvas class="chart" id="cpuTemperatureChart"></canvas>
+    </div>
+
+    <div class="panel span-6">
+      <div class="panel-head"><h2>GPU sử dụng & VRAM</h2><span class="pill">%</span></div>
+      <canvas class="chart" id="gpuChart"></canvas>
+      <div class="legend">
+        <span><i class="dot" style="background:#9b7bff"></i>GPU sử dụng</span>
+        <span><i class="dot" style="background:#39c6d8"></i>Bộ nhớ GPU</span>
+      </div>
+    </div>
+
+    <div class="panel span-6">
+      <div class="panel-head"><h2>Thông lượng ổ đĩa</h2><span class="pill">bytes/s</span></div>
+      <canvas class="chart" id="diskChart"></canvas>
+      <div class="legend">
+        <span><i class="dot" style="background:#5b9cff"></i>Đọc</span>
+        <span><i class="dot" style="background:#f6bd54"></i>Ghi</span>
+      </div>
+    </div>
+
+    <div class="panel span-6">
+      <div class="panel-head"><h2>Mạng vật lý host</h2><span class="pill" id="networkChartDevice">tự động · tốc độ 1 phút</span></div>
+      <canvas class="chart" id="networkChart"></canvas>
+      <div class="legend">
+        <span><i class="dot" style="background:#31d07f"></i>RX</span>
+        <span><i class="dot" style="background:#ff656f"></i>TX</span>
+      </div>
+    </div>
+
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+
+const state = {
+  timer: null,
+  loading: false,
+  chartData: {},
+  hostCores: 1,
+  hostMemoryBytes: 1,
+  networkDevice: ''
+};
+
+// Supplied by the desktop host from the Portal endpoint registry.  This keeps
+// the dashboard layout identical to this source file while avoiding a fixed IP.
+const metricConfig = window.IVISTA_SYSTEM_METRIC_CONFIG || {};
+$('api').value = metricConfig.apiUrl || '';
+$('token').value = metricConfig.token || '';
+
+function apiBase(){
+  return $('api').value.trim().replace(/\/+$/, '');
+}
+
+async function get(path){
+  if(!apiBase()){
+    throw new Error('The Portal endpoint _systemMetric is not configured.');
+  }
+  const headers = {};
+  const token = $('token').value.trim();
+  if(token) headers.Authorization = 'Bearer ' + token;
+
+  const response = await fetch(apiBase() + path, {headers});
+  const body = await response.json().catch(() => ({}));
+
+  if(!response.ok){
+    throw new Error(body?.error?.message || `${response.status} ${response.statusText}`);
+  }
+
+  return body;
+}
+
+function selectedInstance(){
+  return $('node').value || '*';
+}
+
+function pct(v, digits=1){
+  return Number.isFinite(Number(v))
+    ? Number(v).toLocaleString('vi-VN', {minimumFractionDigits:digits, maximumFractionDigits:digits}) + '%'
+    : '—';
+}
+
+function num(v, digits=1){
+  return Number.isFinite(Number(v))
+    ? Number(v).toLocaleString('vi-VN', {minimumFractionDigits:digits, maximumFractionDigits:digits})
+    : '—';
+}
+
+function bytes(v){
+  v = Number(v);
+  if(!Number.isFinite(v)) return '—';
+  const units = ['B','KB','MB','GB','TB','PB'];
+  let i = 0;
+  while(Math.abs(v) >= 1024 && i < units.length - 1){ v /= 1024; i++; }
+  return `${v.toLocaleString('vi-VN', {minimumFractionDigits:i < 2 ? 1 : 2, maximumFractionDigits:i < 2 ? 1 : 2})} ${units[i]}`;
+}
+
+function bits(v){
+  v = Number(v);
+  if(!Number.isFinite(v)) return '—';
+  const units = ['bps','Kbps','Mbps','Gbps','Tbps'];
+  let i = 0;
+  while(Math.abs(v) >= 1000 && i < units.length - 1){ v /= 1000; i++; }
+  return `${v.toLocaleString('vi-VN', {minimumFractionDigits:i < 2 ? 1 : 2, maximumFractionDigits:i < 2 ? 1 : 2})} ${units[i]}`;
+}
+
+function mib(v){
+  v = Number(v);
+  if(!Number.isFinite(v)) return '—';
+  if(v >= 1024) return `${(v/1024).toLocaleString('vi-VN', {minimumFractionDigits:1, maximumFractionDigits:1})} GiB`;
+  return `${v.toLocaleString('vi-VN', {maximumFractionDigits:0})} MiB`;
+}
+
+function esc(v){
+  return String(v ?? '').replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+
+function notice(message){
+  $('notice').textContent = message;
+  $('notice').classList.toggle('hidden', !message);
+}
+
+function setBar(id, value){
+  const safe = Math.max(0, Math.min(100, Number(value) || 0));
+  $(id).style.width = safe + '%';
+}
+
+function setResourceBars(o){
+  const host = o.host || {};
+  const gpu = o.gpu || {};
+
+  const rows = [
+    ['barCpu', 'barCpuVal', host.cpu_percent],
+    ['barMem', 'barMemVal', host.memory_percent],
+    ['barDisk', 'barDiskVal', host.disk_percent],
+    ['barGpu', 'barGpuVal', gpu.utilization_percent],
+    ['barGpuMem', 'barGpuMemVal', gpu.memory_percent]
+  ];
+
+  rows.forEach(([bar, label, value]) => {
+    setBar(bar, value);
+    $(label).textContent = pct(value);
+  });
+}
+
+function renderOverview(o){
+  const nodes = o.nodes || {};
+  const host = o.host || o.resources || {};
+  const gpu = o.gpu || {};
+
+  $('total').textContent = nodes.total ?? '—';
+  $('online').textContent = nodes.online ?? '—';
+  $('offline').textContent = nodes.offline ?? '—';
+
+  $('cpu').textContent = pct(host.cpu_percent);
+  $('cpuTemp').textContent = Number.isFinite(Number(host.cpu_temperature_c))
+    ? num(host.cpu_temperature_c, 0) + ' °C' : '—';
+  $('memory').textContent = pct(host.memory_percent);
+  $('disk').textContent = pct(host.disk_percent);
+
+  state.hostCores = Number(host.cpu_cores) || 1;
+  state.hostMemoryBytes = Number(host.memory_bytes) || 1;
+
+  $('cores').textContent = `${num(host.cpu_cores,0)} lõi`;
+  $('hostMemory').textContent = bytes(host.memory_bytes);
+
+  $('gpuCount').textContent = gpu.count ?? '—';
+  $('gpuUtil').textContent = pct(gpu.utilization_percent);
+  $('gpuMemory').textContent = pct(gpu.memory_percent);
+  $('gpuMemoryUsed').textContent =
+    `${mib(gpu.memory_used_mib)} đã dùng / ${mib((Number(gpu.memory_used_mib)||0)+(Number(gpu.memory_free_mib)||0))}`;
+  $('gpuTemp').textContent = Number.isFinite(Number(gpu.temperature_c))
+    ? num(gpu.temperature_c, 0) + ' °C'
+    : '—';
+  $('gpuExporter').textContent = gpu.exporter_up ? 'Telemetry sẵn sàng' : 'Telemetry chưa sẵn sàng';
+  $('gpuExporter').className = 'subvalue ' + (gpu.exporter_up ? 'good' : 'bad');
+
+  const network = o.network || {};
+  state.networkDevice = network.device || '';
+  $('hostRx').textContent = bits(network.receive_bps);
+  $('hostTx').textContent = bits(network.transmit_bps);
+
+  const deviceLabel = state.networkDevice || 'auto';
+  $('networkDevicePill').textContent = 'NIC vật lý: ' + deviceLabel;
+  $('networkChartDevice').textContent = deviceLabel + ' · tốc độ 1 phút';
+
+  setResourceBars(o);
+}
+
+function renderNodes(data){
+  const nodes = data.nodes || [];
+  $('nodes').innerHTML = nodes.length
+    ? nodes.map(v => `
+      <tr>
+        <td class="mono">${esc(v.instance)}</td>
+        <td class="status ${v.up ? 'good' : 'bad'}">${v.up ? 'TRỰC TUYẾN' : 'NGOẠI TUYẾN'}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="2" class="muted">Hiện không có máy chủ vật lý nào phản hồi</td></tr>';
+}
+
+function renderGPUs(data){
+  const gpus = data.gpus || [];
+
+  if(!gpus.length){
+    $('gpuGrid').innerHTML = `
+      <div class="empty">
+        Hiện chưa có chỉ số phần cứng GPU.
+      </div>`;
+    return;
+  }
+
+  $('gpuGrid').innerHTML = gpus.map((g, index) => `
+    <div class="gpu-card">
+      <div class="gpu-top">
+        <div>
+        <div class="gpu-name">GPU ${esc(g.gpu || index)}</div>
+          <div class="gpu-model">${esc(g.model || g.uuid || g.instance || '')}</div>
+        </div>
+        <span class="pill">${pct(g.utilization_percent,0)}</span>
+      </div>
+      <div class="gpu-metrics">
+        <div class="mini"><span>VRAM</span><b>${pct(g.memory_percent)}</b></div>
+        <div class="mini"><span>Nhiệt độ</span><b>${num(g.temperature_c,0)} °C</b></div>
+        <div class="mini"><span>Công suất</span><b>${num(g.power_watts,0)} W</b></div>
+        <div class="mini"><span>Bộ nhớ đã dùng</span><b>${mib(g.memory_used_mib)}</b></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function ensureNodeOptions(){
+  const data = await get('/nodes?instance=*');
+  renderNodes(data);
+
+  const current = selectedInstance();
+  const select = $('node');
+  const instances = [...new Set((data.nodes || []).map(n => n.instance).filter(Boolean))];
+
+  select.innerHTML = '<option value="*">Tất cả máy chủ</option>';
+  instances.forEach(v => select.add(new Option(v, v)));
+
+  if([...select.options].some(o => o.value === current)){
+    select.value = current;
+  }
+}
+
+function historyParams(instanceValue='*'){
+  const secs = Number($('range').value);
+  const end = new Date();
+  const start = new Date(end.getTime() - secs * 1000);
+  return `&instance=${encodeURIComponent(instanceValue)}&start=${encodeURIComponent(start.toISOString())}&end=${encodeURIComponent(end.toISOString())}`;
+}
+
+async function ts(metric, instanceValue='*', device=''){
+  const deviceParam = device ? `&device=${encodeURIComponent(device)}` : '';
+  return get(`/timeseries?metric=${encodeURIComponent(metric)}${historyParams(instanceValue)}${deviceParam}`);
+}
+
+function seriesOrEmpty(response){
+  return response?.series?.[0] || {points:[]};
+}
+
+function drawChart(id, lines, options={}){
+  const canvas = $(id);
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.max(200, canvas.clientWidth);
+  const h = Math.max(160, canvas.clientHeight);
+
+  canvas.width = Math.round(w*dpr);
+  canvas.height = Math.round(h*dpr);
+
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,w,h);
+
+  const margin = {left:50,right:14,top:18,bottom:25};
+  const pw = w-margin.left-margin.right;
+  const ph = h-margin.top-margin.bottom;
+
+  const colors = options.colors || ['#5b9cff','#31d07f','#f6bd54','#ff656f'];
+  const allValues = lines.flatMap(l => (l.points||[]).map(p => Number(p.value)).filter(Number.isFinite));
+  const fixedMax = options.max;
+  let max = Number.isFinite(fixedMax) ? fixedMax : Math.max(1, ...allValues);
+  if(!Number.isFinite(fixedMax)) max *= 1.08;
+
+  // Grid
+  ctx.strokeStyle = '#22354d';
+  ctx.lineWidth = 1;
+  ctx.fillStyle = '#8fa4bf';
+  ctx.font = '10px system-ui';
+
+  for(let i=0;i<=4;i++){
+    const y = margin.top + ph*i/4;
+    ctx.beginPath();
+    ctx.moveTo(margin.left,y);
+    ctx.lineTo(margin.left+pw,y);
+    ctx.stroke();
+
+    const value = max*(1-i/4);
+    ctx.fillText(formatAxis(value, options.kind), 4, y+3);
+  }
+
+  const longest = Math.max(0, ...lines.map(l => (l.points||[]).length));
+
+  lines.forEach((line, li) => {
+    const pts = line.points || [];
+    if(!pts.length) return;
+
+    ctx.strokeStyle = colors[li % colors.length];
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+
+    pts.forEach((p, i) => {
+      const x = margin.left + (longest <= 1 ? 0 : i/(longest-1)*pw);
+      const y = margin.top + ph - Math.max(0, Number(p.value)||0)/max*ph;
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    });
+
+    ctx.stroke();
+  });
+
+  if(options.note){
+    ctx.fillStyle = '#8fa4bf';
+    ctx.font = '10px system-ui';
+    ctx.fillText(options.note, margin.left, h-5);
+  }
+}
+
+function formatAxis(v, kind){
+  if(kind === 'bytes') return bytes(v);
+  if(kind === 'bits') return bits(v);
+  if(kind === 'celsius') return Math.round(v) + ' °C';
+  return Math.round(v) + (kind === 'percent' ? '%' : '');
+}
+
+function convertSeries(response, fn){
+  const src = seriesOrEmpty(response);
+  return {
+    metric: src.metric,
+    points: (src.points || []).map(p => ({
+      timestamp: p.timestamp,
+      value: fn(Number(p.value)||0)
+    }))
+  };
+}
+
+async function loadHistory(){
+  const hostInstance = selectedInstance();
+
+  const [
+    cpu, cpuTemperature, memory,
+    diskRead, diskWrite,
+    netRx, netTx,
+    gpuUtil, gpuMem
+  ] = await Promise.all([
+    ts('cpu',hostInstance),
+    ts('cpu_temperature',hostInstance),
+    ts('memory',hostInstance),
+    ts('disk_read',hostInstance),
+    ts('disk_write',hostInstance),
+
+    // Use the same physical interface selected by /overview.
+    ts('network_receive',hostInstance,state.networkDevice),
+    ts('network_transmit',hostInstance,state.networkDevice),
+
+    // GPU metrics are queried across available hardware.
+    ts('gpu_utilization','*'),
+    ts('gpu_memory','*')
+  ]);
+
+  state.chartData = {
+    resources:[
+      seriesOrEmpty(cpu),
+      seriesOrEmpty(memory)
+    ],
+    cpuTemperature:[seriesOrEmpty(cpuTemperature)],
+    gpu:[
+      seriesOrEmpty(gpuUtil),
+      seriesOrEmpty(gpuMem)
+    ],
+    disk:[
+      seriesOrEmpty(diskRead),
+      seriesOrEmpty(diskWrite)
+    ],
+    network:[
+      seriesOrEmpty(netRx),
+      seriesOrEmpty(netTx)
+    ]
+  };
+
+  redrawCharts();
+}
+
+function redrawCharts(){
+  const d = state.chartData;
+  if(!d.resources) return;
+
+  drawChart('resourcesChart', d.resources, {
+    max:100, kind:'percent', colors:['#5b9cff','#31d07f','#f6bd54']
+  });
+
+  drawChart('cpuTemperatureChart', d.cpuTemperature, {
+    kind:'celsius', colors:['#f6bd54'], note:'Nhiệt độ cảm biến CPU trung bình'
+  });
+
+  drawChart('gpuChart', d.gpu, {
+    max:100, kind:'percent', colors:['#9b7bff','#39c6d8']
+  });
+
+  drawChart('diskChart', d.disk, {
+    kind:'bytes', colors:['#5b9cff','#f6bd54']
+  });
+
+  drawChart('networkChart', d.network, {
+    kind:'bits', colors:['#31d07f','#ff656f'],
+    note:'Chỉ interface vật lý; tốc độ theo phút'
+  });
+
+}
+
+async function loadDashboard(){
+  if(state.loading) return;
+  state.loading = true;
+  $('load').disabled = true;
+  notice('');
+
+  try{
+    // Populate the physical host list first.
+    await ensureNodeOptions();
+
+    const hostQuery = '?instance=' + encodeURIComponent(selectedInstance());
+
+    const [overview, nodes, gpus] = await Promise.all([
+      get('/overview' + hostQuery),
+      get('/nodes' + hostQuery),
+      get('/gpus')
+    ]);
+
+    renderOverview(overview);
+    renderNodes(nodes);
+    renderGPUs(gpus);
+
+    await loadHistory();
+
+    $('updated').textContent = 'Cập nhật ' + new Date().toLocaleString('vi-VN');
+  }catch(err){
+    notice('Không thể tải dashboard: ' + err.message);
+  }finally{
+    state.loading = false;
+    $('load').disabled = false;
+  }
+}
+
+function resetTimer(){
+  clearInterval(state.timer);
+  const ms = Number($('refresh').value);
+  if(ms > 0) state.timer = setInterval(loadDashboard, ms);
+}
+
+$('load').onclick = loadDashboard;
+$('refresh').onchange = resetTimer;
+$('node').onchange = loadDashboard;
+$('range').onchange = loadDashboard;
+window.addEventListener('resize', () => requestAnimationFrame(redrawCharts));
+
+resetTimer();
+loadDashboard();
+</script>
+</body>
+</html>

@@ -30,7 +30,8 @@
 
             <StackPanel Grid.Row="1">
                 <TextBlock Text="API Server Endpoint:" Margin="0,0,0,8" FontWeight="SemiBold" Foreground="#8B95A5"/>
-                <TextBox x:Name="ApiUrlBox" Height="35" Style="{StaticResource CustomTextBoxStyle}" Margin="0,0,0,15" Tag="http://localhost:8100"/>
+                <TextBox x:Name="ApiUrlBox" Height="35" Style="{StaticResource CustomTextBoxStyle}" Margin="0,0,0,5" Tag="http://localhost:8100" ToolTip="Chỉ nhập base URL; không thêm /api/..."/>
+                <TextBlock Text="Chỉ nhập base URL (ví dụ: https://portal.ivistatech.vn). Các route /api/... được ghép trong code." TextWrapping="Wrap" Foreground="#8B95A5" FontSize="11" Margin="0,0,0,15" />
 
 
                 <TextBlock Text="Chế độ mạng:" Margin="0,0,0,10" FontWeight="SemiBold" Foreground="#8B95A5"/>

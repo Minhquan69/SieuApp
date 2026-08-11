@@ -2,12 +2,14 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using Gst;
 using Gst.Video;
+using Newtonsoft.Json;
 using SharpDX;
 using SharpDX.Direct2D1;
 using SharpDX.Direct3D11;
@@ -175,6 +177,8 @@ namespace V3SClient.UI.Views
         private static readonly ConcurrentDictionary<WhepPlayer_v3, byte> ActivePlayers =
             new ConcurrentDictionary<WhepPlayer_v3, byte>();
         private static int _preserveCameraAspectRatio;
+        private int _disposed;
+        private int _aiSeiReceivedLogged;
 
         /// <summary>
         /// Shared display preference for every active/new live camera player.
@@ -560,7 +564,7 @@ namespace V3SClient.UI.Views
 
         private async System.Threading.Tasks.Task ConnectAsync()
         {
-            if (_camera == null) return;
+            if (Volatile.Read(ref _disposed) != 0 || _camera == null) return;
 
             _cancellation?.Cancel();
             _cancellation?.Dispose();
@@ -640,6 +644,18 @@ namespace V3SClient.UI.Views
                     {
                         PipelineConstructionGate.Release();
                     }
+                    if (pipelineCreated && (Volatile.Read(ref _disposed) != 0 ||
+                        cancellation.IsCancellationRequested ||
+                        !ReferenceEquals(_cancellation, cancellation) ||
+                        !ReferenceEquals(_camera, selectedCamera)))
+                    {
+                        // Native construction cannot be cancelled once GStreamer
+                        // enters Parse.Launch. If the tile was closed meanwhile,
+                        // tear down the just-created pipeline before releasing the
+                        // per-player gate so it cannot survive a disposed view.
+                        await System.Threading.Tasks.Task.Run(() => DisposePipeline()).ConfigureAwait(true);
+                        return;
+                    }
                 }
                 finally
                 {
@@ -681,12 +697,13 @@ namespace V3SClient.UI.Views
             // videoconvert copy once several cameras are open.  The URL and
             // codec are resolved together above so that the parser and decoder
             // always match the actual selected RTSP stream.
-                // Stable pre-merge live pipeline.  It deliberately keeps one
-                // d3d11overlay in the native path, but does not attach the new
-                // managed AI draw callback while the stream is starting.
+                // Keep the encoded access-unit stream in Annex-B/NAL form
+                // until after identity.  AI cameras carry their metadata in
+                // H.264/H.265 SEI NAL units, exactly as the original player
+                // reads it; no Kafka/WebSocket metadata is involved here.
                 var videoChain = isH264
-                    ? "rtph264depay ! h264parse ! video/x-h264,stream-format=(string)avc,alignment=(string)au ! d3d11h264dec qos=false"
-                    : "rtph265depay ! h265parse ! video/x-h265,stream-format=(string)hvc1,alignment=(string)au ! d3d11h265dec";
+                    ? "rtph264depay ! video/x-h264,stream-format=(string)byte-stream,alignment=(string)nal ! identity name=aiMetadataIdentity ! h264parse ! video/x-h264,stream-format=(string)avc,alignment=(string)au ! d3d11h264dec qos=false"
+                    : "rtph265depay ! video/x-h265,stream-format=(string)byte-stream,alignment=(string)nal ! identity name=aiMetadataIdentity ! h265parse ! video/x-h265,stream-format=(string)hvc1,alignment=(string)au ! d3d11h265dec";
                 var pipelineText =
                     "rtspsrc name=videoSource protocols=tcp latency=300 timeout=15000000 drop-on-latency=true " +
                     "videoSource. ! queue leaky=downstream max-size-buffers=8 ! application/x-rtp,media=video ! " +
@@ -699,11 +716,8 @@ namespace V3SClient.UI.Views
                 if (pipeline == null)
                     throw new InvalidOperationException("GStreamer returned an empty playback pipeline.");
 
-                // AI metadata is delivered out-of-band by /ws/metadata.  The
-                // d3d11overlay still needs this draw callback on every decoded
-                // frame to paint that metadata.  This connection was lost in a
-                // previous pipeline merge, leaving the live/map player with
-                // valid metadata but no visible bounding boxes.
+                // The overlay paints the most recent SEI metadata on each
+                // decoded video frame.
                 var aiOverlay = pipeline.GetByName("videoOverlay");
                 if (aiOverlay == null)
                     throw new InvalidOperationException("GStreamer did not create the AI video overlay.");
@@ -714,8 +728,25 @@ namespace V3SClient.UI.Views
                     _aiOverlayPipeline = pipeline;
                 }
 
-                var source = pipeline.GetByName("videoSource");
-                source["location"] = rtspUrl;
+                using (var metadataIdentity = pipeline.GetByName("aiMetadataIdentity"))
+                {
+                    if (metadataIdentity == null)
+                        throw new InvalidOperationException("GStreamer did not create the AI metadata identity element.");
+                    using (var metadataPad = metadataIdentity.GetStaticPad("src"))
+                    {
+                        if (metadataPad == null)
+                            throw new InvalidOperationException("GStreamer did not create the AI metadata source pad.");
+                        metadataPad.AddProbe(PadProbeType.Buffer, OnAiMetadataBuffer);
+                        LoggerManager.LogInfo("Live View _v3 AI SEI reader attached to RTSP pipeline.");
+                    }
+                }
+
+                using (var source = pipeline.GetByName("videoSource"))
+                {
+                    if (source == null)
+                        throw new InvalidOperationException("GStreamer did not create the RTSP source element.");
+                    source["location"] = rtspUrl;
+                }
                 AttachBusMessagePump(pipeline);
                 ResetStableVideoFrameWait();
                 if (pipeline.SetState(State.Playing) == StateChangeReturn.Failure)
@@ -731,6 +762,129 @@ namespace V3SClient.UI.Views
                 if (pipeline != null) DisposePipelineInstance(pipeline);
                 return false;
             }
+        }
+
+        private PadProbeReturn OnAiMetadataBuffer(Pad pad, PadProbeInfo info)
+        {
+            var buffer = info.Buffer;
+            if (buffer == null || !AiOverlayEnabled)
+                return PadProbeReturn.Ok;
+
+            MapInfo mapInfo;
+            if (!buffer.Map(out mapInfo, Gst.MapFlags.Read))
+                return PadProbeReturn.Ok;
+            try
+            {
+                ParseAiSeiNal(mapInfo.Data);
+            }
+            catch (Exception ex)
+            {
+                // Metadata can be malformed on an individual frame.  Keep
+                // video playback alive and log the exact pipeline issue.
+                LoggerManager.LogException(ex, "Live View _v3 AI SEI parse failed");
+            }
+            finally
+            {
+                buffer.Unmap(mapInfo);
+            }
+            return PadProbeReturn.Ok;
+        }
+
+        private void ParseAiSeiNal(byte[] data)
+        {
+            if (data == null || data.Length < 5) return;
+            var offset = data.Length >= 4 && data[0] == 0 && data[1] == 0 && data[2] == 0 && data[3] == 1 ? 4 :
+                         data[0] == 0 && data[1] == 0 && data[2] == 1 ? 3 : -1;
+            if (offset < 0 || offset >= data.Length) return;
+
+            var h264Sei = (data[offset] & 0x1f) == 6;
+            var h265Type = (data[offset] >> 1) & 0x3f;
+            var h265Sei = h265Type == 39 || h265Type == 40;
+            if (!h264Sei && !h265Sei) return;
+
+            var ptr = offset + (h264Sei ? 1 : 2);
+            var payloadType = ReadSeiValue(data, ref ptr);
+            var payloadSize = ReadSeiValue(data, ref ptr);
+            // The original RTSP player accepts the encoder's UUID + JSON
+            // payload regardless of the SEI type field, so retain that
+            // compatibility with existing camera firmware.
+            if (payloadType < 0 || payloadSize < 20 || ptr + payloadSize > data.Length) return;
+
+            var textLength = BitConverter.ToUInt32(data, ptr + 16);
+            if (textLength > payloadSize - 20) return;
+            PublishAiMetadata(Encoding.UTF8.GetString(data, ptr + 20, (int)textLength));
+        }
+
+        private static int ReadSeiValue(byte[] data, ref int offset)
+        {
+            var value = 0;
+            while (offset < data.Length && data[offset] == 0xff)
+            {
+                value += 255;
+                offset++;
+            }
+            if (offset >= data.Length) return -1;
+            return value + data[offset++];
+        }
+
+        private void PublishAiMetadata(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return;
+            var frame = JsonConvert.DeserializeObject<MetaFrame>(json);
+            if (frame == null || frame.AiResults == null || frame.ImageInfo == null ||
+                frame.ImageInfo.ImageWidth <= 0 || frame.ImageInfo.ImageHeight <= 0) return;
+
+            var minConfidence = GlobalSystem.Instance.MinConfidence;
+            var objects = frame.AiResults
+                .Where(x => x != null && x.Bbox != null && x.Confidence >= minConfidence)
+                .Select(ToOverlayObject)
+                .ToList();
+            if (objects.Count == 0) return;
+
+            if (Interlocked.Exchange(ref _aiSeiReceivedLogged, 1) == 0)
+                LoggerManager.LogInfo("Live View _v3 AI SEI metadata received for camera " +
+                                      (_camera == null ? "(unknown)" : _camera.camID) + ".");
+
+            Send2Draw(new AiMetadataFrame_v3
+            {
+                CameraId = _camera == null ? null : _camera.camID,
+                SourceWidth = frame.ImageInfo.ImageWidth,
+                SourceHeight = frame.ImageInfo.ImageHeight,
+                Objects = objects,
+                ReceivedAtUtc = System.DateTime.UtcNow
+            });
+        }
+
+        private static AiMetadataBox_v3 ToOverlayObject(AIResult result)
+        {
+            var roi = result.ObjectAnalysisList == null ? null : result.ObjectAnalysisList.FirstOrDefault();
+            string roiId = null;
+            string dwell = null;
+            if (roi != null && roi.RoiInside != null)
+            {
+                var inside = roi.RoiInside.FirstOrDefault(pair => pair.Value);
+                if (!string.IsNullOrWhiteSpace(inside.Key))
+                {
+                    roiId = inside.Key;
+                    float seconds;
+                    if (roi.RoiDwellSeconds != null && roi.RoiDwellSeconds.TryGetValue(roiId, out seconds))
+                        dwell = string.Format("{0:F1}s", seconds);
+                }
+            }
+            return new AiMetadataBox_v3
+            {
+                Label = string.IsNullOrWhiteSpace(result.Caption) ? result.MetaType : result.Caption,
+                Confidence = result.Confidence,
+                IsBlacklist = result.IsBlacklist,
+                HasPixelBounds = true,
+                PixelLeft = result.Bbox.Left,
+                PixelTop = result.Bbox.Top,
+                PixelWidth = result.Bbox.Width,
+                PixelHeight = result.Bbox.Height,
+                IsInsideRoi = !string.IsNullOrWhiteSpace(roiId),
+                RoiId = roiId,
+                RoiDwellSecondsInfo = dwell
+            };
         }
 
         private static RtspSource_v3 GetRtspSource(Camera camera, CameraStreamInfo selectedStream)
@@ -1447,21 +1601,51 @@ namespace V3SClient.UI.Views
 
         public void Dispose()
         {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
             byte ignored;
             ActivePlayers.TryRemove(this, out ignored);
             _cancellation?.Cancel();
             _cancellation?.Dispose();
             _cancellation = null;
-            DisposePipeline();
             ClearAiMetadata();
-            lock (_aiRendererSync)
+            _ = System.Threading.Tasks.Task.Run(() => DisposeAfterPendingConnectionAsync());
+        }
+
+        private async System.Threading.Tasks.Task DisposeAfterPendingConnectionAsync()
+        {
+            try
             {
-                _aiTextFormat?.Dispose();
-                _aiTextFormat = null;
-                _aiTextFactory?.Dispose();
-                _aiTextFactory = null;
-                _aiDrawFactory?.Dispose();
-                _aiDrawFactory = null;
+                await _connectionGate.WaitAsync().ConfigureAwait(false);
+                try
+                {
+                    DisposePipeline();
+                    lock (_aiRendererSync)
+                    {
+                        _aiTextFormat?.Dispose();
+                        _aiTextFormat = null;
+                        _aiTextFactory?.Dispose();
+                        _aiTextFactory = null;
+                        _aiDrawFactory?.Dispose();
+                        _aiDrawFactory = null;
+                    }
+                }
+                finally
+                {
+                    _connectionGate.Release();
+                }
+
+                if (!Dispatcher.HasShutdownStarted && !Dispatcher.HasShutdownFinished)
+                {
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        _videoWindowHandle = IntPtr.Zero;
+                        try { VideoHost.Dispose(); } catch (ObjectDisposedException) { }
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Live View _v3 deferred player cleanup failed");
             }
         }
     }

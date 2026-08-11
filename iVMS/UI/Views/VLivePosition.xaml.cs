@@ -945,6 +945,8 @@ namespace V3SClient.UI.Views
             _demoTimer?.Stop();
             Sidebar.CameraStatesChanged -= Sidebar_CameraStatesChanged;
             Sidebar.Dispose();
+            
+            try { mapWebView?.Dispose(); } catch { }
         }
     }
 }

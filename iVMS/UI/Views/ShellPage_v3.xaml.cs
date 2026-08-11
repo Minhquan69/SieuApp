@@ -18,6 +18,7 @@ namespace V3SClient.UI.Views
         private PlaybackPage_v3 _playbackPage;
         private DashboardPage_v3 _dashboardPage;
         private EventCenterPage_v3 _eventCenterPage;
+        private AnalysisPage_v3 _analysisPage;
         private UIElement _activeModule;
 
         public ShellPage_v3()
@@ -176,6 +177,17 @@ namespace V3SClient.UI.Views
                 ShowModule(_eventCenterPage);
                 return;
             }
+            if (_viewModel.ActiveRoute == "/analysis")
+            {
+                if (_analysisPage == null) _analysisPage = new AnalysisPage_v3();
+                ShowModule(_analysisPage);
+                return;
+            }
+            if (_viewModel.ActiveRoute == "/system")
+            {
+                ShowModule(new SystemMetricsPage_v3());
+                return;
+            }
             if (_viewModel.SelectedNavigationItem.Route == "/emap")
             {
                 ShowModule(new MapPage_v3());
@@ -198,7 +210,10 @@ namespace V3SClient.UI.Views
 
             if (_activeModule != null)
             {
-                if (ReferenceEquals(_activeModule, _playbackPage))
+                // LiveCharts keeps an internal dispatcher timer. Keep chart pages in
+                // the visual host while hidden so a delayed tick never sees a
+                // detached Axis (LiveCharts.Wpf Axis.AsCoreElement null crash).
+                if (ReferenceEquals(_activeModule, _playbackPage) || ReferenceEquals(_activeModule, _analysisPage))
                     _activeModule.Visibility = Visibility.Collapsed;
                 else
                     _moduleHost.Children.Remove(_activeModule);

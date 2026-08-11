@@ -705,7 +705,9 @@
                         <TreeView.Resources>
                             <Style TargetType="ScrollBar" BasedOn="{StaticResource QlBsxDkSlimScrollBarStyle}" />
                             <Style TargetType="TreeViewItem" BasedOn="{StaticResource QlBsxDkTreeViewItem06Style}" />
-                            <DataTemplate DataType="{x:Type models:PlateFolderItem}">
+                        </TreeView.Resources>
+                        <TreeView.ItemTemplate>
+                            <DataTemplate>
                                 <Grid>
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />
@@ -718,19 +720,10 @@
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock FontSize="10" Margin="0,0,7,0" VerticalAlignment="Center">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Text" Value="&#x25B6;" />
-                                                    <Setter Property="Foreground" Value="#5BA3F5" />
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=TreeViewItem}}" Value="True">
-                                                            <Setter Property="Text" Value="&#x25BC;" />
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
+                                        <Border Width="16" Height="16" CornerRadius="3" Background="#1C212B" VerticalAlignment="Center" Margin="0,0,6,0">
+                                            <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" Foreground="#5A6478" FontSize="9" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                             <TextBlock Text="{Binding FolderName}" FontWeight="SemiBold" Foreground="#ECF0F5" FontSize="12" TextTrimming="CharacterEllipsis" />
                                         </StackPanel>
@@ -800,7 +793,7 @@
                                     </Border>
                                 </Grid>
                             </DataTemplate>
-                        </TreeView.Resources>
+                        </TreeView.ItemTemplate>
                     </TreeView>
 
                     <Border Grid.Row="3" BorderBrush="#252830" BorderThickness="0,1,0,0" Padding="7,5" Background="#111318">

@@ -40,5 +40,7 @@
     <Setter Property="Opacity" Value="0.9" />
     <Setter Property="Padding" Value="10,0,0,0" />
     <Setter Property="CalendarWidth" Value="280" />
+    <Setter Property="ShowButtonSpinner" Value="False" />
+    <Setter Property="ShowDropDownButton" Value="True" />
   </Style>
 </ResourceDictionary>

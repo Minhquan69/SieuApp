@@ -44,7 +44,7 @@
                             <TextBlock Text="Center Manager URL" Foreground="#CCC" FontSize="13" />
                             <TextBlock Text="Địa chỉ chính của hệ thống" Foreground="#666" FontSize="10" FontStyle="Italic" />
                         </StackPanel>
-                        <TextBox Grid.Column="1" Text="{Binding ApiUrl, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource CustomTextBoxStyle}" Height="30" VerticalContentAlignment="Center" Margin="0,0,30,0" />
+                        <TextBox Grid.Column="1" Text="{Binding ApiUrl, UpdateSourceTrigger=PropertyChanged}" ToolTip="Chỉ nhập base URL. Các route /api/... được ghép trong code." Style="{StaticResource CustomTextBoxStyle}" Height="30" VerticalContentAlignment="Center" Margin="0,0,30,0" />
 
                         <!-- Network Mode -->
                         <TextBlock Grid.Column="2" Text="Chế độ mạng" Foreground="#CCC" FontSize="13" VerticalAlignment="Center" Margin="0,0,15,0" />
@@ -54,6 +54,7 @@
                         </ComboBox>
                     </Grid>
 
+                    <TextBlock Text="Chỉ nhập base URL, ví dụ https://portal.ivistatech.vn; không nhập /api/... vì app tự ghép route." TextWrapping="Wrap" Foreground="#8B95A5" FontSize="11" Margin="10,-10,0,15" />
                     <Separator Background="#252830" Margin="0,0,0,20" />
 
                     <!-- Section: Endpoints -->
@@ -79,12 +80,7 @@
                                 <DataGridTemplateColumn Header="URL" Width="*">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <TextBlock x:Name="txtUrl" Text="{Binding PublicUrl}" VerticalAlignment="Center" Foreground="#E8ECF1" />
-                                            <DataTemplate.Triggers>
-                                                <DataTrigger Binding="{Binding DataContext.NetworkMode, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="Internal">
-                                                    <Setter TargetName="txtUrl" Property="Text" Value="{Binding InternalUrl}" />
-                                                </DataTrigger>
-                                            </DataTemplate.Triggers>
+                                            <TextBlock Text="{Binding PublicUrl}" ToolTip="App sử dụng Endpoint Công cộng được portal trả về." VerticalAlignment="Center" Foreground="#E8ECF1" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
