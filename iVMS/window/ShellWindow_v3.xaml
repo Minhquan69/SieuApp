@@ -11,7 +11,7 @@
         <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="6" CornerRadius="8"
                             GlassFrameThickness="0" UseAeroCaptionButtons="False" />
     </shell:WindowChrome.WindowChrome>
-    <Border BorderBrush="#245174" BorderThickness="1" CornerRadius="7" SnapsToDevicePixels="True">
+    <Border x:Name="WindowFrame" Background="{StaticResource VmsBackgroundBrush_v3}" BorderBrush="#245174" BorderThickness="1" CornerRadius="8" SnapsToDevicePixels="True">
         <views:ShellPage_v3 x:Name="ShellView" />
     </Border>
 </Window>

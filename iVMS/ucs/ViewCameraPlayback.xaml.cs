@@ -56,6 +56,9 @@ namespace V3SClient.ucs
         private const int SeekThrottleMs = 150;
         private System.DateTime _lastSeekInteractionTime = System.DateTime.MinValue;
         private double _lastTimelineClickX = 0;
+        private bool _playbackReachedEnd;
+        private bool _isRecoveringFromEnd;
+        private System.DateTime? _pendingRecoverySeekTime;
 
         public int OriginalRowSpan { get; set; } = 1;
         public int OriginalColSpan { get; set; } = 1;
@@ -561,6 +564,14 @@ namespace V3SClient.ucs
                         videoWindow.Visibility = Visibility.Visible;
                         VideoPanel.Visible = true;
                     }));
+                    if (_pendingRecoverySeekTime.HasValue)
+                    {
+                        var targetTime = _pendingRecoverySeekTime.Value;
+                        _pendingRecoverySeekTime = null;
+                        _isRecoveringFromEnd = false;
+                        Dispatcher.BeginInvoke(new Action(() => SeekToRealTime(targetTime, true)),
+                            DispatcherPriority.Background);
+                    }
                     break;
                 case PlayerStatus.Stop:
                     if (!string.IsNullOrWhiteSpace(info.Value) &&
@@ -572,6 +583,16 @@ namespace V3SClient.ucs
                         ShowPlaybackFailure(
                             "Không thể giải mã video phát lại",
                             "Bộ giải mã trên máy không tương thích với luồng video này. Vui lòng thử lại.");
+                        break;
+                    }
+                    if (string.Equals(info.Value, "End of files", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // PlaybackHLS reports its VOD EOS as Stop after putting
+                        // the old pipeline into Null. The next timeline click
+                        // must recreate the decoder before seeking.
+                        _playbackReachedEnd = true;
+                        _isPlaying = false;
+                        ShowConnectButton = Visibility.Visible;
                         break;
                     }
                     // During HLS startup a temporary Stop can arrive before the
@@ -586,7 +607,12 @@ namespace V3SClient.ucs
                         ShowConnectButton = Visibility.Visible;
                     break;
                 case PlayerStatus.Eof:
-                    System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() => ConnectedCamera()));
+                    // A VOD HLS pipeline reaches EOS after the selected recording.
+                    // Keep the timeline interactive so the user can choose where
+                    // to reopen playback instead of restarting at the beginning.
+                    _playbackReachedEnd = true;
+                    _isPlaying = false;
+                    ShowConnectButton = Visibility.Visible;
                     break;
             }
         }
@@ -606,6 +632,8 @@ namespace V3SClient.ucs
                 ShowPreparingPlayback("Đang đồng bộ dữ liệu phát lại...");
                 NoPlaybackDataOverlay.Visibility = Visibility.Collapsed;
                 ShowConnectButton = Visibility.Hidden;
+                _playbackReachedEnd = false;
+                VideoDuration = 0;
                 InitPipeline();
                 Player.player.SetState(State.Playing);
                 _isPlaying = true;
@@ -618,6 +646,40 @@ namespace V3SClient.ucs
                 ShowPlaybackFailure(
                     "Không thể phát video đã ghi",
                     "Không khởi tạo được bộ giải mã. Hãy bấm tìm kiếm hoặc thử lại.");
+            }
+        }
+
+        private void RestartPlaybackAfterEnd(System.DateTime targetTime)
+        {
+            if (_disposed || _isRecoveringFromEnd)
+                return;
+
+            _isRecoveringFromEnd = true;
+            _pendingRecoverySeekTime = targetTime;
+            try
+            {
+                ShowPreparingPlayback("Đang tải lại video từ thời điểm đã chọn...");
+                NoPlaybackDataOverlay.Visibility = Visibility.Collapsed;
+                ShowConnectButton = Visibility.Hidden;
+                _playbackReachedEnd = false;
+                VideoDuration = 0;
+                InitPipeline();
+                if (Player == null || Player.player == null)
+                    throw new InvalidOperationException("Không thể khởi tạo lại bộ giải mã video.");
+
+                Player.player.SetState(State.Playing);
+                _isPlaying = true;
+                UpdateSpeedDisplay();
+                WatchPlaybackStartup(Player);
+            }
+            catch (Exception ex)
+            {
+                _pendingRecoverySeekTime = null;
+                _isRecoveringFromEnd = false;
+                LoggerManager.LogException(ex, "Playback restart after EOF");
+                ShowPlaybackFailure(
+                    "Không thể phát lại từ thời điểm đã chọn",
+                    "Vui lòng chọn lại thời điểm hoặc thử mở lại phiên phát.");
             }
         }
 
@@ -1481,6 +1543,14 @@ namespace V3SClient.ucs
                 if (Player != null && Player.player != null)
                     Player.Pause();
                 ShowNoPlaybackDataAtTime(_searchStartTime.AddSeconds(realTimeOffset));
+                return;
+            }
+
+            // At EOS the previous GStreamer pipeline has stopped. Recreate it
+            // first, then apply this exact selected time after duration is ready.
+            if (_playbackReachedEnd || Player == null || Player.player == null)
+            {
+                RestartPlaybackAfterEnd(targetTime);
                 return;
             }
 

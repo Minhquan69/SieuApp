@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using MahApps.Metro.IconPacks;
+using V3SClient.UI.Views;
 using V3SClient.window;
 
 namespace V3SClient.ucs
@@ -45,6 +46,36 @@ namespace V3SClient.ucs
         }
 
         private void AccountButton_Click(object s, RoutedEventArgs e) { AccountPopup.IsOpen = true; }
+        private void DisplaySettings_Click(object sender, RoutedEventArgs e)
+        {
+            DisplaySettingsPanel.Visibility = DisplaySettingsPanel.Visibility == Visibility.Visible
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+            UpdateCameraDisplaySettingVisuals();
+        }
+
+        private void PreserveScale_Click(object sender, RoutedEventArgs e)
+        {
+            WhepPlayer_v3.PreserveCameraAspectRatio = true;
+            UpdateCameraDisplaySettingVisuals();
+        }
+
+        private void FillScale_Click(object sender, RoutedEventArgs e)
+        {
+            WhepPlayer_v3.PreserveCameraAspectRatio = false;
+            UpdateCameraDisplaySettingVisuals();
+        }
+
+        private void UpdateCameraDisplaySettingVisuals()
+        {
+            var selected = (Brush)FindResource("VmsPrimarySofterBrush_v3");
+            var normal = Brushes.Transparent;
+            var preserve = WhepPlayer_v3.PreserveCameraAspectRatio;
+            PreserveScaleButton.Background = preserve ? selected : normal;
+            PreserveScaleButton.Foreground = preserve ? (Brush)FindResource("VmsFocusBrush_v3") : (Brush)FindResource("VmsTextSecondaryBrush_v3");
+            FillScaleButton.Background = preserve ? normal : selected;
+            FillScaleButton.Foreground = preserve ? (Brush)FindResource("VmsTextSecondaryBrush_v3") : (Brush)FindResource("VmsFocusBrush_v3");
+        }
         private void MinimizeWindowButton_Click(object s, RoutedEventArgs e)
         {
             var shell = Window.GetWindow(this);

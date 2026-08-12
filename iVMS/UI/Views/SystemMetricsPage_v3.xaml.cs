@@ -7,6 +7,7 @@ using System.Net.Http.Headers;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
@@ -30,10 +31,95 @@ namespace V3SClient.UI.Views
         public SystemMetricsPage_v3()
         {
             InitializeComponent();
+            KeepOnlyRequestedSummaryKpis();
+            ApplyOverviewKpiPalette();
             Loaded += async (s, e) => { ConfigureRefreshTimer(); await RefreshAsync(); };
             Unloaded += (s, e) => { _refreshTimer.Stop(); _http.Dispose(); };
             _refreshTimer.Tick += async (s, e) => await RefreshAsync();
             HostBox.SelectionChanged += async (s, e) => { if (IsLoaded && !_updatingHostList) await RefreshAsync(); };
+        }
+
+        private void KeepOnlyRequestedSummaryKpis()
+        {
+            RemoveSummaryKpi(OfflineText);
+            RemoveSummaryKpi(CpuTemperatureText);
+            RemoveSummaryKpi(GpuCountText);
+            RemoveSummaryKpi(GpuMemoryText);
+            RemoveSummaryKpi(GpuTemperatureText);
+            MoveSummaryKpi(DiskText, SystemKpiPrimaryGrid);
+            MoveSummaryKpi(GpuText, SystemKpiPrimaryGrid);
+        }
+
+        private static void MoveSummaryKpi(FrameworkElement metric, UniformGrid destination)
+        {
+            DependencyObject current = metric;
+            while (current != null)
+            {
+                var card = current as Border;
+                var parent = card == null ? null : VisualTreeHelper.GetParent(card) as UniformGrid;
+                if (parent != null)
+                {
+                    parent.Children.Remove(card);
+                    destination.Children.Add(card);
+                    return;
+                }
+
+                current = VisualTreeHelper.GetParent(current);
+            }
+        }
+
+        private void ApplyOverviewKpiPalette()
+        {
+            ApplySummaryKpiPalette(TotalText, "#287BFF", "#103967", "#091D35");
+            ApplySummaryKpiPalette(OnlineText, "#20BB77", "#0C4A3A", "#092A2C");
+            ApplySummaryKpiPalette(CpuText, "#35B5FF", "#0B3A5B", "#091D35");
+            ApplySummaryKpiPalette(MemoryText, "#9B5CFF", "#2B1E58", "#151630");
+            ApplySummaryKpiPalette(DiskText, "#FF9F43", "#492919", "#211A1B");
+            ApplySummaryKpiPalette(GpuText, "#E06CFF", "#43205B", "#1B1635");
+        }
+
+        private static void ApplySummaryKpiPalette(FrameworkElement metric, string accent, string start, string end)
+        {
+            DependencyObject current = metric;
+            while (current != null)
+            {
+                var card = current as Border;
+                if (card != null && VisualTreeHelper.GetParent(card) is UniformGrid)
+                {
+                    card.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(accent));
+                    card.Background = new LinearGradientBrush(
+                        (Color)ColorConverter.ConvertFromString(start),
+                        (Color)ColorConverter.ConvertFromString(end),
+                        new Point(0, 0), new Point(1, 1));
+
+                    if (card.Child is Grid content)
+                    {
+                        var accentBar = content.Children.OfType<Border>().FirstOrDefault(item => item.Height == 3);
+                        if (accentBar != null)
+                            accentBar.Visibility = Visibility.Collapsed;
+                    }
+                    return;
+                }
+
+                current = VisualTreeHelper.GetParent(current);
+            }
+        }
+
+        private static void RemoveSummaryKpi(FrameworkElement metric)
+        {
+            DependencyObject current = metric;
+            while (current != null)
+            {
+                var card = current as Border;
+                var parent = card == null ? null : VisualTreeHelper.GetParent(card) as UniformGrid;
+                if (parent != null)
+                {
+                    parent.Children.Remove(card);
+                    return;
+                }
+
+                current = VisualTreeHelper.GetParent(current);
+            }
         }
 
         private async void Refresh_Click(object sender, RoutedEventArgs e) => await RefreshAsync();

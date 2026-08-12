@@ -53,6 +53,9 @@ namespace V3SClient.UI.Views
         private bool _positioningBadge;
         private bool _badgeRelocationQueued;
         private bool _popupPlacementSuspended;
+        // Initial Offline is a normal queued-startup state. Only an explicit
+        // operator disconnect is allowed to keep the action popup visible.
+        private bool _showDisconnectedActions;
         private int _badgeGeneration;
         private bool _badgeOpenQueued;
         private Window _ownerWindow;
@@ -280,6 +283,7 @@ namespace V3SClient.UI.Views
         public void Bind(LiveSlotViewModel_v3 slot)
         {
             _badgeGeneration++;
+            _showDisconnectedActions = false;
             HideCameraBadge(true);
             var previousCamera = _boundCamera;
             var nextCamera = slot == null ? null : slot.Camera;
@@ -570,6 +574,7 @@ namespace V3SClient.UI.Views
         public async System.Threading.Tasks.Task ConnectAsync()
         {
             if (_disposed || Slot == null || Slot.Camera == null) return;
+            _showDisconnectedActions = false;
             // `false` is authoritative from /devices/status/batch.  Do not
             // start a decoder/pipeline for a camera known to be offline; a
             // stream failure is reserved for cameras reported online.
@@ -789,7 +794,10 @@ namespace V3SClient.UI.Views
             if (Slot == null || Slot.Camera == null) return;
             if (Slot.State == LiveConnectionState_v3.Connected ||
                 Slot.State == LiveConnectionState_v3.Connecting)
+            {
+                _showDisconnectedActions = true;
                 Disconnect();
+            }
             else
                 await ConnectAsync();
         }
@@ -1093,7 +1101,7 @@ namespace V3SClient.UI.Views
                 _actionsPinned = false;
                 HideActions();
             }
-            else if (manuallyDisconnected)
+            else if (manuallyDisconnected && _showDisconnectedActions)
             {
                 _actionsPinned = true;
                 ActionPopup.IsOpen = true;
@@ -1102,7 +1110,10 @@ namespace V3SClient.UI.Views
                 Dispatcher.BeginInvoke(new Action(PositionActionPopup), DispatcherPriority.Loaded);
             }
             else if (!_fullscreenMode)
+            {
                 _actionsPinned = false;
+                HideActions();
+            }
             ErrorOverlay.Visibility = !empty && !reportedOffline && Slot.HasError &&
                 (Slot.State == LiveConnectionState_v3.Error || Slot.State == LiveConnectionState_v3.Retrying)
                 ? Visibility.Visible : Visibility.Collapsed;

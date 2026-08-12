@@ -102,6 +102,22 @@ namespace V3SClient.UI.Views
         private DateTime _selectedDate = DateTime.Today;
         private VPlaybackHLS _detailPlayback;
         private EventRow_v3 _detailRow;
+        private bool _isAdjustingDetailPlaybackHeight;
+
+        private void DetailPlaybackPanel_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (_isAdjustingDetailPlaybackHeight || DetailPlaybackPanel == null || DetailPlaybackPanel.ActualWidth <= 0)
+                return;
+
+            var targetHeight = Math.Max(465d,
+                Math.Ceiling(Math.Max(0d, DetailPlaybackPanel.ActualWidth - 18d) * 9d / 16d) + 126d);
+            if (Math.Abs(DetailPlaybackPanel.Height - targetHeight) < 1d)
+                return;
+
+            _isAdjustingDetailPlaybackHeight = true;
+            try { DetailPlaybackPanel.Height = targetHeight; }
+            finally { _isAdjustingDetailPlaybackHeight = false; }
+        }
 
         // ─────────────────────────────────────────────────────
         public EventCenterPage_v3()
@@ -136,20 +152,42 @@ namespace V3SClient.UI.Views
                 SearchPlaceholder.Visibility = string.IsNullOrEmpty(SearchBox.Text)
                     ? Visibility.Visible : Visibility.Collapsed;
 
-            Loaded += async (_, __) =>
-            {
-                await InitAsync();
-                _fullRefreshTimer.Start();
-            };
+            Loaded += EventCenterPage_Loaded;
             // A pending async refresh can resume after Unloaded (for example while
             // navigating quickly).  Cancelling is sufficient; disposing here races
             // with RefreshAllAsync and causes ObjectDisposedException on Cancel().
-            Unloaded += (_, __) =>
+            Unloaded += EventCenterPage_Unloaded;
+        }
+
+        private async void EventCenterPage_Loaded(object sender, RoutedEventArgs e)
+        {
+            await InitAsync();
+            _fullRefreshTimer.Start();
+
+            // VPlaybackHLS releases its native video surfaces while this page is
+            // unloaded. Rebuild the embedded player when the Event page is shown
+            // again so the Frame never keeps a detached gray video surface.
+            if (_detailRow != null && DetailPanel.Visibility == Visibility.Visible)
             {
-                _fullRefreshTimer.Stop();
-                _cts.Cancel();
-                _tableCts.Cancel();
-            };
+                await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded);
+                if (IsLoaded && _detailRow != null && DetailPanel.Visibility == Visibility.Visible)
+                    await OpenDetailPlaybackAsync(_detailRow);
+            }
+        }
+
+        private void EventCenterPage_Unloaded(object sender, RoutedEventArgs e)
+        {
+            _fullRefreshTimer.Stop();
+            _cts.Cancel();
+            _tableCts.Cancel();
+
+            // Detaching forces VPlaybackHLS.Unloaded to dispose its native decoder
+            // handles before another page occupies the same HWND host.
+            if (_detailPlayback != null)
+            {
+                DetailPlaybackHost.Content = null;
+                _detailPlayback = null;
+            }
         }
 
         // ─────────────────────────────────────────────────────

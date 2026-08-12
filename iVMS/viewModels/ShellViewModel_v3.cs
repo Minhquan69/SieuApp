@@ -33,7 +33,7 @@ namespace V3SClient.viewModels
         {
             NavigationItems = new ObservableCollection<ShellNavigationItem_v3>
             {
-                new ShellNavigationItem_v3("Tổng quan", PackIconMaterialKind.ViewDashboardOutline, null, null),
+                new ShellNavigationItem_v3("Tổng quan", PackIconMaterialKind.MonitorDashboard, null, null),
                 new ShellNavigationItem_v3("Trực tiếp", PackIconMaterialKind.CameraOutline, "/live", null),
                 new ShellNavigationItem_v3("Sự kiện", PackIconMaterialKind.RobotOutline, null, null),
                 new ShellNavigationItem_v3("Phát lại", PackIconMaterialKind.PlayCircleOutline, "/playback", null),
@@ -211,7 +211,7 @@ namespace V3SClient.viewModels
         {
             if (item == null) return;
             var route = item.Route;
-            if (string.IsNullOrWhiteSpace(route) && item.IconKind == PackIconMaterialKind.ViewDashboardOutline) route = "/dashboard";
+            if (string.IsNullOrWhiteSpace(route) && item.IconKind == PackIconMaterialKind.MonitorDashboard) route = "/dashboard";
             if (string.IsNullOrWhiteSpace(route) && item.IconKind == PackIconMaterialKind.RobotOutline) route = "/events";
             if (string.IsNullOrWhiteSpace(route) && item.IconKind == PackIconMaterialKind.ChartBar) route = "/analysis";
             if (string.IsNullOrWhiteSpace(route)) return;

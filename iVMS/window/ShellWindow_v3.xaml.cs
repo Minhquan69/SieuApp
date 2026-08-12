@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Input;
+using System.Windows.Media;
 using V3SClient.UI.Views;
 using V3SClient.viewModels;
 using V3SClient.libs;
@@ -94,6 +95,10 @@ namespace V3SClient.window
         private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
         [DllImport("user32.dll")]
         private static extern bool GetWindowRect(IntPtr hWnd, out NativeRect rect);
+        [DllImport("gdi32.dll")]
+        private static extern IntPtr CreateRoundRectRgn(int left, int top, int right, int bottom, int width, int height);
+        [DllImport("user32.dll")]
+        private static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool redraw);
 
         public ShellWindow_v3()
         {
@@ -108,12 +113,45 @@ namespace V3SClient.window
             DataContext = _viewModel;
             ShellView.DataContext = _viewModel;
             SourceInitialized += ShellWindow_SourceInitialized;
+            Loaded += (s, e) => UpdateShellCornerClip();
+            SizeChanged += (s, e) => UpdateShellCornerClip();
             Closed += (s, e) =>
             {
                 _viewModel.Dispose();
                 if (!_logoutRequested)
                     Application.Current.Shutdown();
             };
+        }
+
+        private void UpdateShellCornerClip()
+        {
+            if (ShellView == null || ShellView.ActualWidth <= 0 || ShellView.ActualHeight <= 0)
+                return;
+
+            // Border.CornerRadius does not clip a child in WPF. Clip the page
+            // itself so its background cannot paint over any of the four
+            // rounded frame corners while the window is resized.
+            ShellView.Clip = new RectangleGeometry(
+                new Rect(0, 0, ShellView.ActualWidth, ShellView.ActualHeight), 7, 7);
+            ApplyNativeCornerRegion();
+        }
+
+        private void ApplyNativeCornerRegion()
+        {
+            var hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd == IntPtr.Zero || ActualWidth <= 0 || ActualHeight <= 0)
+                return;
+
+            var source = PresentationSource.FromVisual(this);
+            var scale = source == null || source.CompositionTarget == null
+                ? 1.0
+                : source.CompositionTarget.TransformToDevice.M11;
+            var width = Math.Max(1, (int)Math.Ceiling(ActualWidth * scale));
+            var height = Math.Max(1, (int)Math.Ceiling(ActualHeight * scale));
+            var diameter = Math.Max(2, (int)Math.Round(16 * scale));
+            var region = CreateRoundRectRgn(0, 0, width + 1, height + 1, diameter, diameter);
+            if (region != IntPtr.Zero)
+                SetWindowRgn(hwnd, region, true); // Windows owns the region after success.
         }
 
         protected override void OnClosing(CancelEventArgs e)
@@ -221,6 +259,7 @@ namespace V3SClient.window
         private void ShellWindow_SourceInitialized(object sender, EventArgs e)
         {
             HwndSource.FromHwnd(new WindowInteropHelper(this).Handle)?.AddHook(WindowResizeHook);
+            ApplyNativeCornerRegion();
         }
         private IntPtr WindowResizeHook(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
         {

@@ -548,7 +548,7 @@
                     <Style.Triggers>
                         <MultiTrigger>
                             <MultiTrigger.Conditions>
-                                <Condition Property="MinHeight" Value="108"/>
+                                <Condition Property="MinHeight" Value="126"/>
                                 <Condition Property="IsMouseOver" Value="True"/>
                             </MultiTrigger.Conditions>
                             <Setter Property="RenderTransform"><Setter.Value><ScaleTransform ScaleX="1.025" ScaleY="1.025"/></Setter.Value></Setter>
@@ -572,11 +572,10 @@
 
             <!-- ── Card 1: Hôm nay (BLUE) ── -->
             <Border Grid.Column="0" CornerRadius="12" ClipToBounds="True"
-                    Background="{StaticResource VmsSurfaceBrush_v3}"
-                    BorderBrush="#3B2563EB" BorderThickness="1"
-                    MinHeight="108" Padding="20,18">
+                    Background="#FF0E2C52"
+                    BorderBrush="#FF2E7AF5" BorderThickness="1"
+                    MinHeight="126" Padding="20,12">
                 <Grid>
-                    <Border Height="3" Width="52" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,-18,0,0" CornerRadius="0,0,4,4" Background="#2563EB"/>
                     <Ellipse Width="130" Height="130" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-40,-54" Opacity="0.12">
                         <Ellipse.Fill>
                             <RadialGradientBrush>
@@ -587,16 +586,16 @@
                     </Ellipse>
                     <Grid>
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="64"/>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <StackPanel>
-                            <TextBlock Text="Mật độ phương tiện" Foreground="#4CB7F5" FontSize="11" FontWeight="Bold"/>
-                            <TextBlock x:Name="KpiDensityValue" Text="—" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontSize="24" FontWeight="Bold" Margin="0,10,0,0"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="Mật độ phương tiện" Foreground="#FFD0E3F8" FontSize="13" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="KpiDensityValue" Text="—" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontSize="32" FontWeight="Bold" Margin="0,2,0,0"/>
                             <TextBlock x:Name="KpiDensityDetail" Text="Phương tiện trong trạm" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="10" Margin="0,6,0,0" Visibility="Collapsed"/>
                             <TextBlock x:Name="KpiDensityTrend" Text="" FontSize="10" FontWeight="SemiBold" Margin="0,2,0,0" Visibility="Collapsed"/>
                         </StackPanel>
-                        <Border Grid.Column="1" Width="50" Height="50" CornerRadius="13" Background="#1A2563EB" VerticalAlignment="Center">
+                        <Border Grid.Column="0" Width="58" Height="58" CornerRadius="29" Background="#FF123C70" VerticalAlignment="Center">
                             <Path Data="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z" Fill="#4CB7F5" Width="20" Height="20" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                     </Grid>
@@ -605,11 +604,10 @@
 
             <!-- ── Card 2: Đang trong quy trình (GREEN) ── -->
             <Border Grid.Column="2" CornerRadius="12" ClipToBounds="True"
-                    Background="{StaticResource VmsSurfaceBrush_v3}"
-                    BorderBrush="#3516A34A" BorderThickness="1"
-                    MinHeight="108" Padding="20,18">
+                    Background="#FF192445"
+                    BorderBrush="#FF8546D8" BorderThickness="1"
+                    MinHeight="126" Padding="20,12">
                 <Grid>
-                    <Border Height="3" Width="52" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,-18,0,0" CornerRadius="0,0,4,4" Background="#22C55E"/>
                     <Ellipse Width="130" Height="130" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-40,-54" Opacity="0.12">
                         <Ellipse.Fill>
                             <RadialGradientBrush>
@@ -620,16 +618,16 @@
                     </Ellipse>
                     <Grid>
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="64"/>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <StackPanel>
-                            <TextBlock Text="Phương tiện hôm nay" Foreground="#35D07F" FontSize="11" FontWeight="Bold"/>
-                            <TextBlock x:Name="KpiTodayValue" Text="—" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontSize="24" FontWeight="Bold" Margin="0,10,0,0"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="Phương tiện hôm nay" Foreground="#FFE0D0FB" FontSize="13" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="KpiTodayValue" Text="—" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontSize="32" FontWeight="Bold" Margin="0,2,0,0"/>
                             <TextBlock x:Name="KpiTodayDetail" Text="Đang tải..." Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="10" Margin="0,6,0,0"/>
                             <TextBlock x:Name="KpiTodayTrend" Text="" FontSize="10" FontWeight="SemiBold" Margin="0,2,0,0"/>
                         </StackPanel>
-                        <Border Grid.Column="1" Width="50" Height="50" CornerRadius="13" Background="#1A22C55E" VerticalAlignment="Center">
+                        <Border Grid.Column="0" Width="58" Height="58" CornerRadius="29" Background="#FF392064" VerticalAlignment="Center">
                             <Path Data="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z" Fill="#35D07F" Width="20" Height="20" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                     </Grid>
@@ -638,11 +636,10 @@
 
             <!-- ── Card 3: Tuần này (PURPLE) ── -->
             <Border Grid.Column="4" CornerRadius="12" ClipToBounds="True"
-                    Background="{StaticResource VmsSurfaceBrush_v3}"
-                    BorderBrush="#357C3AED" BorderThickness="1"
-                    MinHeight="108" Padding="20,18">
+                    Background="#FF0B372E"
+                    BorderBrush="#FF20BB77" BorderThickness="1"
+                    MinHeight="126" Padding="20,12">
                 <Grid>
-                    <Border Height="3" Width="52" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,-18,0,0" CornerRadius="0,0,4,4" Background="#8B5CF6"/>
                     <Ellipse Width="130" Height="130" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-40,-54" Opacity="0.12">
                         <Ellipse.Fill>
                             <RadialGradientBrush>
@@ -653,16 +650,16 @@
                     </Ellipse>
                     <Grid>
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="64"/>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <StackPanel>
-                            <TextBlock Text="Phương tiện tuần này" Foreground="#A78BFA" FontSize="11" FontWeight="Bold"/>
-                            <TextBlock x:Name="KpiWeekValue" Text="—" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontSize="24" FontWeight="Bold" Margin="0,10,0,0"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="Phương tiện tuần này" Foreground="#FFC9F4DA" FontSize="13" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="KpiWeekValue" Text="—" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontSize="32" FontWeight="Bold" Margin="0,2,0,0"/>
                             <TextBlock x:Name="KpiWeekDetail" Text="Đang tải..." Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="10" Margin="0,6,0,0"/>
                             <TextBlock x:Name="KpiWeekTrend" Text="" FontSize="10" FontWeight="SemiBold" Margin="0,2,0,0"/>
                         </StackPanel>
-                        <Border Grid.Column="1" Width="50" Height="50" CornerRadius="13" Background="#1A8B5CF6" VerticalAlignment="Center">
+                        <Border Grid.Column="0" Width="58" Height="58" CornerRadius="29" Background="#FF0B513A" VerticalAlignment="Center">
                             <Path Data="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z" Fill="#A78BFA" Width="20" Height="20" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                     </Grid>
@@ -671,11 +668,10 @@
 
             <!-- KPI tháng -->
             <Border Grid.Column="6" CornerRadius="12" ClipToBounds="True"
-                    Background="{StaticResource VmsSurfaceBrush_v3}"
-                    BorderBrush="#35F59E0B" BorderThickness="1"
-                    MinHeight="108" Padding="20,18">
+                    Background="#FF211C45"
+                    BorderBrush="#FF8758D8" BorderThickness="1"
+                    MinHeight="126" Padding="20,12">
                 <Grid>
-                    <Border Height="3" Width="52" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,-18,0,0" CornerRadius="0,0,4,4" Background="#F59E0B"/>
                     <Ellipse Width="130" Height="130" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-40,-54" Opacity="0.12">
                         <Ellipse.Fill>
                             <RadialGradientBrush>
@@ -686,16 +682,16 @@
                     </Ellipse>
                     <Grid>
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="64"/>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <StackPanel>
-                            <TextBlock Text="Phương tiện tháng này" Foreground="#FBBF24" FontSize="11" FontWeight="Bold"/>
-                            <TextBlock x:Name="KpiMonthValue" Text="—" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontSize="24" FontWeight="Bold" Margin="0,10,0,0"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="Phương tiện tháng này" Foreground="#FFE8D3A4" FontSize="13" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="KpiMonthValue" Text="—" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontSize="32" FontWeight="Bold" Margin="0,2,0,0"/>
                             <TextBlock x:Name="KpiMonthDetail" Text="Đang tải..." Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="10" Margin="0,6,0,0"/>
                             <TextBlock x:Name="KpiMonthTrend" Text="" FontSize="10" FontWeight="SemiBold" Margin="0,2,0,0"/>
                         </StackPanel>
-                        <Border Grid.Column="1" Width="50" Height="50" CornerRadius="13" Background="#1AF59E0B" VerticalAlignment="Center">
+                        <Border Grid.Column="0" Width="58" Height="58" CornerRadius="29" Background="#FF392064" VerticalAlignment="Center">
                             <Path Data="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z" Fill="#FBBF24" Width="20" Height="20" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                     </Grid>
@@ -1010,9 +1006,10 @@
                                 </Grid>
                             </Border>
 
-                            <Border Background="{StaticResource VmsSurface2Brush_v3}"
+                            <Border x:Name="DetailPlaybackPanel" Background="{StaticResource VmsSurface2Brush_v3}"
                                     BorderBrush="{StaticResource VmsBorderSubtleBrush_v3}"
-                                    BorderThickness="1" CornerRadius="6" Height="360" ClipToBounds="True">
+                                    BorderThickness="1" CornerRadius="6" Height="465" ClipToBounds="True"
+                                    SizeChanged="DetailPlaybackPanel_SizeChanged">
                                 <Grid>
                                     <Frame x:Name="DetailPlaybackHost" NavigationUIVisibility="Hidden"/>
                                     <TextBlock x:Name="DetailVideoPlaceholder" Text="Đang chuẩn bị playback..." Foreground="{StaticResource VmsTextDisabledBrush_v3}" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center"/>

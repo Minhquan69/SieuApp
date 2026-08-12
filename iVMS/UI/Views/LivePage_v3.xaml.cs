@@ -84,7 +84,6 @@ namespace V3SClient.UI.Views
         private LiveTile_v3 _fullscreenTile;
         private Camera _pendingCameraClick;
         private int _cameraClickVersion;
-        private Button _removeErrorsHeaderButton;
         private WindowStyle _tileWindowStyle;
         private ResizeMode _tileResizeMode;
         private WindowState _tileWindowState;
@@ -168,22 +167,6 @@ namespace V3SClient.UI.Views
             LivePageHeader.SizeChanged += LivePageHeader_SizeChanged;
             CameraGrid.SizeChanged += CameraGrid_SizeChanged;
             SizeChanged += LivePage_SizeChanged;
-            _removeErrorsHeaderButton = new Button
-            {
-                Style = (Style)FindResource("LiveHeaderActionStyle_v3"),
-                Padding = new Thickness(7, 4, 7, 4),
-                Margin = new Thickness(2, 2, 2, 2),
-                ToolTip = "Xóa camera lỗi",
-                Content = new MahApps.Metro.IconPacks.PackIconMaterial
-                {
-                    Kind = MahApps.Metro.IconPacks.PackIconMaterialKind.CloseCircleOutline,
-                    Width = 14,
-                    Height = 14
-                },
-                Visibility = Visibility.Collapsed
-            };
-            _removeErrorsHeaderButton.Click += RemoveErrors_Click;
-            HeaderUtilityPanel.Children.Insert(3, _removeErrorsHeaderButton);
             _viewModel = new LiveViewModel_v3();
             DataContext = _viewModel;
             Loaded += OnLoaded;
@@ -732,15 +715,13 @@ namespace V3SClient.UI.Views
             if (layout == LiveLayoutMode_v3.Layout5Plus1 || layout == LiveLayoutMode_v3.Layout3x3) return Tuple.Create(3, 3);
             if (layout == LiveLayoutMode_v3.Layout16Plus1) return Tuple.Create(5, 5);
             if (layout == LiveLayoutMode_v3.Layout6x6) return Tuple.Create(6, 6);
-            // Fit the grid to the viewport aspect ratio instead of using a
-            // square-only grid.  A wide camera wall therefore uses more
-            // columns and fewer rows, avoiding the 10x10 overflow seen when
-            // a large group is selected.
-            var width = CameraGrid.ActualWidth > 0 ? CameraGrid.ActualWidth : 16d;
-            var height = CameraGrid.ActualHeight > 0 ? CameraGrid.ActualHeight : 9d;
-            var aspectRatio = Math.Max(1d, width / Math.Max(1d, height));
-            var columns = Math.Max(1, Math.Min(count, (int)Math.Ceiling(Math.Sqrt(count * aspectRatio))));
-            return Tuple.Create((int)Math.Ceiling((double)count / columns), columns);
+            // A requested camera count must remain visually balanced.  Use
+            // the closest square that can hold every camera: 10 => 4 x 3,
+            // 15 => 4 x 4, 20 => 5 x 4.  This avoids sparse wide grids such
+            // as 2 x 5, where rows and columns differ too much.
+            var rows = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(count)));
+            var columns = Math.Max(1, (int)Math.Ceiling((double)count / rows));
+            return Tuple.Create(rows, columns);
         }
 
         private static Tuple<int, int, int, int> GetPlacement(LiveLayoutMode_v3 layout, int position, int columns)
@@ -848,18 +829,28 @@ namespace V3SClient.UI.Views
                 cancellationToken.ThrowIfCancellationRequested();
                 await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
                 cancellationToken.ThrowIfCancellationRequested();
-                // Start every pipeline in one batch and deliberately do not
-                // await the whole batch here.  A tile exposes its surface on
-                // its own Playing event, so a fast camera is shown instantly
-                // while slow/offline cameras continue independently.
-                var connectTasks = targets.Select(tile => tile.ConnectAsync()).ToArray();
-                _ = Task.WhenAll(connectTasks).ContinueWith(task =>
-                    Dispatcher.BeginInvoke(new Action(() =>
+                // Native RTSP/GStreamer pipelines compete for decoder, I/O
+                // and dispatcher resources during startup. Starting 36 at
+                // once starves every tile, so stagger their initialization.
+                // ConnectAsync returns after creating the pipeline; the short
+                // gap gives it time to attach its native video surface while
+                // keeping the UI responsive.
+                foreach (var tile in targets)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    try
                     {
-                        if (task.IsFaulted)
-                            LoggerManager.LogException(task.Exception, "Live View _v3 batch camera connection failed");
-                        if (!_disposed) UpdateStatus();
-                    })));
+                        await tile.ConnectAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        LoggerManager.LogException(ex, "Live View _v3 camera connection failed");
+                    }
+
+                    await Task.Delay(220, cancellationToken);
+                }
+
+                if (!_disposed) UpdateStatus();
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { LoggerManager.LogException(ex, "Live View _v3 deferred camera connection failed"); }
@@ -1051,15 +1042,7 @@ namespace V3SClient.UI.Views
             var button = sender as Button;
             if (button != null)
                 LayoutPopup.PlacementTarget = button;
-            if (PreserveCameraAspectCheckBox != null)
-                PreserveCameraAspectCheckBox.IsChecked = WhepPlayer_v3.PreserveCameraAspectRatio;
             LayoutPopup.IsOpen = !LayoutPopup.IsOpen;
-        }
-
-        private void PreserveCameraAspectCheckBox_Changed(object sender, RoutedEventArgs e)
-        {
-            WhepPlayer_v3.PreserveCameraAspectRatio = PreserveCameraAspectCheckBox != null &&
-                PreserveCameraAspectCheckBox.IsChecked == true;
         }
         private void LayoutMenu_MouseEnter(object sender, MouseEventArgs e) { LayoutPopup.IsOpen = true; }
         private void LayoutPopup_MouseLeave(object sender, MouseEventArgs e) { LayoutPopup.IsOpen = false; }
@@ -1168,12 +1151,31 @@ namespace V3SClient.UI.Views
 
         private void CustomLayout_Click(object sender, RoutedEventArgs e)
         {
+            ApplyAutomaticLayoutFromCameraCount();
+        }
+
+        private void CustomSlotText_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key != Key.Enter) return;
+
+            e.Handled = true;
+            ApplyAutomaticLayoutFromCameraCount();
+        }
+
+        private void ApplyAutomaticLayoutFromCameraCount()
+        {
             int count;
             if (!int.TryParse(CustomSlotText.Text, out count)) count = 10;
             count = Math.Max(1, count);
+
+            // Always regenerate the automatic grid; never reuse a saved
+            // merged custom layout which happens to have the same slot count.
+            _customLayoutRows = 0;
+            _customLayoutColumns = 0;
+            _customLayoutCells.Clear();
             _viewModel.ApplyCustomLayout(count);
             CustomSlotText.Text = _viewModel.CustomSlotCount.ToString();
-            LayoutMenuButton.Content = "▦ Custom";
+            LayoutMenuButton.Content = "▦ " + _viewModel.CustomSlotCount + " cam";
             LayoutPopup.IsOpen = false;
             BuildGrid(deferStaleCleanup: true);
         }
@@ -1283,11 +1285,9 @@ namespace V3SClient.UI.Views
                     if (offlineSlot.State != LiveConnectionState_v3.Connected)
                         offlineSlot.State = LiveConnectionState_v3.Offline;
                 }
-                var connectTasks = _tiles.Values
-                    .Where(tile => tile.Slot != null && tile.Slot.Camera != null && tile.Slot.Camera.is_online != false)
-                    .Select(tile => tile.ConnectAsync())
-                    .ToArray();
-                await Task.WhenAll(connectTasks);
+                await ConnectSlotsDeferredAsync(
+                    _tiles.Values.Select(tile => tile.Slot),
+                    BeginCameraOperation());
             }
             finally
             {
@@ -1331,6 +1331,26 @@ namespace V3SClient.UI.Views
             UpdateStatus();
         }
 
+        private async void RemoveFailedOffline_Click(object sender, RoutedEventArgs e)
+        {
+            var tiles = _tiles.Values
+                .Where(tile => tile != null && tile.Slot != null && tile.Slot.Camera != null)
+                .Where(tile => tile.Slot.Camera.is_online == false ||
+                               tile.Slot.State == LiveConnectionState_v3.Offline ||
+                               tile.Slot.State == LiveConnectionState_v3.Error ||
+                               tile.Slot.State == LiveConnectionState_v3.Retrying)
+                .ToArray();
+            if (tiles.Length == 0) return;
+
+            foreach (var tile in tiles) tile.RequestDisconnect();
+            var cleanupTasks = tiles.Select(tile => tile.DisconnectInBackgroundAsync()).ToArray();
+            try { await Task.WhenAll(cleanupTasks); }
+            catch (Exception ex) { LoggerManager.LogException(ex, "Live View _v3 failed/offline cleanup failed"); }
+            foreach (var tile in tiles) _viewModel.ClearSlot(tile.Slot);
+            BuildGrid();
+            UpdateStatus();
+        }
+
         /// <summary>
         /// GStreamer owns WPF/WinForms handles, so pipeline disposal must remain
         /// on the dispatcher thread. The bulk command schedules one dispatcher
@@ -1370,12 +1390,6 @@ namespace V3SClient.UI.Views
                 Dispatcher.BeginInvoke(DispatcherPriority.Background, cleanupBatch);
             else
                 completed?.Invoke();
-        }
-
-        private void RemoveErrors_Click(object sender, RoutedEventArgs e)
-        {
-            foreach (var slot in _viewModel.Slots.Where(slot => slot.HasError).ToList()) _viewModel.ClearSlot(slot);
-            BuildGrid();
         }
 
         private void Tile_RemoveRequested(object sender, EventArgs e)
@@ -2213,6 +2227,19 @@ namespace V3SClient.UI.Views
             OpenEventCenterRequested?.Invoke(this, EventArgs.Empty);
         }
 
+        private void AiFeedScroller_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            // The feed is horizontal. Convert a normal mouse wheel gesture
+            // into horizontal movement so operators can browse cards without
+            // having to grab the tiny scrollbar below the feed.
+            if (AiFeedScroller == null || AiFeedScroller.ScrollableWidth <= 0) return;
+
+            AiFeedScroller.ScrollToHorizontalOffset(
+                Math.Max(0, Math.Min(AiFeedScroller.ScrollableWidth,
+                    AiFeedScroller.HorizontalOffset - e.Delta)));
+            e.Handled = true;
+        }
+
         private void ToggleAiFeedCollapsed_Click(object sender, RoutedEventArgs e)
         {
             _aiFeedCollapsed = !_aiFeedCollapsed;
@@ -2395,9 +2422,15 @@ namespace V3SClient.UI.Views
 
         private void UpdateStatus()
         {
-            if (_removeErrorsHeaderButton != null)
-                _removeErrorsHeaderButton.Visibility = _viewModel.Slots.Any(slot => slot.HasError)
-                    ? Visibility.Visible : Visibility.Collapsed;
+            var hasFailedOrOfflineCamera = _viewModel.Slots.Any(slot => slot != null && slot.Camera != null &&
+                (slot.Camera.is_online == false ||
+                 slot.State == LiveConnectionState_v3.Offline ||
+                 slot.State == LiveConnectionState_v3.Error ||
+                 slot.State == LiveConnectionState_v3.Retrying));
+            RemoveFailedOfflineHeaderButton.Visibility = hasFailedOrOfflineCamera
+                ? Visibility.Visible : Visibility.Collapsed;
+            RemoveFailedOfflineInlineButton.Visibility = hasFailedOrOfflineCamera
+                ? Visibility.Visible : Visibility.Collapsed;
             CameraStatus.Text = string.Format("{0} cameras · {1} groups · {2}/{3} active", _viewModel.CameraCount, _viewModel.GroupCount, _viewModel.ActiveCameraCount, _viewModel.Slots.Count);
             _viewModel.RefreshCameraIndicators();
         }
@@ -2448,8 +2481,6 @@ namespace V3SClient.UI.Views
             LivePageHeader.SizeChanged -= LivePageHeader_SizeChanged;
             CameraGrid.SizeChanged -= CameraGrid_SizeChanged;
             SizeChanged -= LivePage_SizeChanged;
-            if (_removeErrorsHeaderButton != null)
-                _removeErrorsHeaderButton.Click -= RemoveErrors_Click;
             DisposeTiles();
             AiEventFeedItems.Clear();
             _aiFeedCropCache.Clear();
