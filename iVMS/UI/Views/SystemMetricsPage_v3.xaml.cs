@@ -149,6 +149,17 @@ namespace V3SClient.UI.Views
 
         private void Chart_SizeChanged(object sender, SizeChangedEventArgs e) => DrawCharts();
 
+        private void ChartTab_Checked(object sender, RoutedEventArgs e)
+        {
+            if (TabContentOverview == null) return;
+            TabContentOverview.Visibility = TabOverview.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            TabContentGpu.Visibility = TabGpu.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            TabContentDisk.Visibility = TabDisk.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            TabContentNetwork.Visibility = TabNetwork.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            DrawCharts();
+        }
+
+
         private void ConfigureRefreshTimer()
         {
             _refreshTimer.Stop();

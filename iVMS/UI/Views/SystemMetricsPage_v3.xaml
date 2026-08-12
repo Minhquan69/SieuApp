@@ -46,13 +46,48 @@
    <Setter Property="Height" Value="36"/><Setter Property="Padding" Value="4,0"/><Setter Property="Background" Value="#071522"/><Setter Property="Foreground" Value="#F4F8FF"/><Setter Property="BorderBrush" Value="#1C3850"/><Setter Property="BorderThickness" Value="1"/><Setter Property="VerticalContentAlignment" Value="Center"/>
    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox"><Border x:Name="Root" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6" Padding="{TemplateBinding Padding}"><ScrollViewer x:Name="PART_ContentHost"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Root" Property="BorderBrush" Value="#347DFF"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Root" Property="BorderBrush" Value="#60A5FA"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
   </Style>
+  <Style x:Key="ChartTab" TargetType="RadioButton">
+    <Setter Property="Foreground" Value="#7A9BB8"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Padding" Value="14,0"/>
+    <Setter Property="Height" Value="40"/>
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="Template">
+     <Setter.Value>
+      <ControlTemplate TargetType="RadioButton">
+       <Border x:Name="Root" Background="Transparent" Padding="{TemplateBinding Padding}">
+        <Grid>
+         <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Left"/>
+         <Border x:Name="Indicator" Height="2" VerticalAlignment="Bottom" Background="#347DFF" Opacity="0" CornerRadius="1"/>
+        </Grid>
+       </Border>
+       <ControlTemplate.Triggers>
+        <Trigger Property="IsChecked" Value="True">
+         <Setter Property="Foreground" Value="White"/>
+         <Setter TargetName="Indicator" Property="Opacity" Value="1"/>
+        </Trigger>
+        <Trigger Property="IsMouseOver" Value="True">
+         <Setter Property="Foreground" Value="#D7E6F4"/>
+        </Trigger>
+       </ControlTemplate.Triggers>
+      </ControlTemplate>
+     </Setter.Value>
+    </Setter>
+   </Style>
  </UserControl.Resources>
- <ScrollViewer VerticalScrollBarVisibility="Auto">
-  <ScrollViewer.Resources>
-   <Style TargetType="ComboBox" BasedOn="{StaticResource MetricComboBox}"/>
-   <Style TargetType="ComboBoxItem" BasedOn="{StaticResource MetricComboBoxItem}"/>
-  </ScrollViewer.Resources>
-  <StackPanel Margin="8">
+  <Grid>
+   <Grid.RowDefinitions>
+    <RowDefinition Height="Auto"/>
+    <RowDefinition Height="*"/>
+   </Grid.RowDefinitions>
+   <Grid.Resources>
+    <Style TargetType="ComboBox" BasedOn="{StaticResource MetricComboBox}"/>
+    <Style TargetType="ComboBoxItem" BasedOn="{StaticResource MetricComboBoxItem}"/>
+   </Grid.Resources>
+   <StackPanel Margin="8">
   <Grid Margin="0,8,0,12"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
    <StackPanel><TextBlock Text="INFRASTRUCTURE" Foreground="#347DFF" FontSize="10" FontWeight="Bold"/><TextBlock Text="Hệ thống" Foreground="White" FontSize="21" FontWeight="SemiBold" Margin="0,4,0,0"/><TextBlock Text="Theo dõi tài nguyên máy chủ vật lý, mạng và GPU." Foreground="#B3C7DD" FontSize="12" Margin="0,3,0,0"/></StackPanel>
    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Bottom"><TextBlock x:Name="UpdatedText" Foreground="#D7E6F4" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/><Button Click="Refresh_Click" Style="{StaticResource VmsRefreshButtonStyle_v3}" Margin="0,0,8,0" ToolTip="Làm mới"><Icon:PackIconMaterial Kind="Refresh" Width="17" Height="17"/></Button><TextBox x:Name="RefreshSecondsBox" Style="{StaticResource RefreshIntervalTextBox}" Text="60" Width="60" TextAlignment="Center" PreviewTextInput="RefreshSecondsBox_PreviewTextInput" LostKeyboardFocus="RefreshSecondsBox_LostKeyboardFocus"/><TextBlock Text="s" Foreground="#B3C7DD" VerticalAlignment="Center" Margin="5,0,0,0"/><Button x:Name="StopButton" Style="{StaticResource SystemActionButton}" Content="Dừng" Margin="8,0,0,0" Click="StopButton_Click"/></StackPanel>
@@ -75,15 +110,15 @@
    <Border Style="{StaticResource Kpi}" BorderBrush="#4E3D88" Background="#161937"><Grid><Border Height="3" Width="58" Background="#8B5CF6" CornerRadius="0,0,4,4" VerticalAlignment="Top" HorizontalAlignment="Left"/><Border Width="42" Height="42" Background="#241F50" CornerRadius="21" HorizontalAlignment="Right" VerticalAlignment="Top"><Viewbox Margin="10"><Path Data="M4,6 H16 V14 H4 Z M7,9 H13 M7,12 H10 M2,8 H4 M2,12 H4 M16,8 H18 M16,12 H18" Stroke="#8B5CF6" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Fill="Transparent"/></Viewbox></Border><StackPanel><TextBlock Text="Bộ nhớ" Foreground="#8B5CF6" FontSize="10" FontWeight="Bold"/><TextBlock x:Name="MemoryText" Foreground="#F4F8FF" FontSize="22" FontWeight="Bold" Margin="0,8,0,3"/><TextBlock x:Name="MemoryDetail" Text="—" Foreground="#B3C7DD" FontSize="10"/></StackPanel></Grid></Border>
   </UniformGrid>
   <UniformGrid x:Name="SystemKpiSecondaryGrid" Columns="2" Visibility="Collapsed">
-   <Border Style="{StaticResource Kpi}" BorderBrush="#694630" Background="#211D20"><Grid><Border Height="3" Width="58" Background="#FF7925" CornerRadius="0,0,4,4" VerticalAlignment="Top" HorizontalAlignment="Left"/><Border Width="42" Height="42" Background="#342522" CornerRadius="21" HorizontalAlignment="Right" VerticalAlignment="Top"><Viewbox Margin="10"><Path Data="M3,6 H17 V15 H3 Z M3,9 H17 M6,12 H8 M12,12 H14" Stroke="#FF7925" StrokeThickness="1.7" StrokeLineJoin="Round" Fill="Transparent"/></Viewbox></Border><StackPanel><TextBlock Text="Disk" Foreground="#FF7925" FontSize="10" FontWeight="Bold"/><TextBlock x:Name="DiskText" Foreground="#F4F8FF" FontSize="22" FontWeight="Bold" Margin="0,8,0,3"/><TextBlock Text="Phân vùng cao nhất" Foreground="#B3C7DD" FontSize="10"/></StackPanel></Grid></Border>
-   <Border Style="{StaticResource Kpi}" BorderBrush="#1F615B" Background="#082B2D"><Grid><Border Height="3" Width="58" Background="#20D37B" CornerRadius="0,0,4,4" VerticalAlignment="Top" HorizontalAlignment="Left"/><Border Width="42" Height="42" Background="#0C3834" CornerRadius="21" HorizontalAlignment="Right" VerticalAlignment="Top"><Viewbox Margin="10"><Path Data="M5,5 H9 V9 H5 Z M11,5 H15 V9 H11 Z M5,11 H9 V15 H5 Z M11,11 H15 V15 H11 Z M2,7 H4 M16,7 H18 M2,13 H4 M16,13 H18" Stroke="#20D37B" StrokeThickness="1.5" StrokeLineJoin="Round" Fill="Transparent"/></Viewbox></Border><StackPanel><TextBlock Text="GPU" Foreground="#20D37B" FontSize="10" FontWeight="Bold"/><TextBlock x:Name="GpuCountText" Foreground="#F4F8FF" FontSize="22" FontWeight="Bold" Margin="0,8,0,3"/><TextBlock x:Name="GpuCountDetail" Text="Telemetry" Foreground="#B3C7DD" FontSize="10"/></StackPanel></Grid></Border>
-   <Border Style="{StaticResource Kpi}" BorderBrush="#4E3D88" Background="#161937"><Grid><Border Height="3" Width="58" Background="#8B5CF6" CornerRadius="0,0,4,4" VerticalAlignment="Top" HorizontalAlignment="Left"/><Border Width="42" Height="42" Background="#241F50" CornerRadius="21" HorizontalAlignment="Right" VerticalAlignment="Top"><Viewbox Margin="10"><Path Data="M11,2 L4,11 H9 L8,18 L16,8 H11 Z" Stroke="#8B5CF6" StrokeThickness="1.7" StrokeLineJoin="Round" Fill="Transparent"/></Viewbox></Border><StackPanel><TextBlock Text="GPU sử dụng" Foreground="#8B5CF6" FontSize="10" FontWeight="Bold"/><TextBlock x:Name="GpuText" Foreground="#F4F8FF" FontSize="22" FontWeight="Bold" Margin="0,8,0,3"/><TextBlock x:Name="GpuUtilDetail" Text="—" Foreground="#B3C7DD" FontSize="10"/></StackPanel></Grid></Border>
-   <Border Style="{StaticResource Kpi}" BorderBrush="#24517F"><Grid><Border Height="3" Width="58" Background="#347DFF" CornerRadius="0,0,4,4" VerticalAlignment="Top" HorizontalAlignment="Left"/><Border Width="42" Height="42" Background="#102B4B" CornerRadius="21" HorizontalAlignment="Right" VerticalAlignment="Top"><Viewbox Margin="10"><Path Data="M4,6 H16 V14 H4 Z M7,9 H13 M7,12 H10 M2,8 H4 M2,12 H4 M16,8 H18 M16,12 H18" Stroke="#347DFF" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Fill="Transparent"/></Viewbox></Border><StackPanel><TextBlock Text="Bộ nhớ GPU" Foreground="#347DFF" FontSize="10" FontWeight="Bold"/><TextBlock x:Name="GpuMemoryText" Foreground="#F4F8FF" FontSize="22" FontWeight="Bold" Margin="0,8,0,3"/><TextBlock x:Name="GpuMemoryDetail" Text="—" Foreground="#B3C7DD" FontSize="10"/></StackPanel></Grid></Border>
-   <Border Style="{StaticResource Kpi}" BorderBrush="#694630" Background="#211D20"><Grid><Border Height="3" Width="58" Background="#FF7925" CornerRadius="0,0,4,4" VerticalAlignment="Top" HorizontalAlignment="Left"/><Border Width="42" Height="42" Background="#342522" CornerRadius="21" HorizontalAlignment="Right" VerticalAlignment="Top"><Viewbox Margin="10"><Path Data="M9,3 V12 A4,4 0 1 0 11,12 V3 A1,1 0 0 0 9,3 M10,14 V17 M10,3 V11" Stroke="#FF7925" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Fill="Transparent"/></Viewbox></Border><StackPanel><TextBlock Text="Nhiệt GPU" Foreground="#FF7925" FontSize="10" FontWeight="Bold"/><TextBlock x:Name="GpuTemperatureText" Foreground="#F4F8FF" FontSize="22" FontWeight="Bold" Margin="0,8,0,3"/><TextBlock x:Name="GpuPowerText" Text="—" Foreground="#B3C7DD" FontSize="10"/></StackPanel></Grid></Border>
-  </UniformGrid>
+    <Border Style="{StaticResource Kpi}" BorderBrush="#694630" Background="#211D20"><Grid><Border Height="3" Width="58" Background="#FF7925" CornerRadius="0,0,4,4" VerticalAlignment="Top" HorizontalAlignment="Left"/><Border Width="42" Height="42" Background="#342522" CornerRadius="21" HorizontalAlignment="Right" VerticalAlignment="Top"><Viewbox Margin="10"><Path Data="M3,6 H17 V15 H3 Z M3,9 H17 M6,12 H8 M12,12 H14" Stroke="#FF7925" StrokeThickness="1.7" StrokeLineJoin="Round" Fill="Transparent"/></Viewbox></Border><StackPanel><TextBlock Text="Disk" Foreground="#FF7925" FontSize="10" FontWeight="Bold"/><TextBlock x:Name="DiskText" Foreground="#F4F8FF" FontSize="22" FontWeight="Bold" Margin="0,8,0,3"/><TextBlock Text="Phân vùng cao nhất" Foreground="#B3C7DD" FontSize="10"/></StackPanel></Grid></Border>
+    <Border Style="{StaticResource Kpi}" BorderBrush="#1F615B" Background="#082B2D"><Grid><Border Height="3" Width="58" Background="#20D37B" CornerRadius="0,0,4,4" VerticalAlignment="Top" HorizontalAlignment="Left"/><StackPanel><TextBlock Text="GPU" Foreground="#20D37B" FontSize="10" FontWeight="Bold"/><TextBlock x:Name="GpuCountText" Foreground="#F4F8FF" FontSize="22" FontWeight="Bold" Margin="0,8,0,3"/><TextBlock x:Name="GpuCountDetail" Text="Telemetry" Foreground="#B3C7DD" FontSize="10"/></StackPanel></Grid></Border>
+    <Border Style="{StaticResource Kpi}" BorderBrush="#4E3D88" Background="#161937"><Grid><Border Height="3" Width="58" Background="#8B5CF6" CornerRadius="0,0,4,4" VerticalAlignment="Top" HorizontalAlignment="Left"/><StackPanel><TextBlock Text="GPU sử dụng" Foreground="#8B5CF6" FontSize="10" FontWeight="Bold"/><TextBlock x:Name="GpuText" Foreground="#F4F8FF" FontSize="22" FontWeight="Bold" Margin="0,8,0,3"/><TextBlock x:Name="GpuUtilDetail" Text="—" Foreground="#B3C7DD" FontSize="10"/></StackPanel></Grid></Border>
+    <Border Style="{StaticResource Kpi}" BorderBrush="#24517F"><Grid><Border Height="3" Width="58" Background="#347DFF" CornerRadius="0,0,4,4" VerticalAlignment="Top" HorizontalAlignment="Left"/><StackPanel><TextBlock Text="Bộ nhớ GPU" Foreground="#347DFF" FontSize="10" FontWeight="Bold"/><TextBlock x:Name="GpuMemoryText" Foreground="#F4F8FF" FontSize="22" FontWeight="Bold" Margin="0,8,0,3"/><TextBlock x:Name="GpuMemoryDetail" Text="—" Foreground="#B3C7DD" FontSize="10"/></StackPanel></Grid></Border>
+    <Border Style="{StaticResource Kpi}" BorderBrush="#694630" Background="#211D20"><Grid><Border Height="3" Width="58" Background="#FF7925" CornerRadius="0,0,4,4" VerticalAlignment="Top" HorizontalAlignment="Left"/><StackPanel><TextBlock Text="Nhiệt GPU" Foreground="#FF7925" FontSize="10" FontWeight="Bold"/><TextBlock x:Name="GpuTemperatureText" Foreground="#F4F8FF" FontSize="22" FontWeight="Bold" Margin="0,8,0,3"/><TextBlock x:Name="GpuPowerText" Text="—" Foreground="#B3C7DD" FontSize="10"/></StackPanel></Grid></Border>
+   </UniformGrid>
   </StackPanel>
-  <Grid Margin="0,2,0,9" Height="224">
-   <Grid.ColumnDefinitions><ColumnDefinition Width="1.05*"/><ColumnDefinition Width="1.35*"/><ColumnDefinition Width="0.95*"/></Grid.ColumnDefinitions>
+  <Grid Margin="0,2,0,9" Height="340">
+   <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
    <Border Style="{StaticResource Panel}" Margin="0,0,5,0">
     <Grid>
      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
@@ -100,43 +135,150 @@
      </DataGrid>
     </Grid>
    </Border>
-   <Border Grid.Column="1" Style="{StaticResource Panel}" Margin="5,0">
+   <Border Grid.Column="1" Style="{StaticResource Panel}" Margin="5,0,0,0">
     <Grid>
-     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-     <TextBlock Text="Mức sử dụng tài nguyên" Foreground="White" FontWeight="SemiBold" FontSize="13"/>
-     <TextBlock Grid.Row="1" Text="Tổng hợp theo host đang chọn" Foreground="#B3C7DD" FontSize="10" Margin="0,3,0,12"/>
-     <Grid Grid.Row="2"><Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition Width="76"/><ColumnDefinition Width="*"/><ColumnDefinition Width="55"/></Grid.ColumnDefinitions>
+     <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+     </Grid.RowDefinitions>
+     <TextBlock Text="Tài nguyên tổng quan" Foreground="White" FontWeight="SemiBold" FontSize="13"/>
+     <TextBlock Grid.Row="1" Text="Tổng hợp theo host đang chọn" Foreground="#B3C7DD" FontSize="10" Margin="0,3,0,14"/>
+     <Grid Grid.Row="2">
+      <Grid.RowDefinitions>
+       <RowDefinition Height="*"/>
+       <RowDefinition Height="*"/>
+       <RowDefinition Height="*"/>
+       <RowDefinition Height="*"/>
+       <RowDefinition Height="*"/>
+      </Grid.RowDefinitions>
+      <Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="*"/><ColumnDefinition Width="55"/></Grid.ColumnDefinitions>
       <TextBlock Text="CPU" VerticalAlignment="Center" Foreground="#D7E6F4" FontSize="11"/><ProgressBar Style="{StaticResource ResourceProgress}" x:Name="CpuBar" Grid.Column="1" Maximum="100" Foreground="#347DFF" Background="#263B50" VerticalAlignment="Center" Margin="0,0,12,0"/><TextBlock x:Name="CpuBarText" Grid.Column="2" Foreground="White" FontWeight="SemiBold" FontSize="11" VerticalAlignment="Center" TextAlignment="Right"/>
       <TextBlock Grid.Row="1" Text="Bộ nhớ" VerticalAlignment="Center" Foreground="#D7E6F4" FontSize="11"/><ProgressBar Style="{StaticResource ResourceProgress}" x:Name="MemoryBar" Grid.Row="1" Grid.Column="1" Maximum="100" Foreground="#20D37B" Background="#263B50" VerticalAlignment="Center" Margin="0,0,12,0"/><TextBlock x:Name="MemoryBarText" Grid.Row="1" Grid.Column="2" Foreground="White" FontWeight="SemiBold" FontSize="11" VerticalAlignment="Center" TextAlignment="Right"/>
       <TextBlock Grid.Row="2" Text="Disk" VerticalAlignment="Center" Foreground="#D7E6F4" FontSize="11"/><ProgressBar Style="{StaticResource ResourceProgress}" x:Name="DiskBar" Grid.Row="2" Grid.Column="1" Maximum="100" Foreground="#FF7925" Background="#263B50" VerticalAlignment="Center" Margin="0,0,12,0"/><TextBlock x:Name="DiskBarText" Grid.Row="2" Grid.Column="2" Foreground="White" FontWeight="SemiBold" FontSize="11" VerticalAlignment="Center" TextAlignment="Right"/>
       <TextBlock Grid.Row="3" Text="GPU" VerticalAlignment="Center" Foreground="#D7E6F4" FontSize="11"/><ProgressBar Style="{StaticResource ResourceProgress}" x:Name="GpuBar" Grid.Row="3" Grid.Column="1" Maximum="100" Foreground="#8B5CF6" Background="#263B50" VerticalAlignment="Center" Margin="0,0,12,0"/><TextBlock x:Name="GpuBarText" Grid.Row="3" Grid.Column="2" Foreground="White" FontWeight="SemiBold" FontSize="11" VerticalAlignment="Center" TextAlignment="Right"/>
       <TextBlock Grid.Row="4" Text="Bộ nhớ GPU" VerticalAlignment="Center" Foreground="#D7E6F4" FontSize="11"/><ProgressBar Style="{StaticResource ResourceProgress}" x:Name="GpuMemoryBar" Grid.Row="4" Grid.Column="1" Maximum="100" Foreground="#347DFF" Background="#263B50" VerticalAlignment="Center" Margin="0,0,12,0"/><TextBlock x:Name="GpuMemoryBarText" Grid.Row="4" Grid.Column="2" Foreground="White" FontWeight="SemiBold" FontSize="11" VerticalAlignment="Center" TextAlignment="Right"/>
      </Grid>
-    </Grid>
-   </Border>
-   <Border Grid.Column="2" Style="{StaticResource Panel}" Margin="5,0,0,0">
-    <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-     <TextBlock Text="NVIDIA GPU" Foreground="White" FontWeight="SemiBold" FontSize="13"/>
-     <TextBlock Grid.Row="1" Text="Chỉ số GPU toàn hệ thống" Foreground="#B3C7DD" FontSize="10" Margin="0,3,0,12"/>
-     <Grid Grid.Row="2"><Grid.RowDefinitions><RowDefinition/><RowDefinition/></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
-      <Border Background="#0A1C2B" BorderBrush="#18354D" BorderThickness="1" CornerRadius="5" Margin="0,0,5,5" Padding="10,7"><StackPanel><StackPanel Orientation="Horizontal"><Viewbox Width="14" Height="14" Margin="0,0,6,0"><Path Data="M1,3 H11 V11 H1 Z M11,5 H13 V9 H11 M3,11 V13 M5,11 V13 M7,11 V13 M3.3,5.3 A1.7,1.7 0 1 0 3.3,8.7 A1.7,1.7 0 1 0 3.3,5.3 M7,6 H9 M7,8 H9" Stroke="#347DFF" StrokeThickness="1.25" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"/></Viewbox><TextBlock Text="Thiết bị" Foreground="#6AA4FF" FontSize="10"/></StackPanel><TextBlock x:Name="GpuPanelCountText" Text="—" Foreground="White" FontWeight="Bold" FontSize="16" Margin="0,5,0,0"/></StackPanel></Border>
-      <Border Grid.Column="1" Background="#0A1C2B" BorderBrush="#18354D" BorderThickness="1" CornerRadius="5" Margin="5,0,0,5" Padding="10,7"><StackPanel><StackPanel Orientation="Horizontal"><Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="M7,1 L2,7 H6 L5,12 L11,5 H7 Z" Stroke="#347DFF" StrokeThickness="1.3" Fill="Transparent"/></Viewbox><TextBlock Text="Sử dụng" Foreground="#6AA4FF" FontSize="10"/></StackPanel><TextBlock x:Name="GpuPanelUtilizationText" Text="—" Foreground="White" FontWeight="Bold" FontSize="16" Margin="0,5,0,0"/></StackPanel></Border>
-      <Border Grid.Row="1" Background="#0A1C2B" BorderBrush="#18354D" BorderThickness="1" CornerRadius="5" Margin="0,5,5,0" Padding="10,7"><StackPanel><StackPanel Orientation="Horizontal"><Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="M1,3 H12 V10 H1 Z M3,5 H7 M3,8 H5" Stroke="#347DFF" StrokeThickness="1.3" Fill="Transparent"/></Viewbox><TextBlock Text="VRAM" Foreground="#6AA4FF" FontSize="10"/></StackPanel><TextBlock x:Name="GpuPanelMemoryText" Text="—" Foreground="White" FontWeight="Bold" FontSize="16" Margin="0,5,0,0"/></StackPanel></Border>
-      <Border Grid.Row="1" Grid.Column="1" Background="#0A1C2B" BorderBrush="#18354D" BorderThickness="1" CornerRadius="5" Margin="5,5,0,0" Padding="10,7"><StackPanel><StackPanel Orientation="Horizontal"><Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="M5,1 V7 A3,3 0 1 0 7,7 V1 A1,1 0 0 0 5,1" Stroke="#347DFF" StrokeThickness="1.3" Fill="Transparent"/></Viewbox><TextBlock Text="Nhiệt độ" Foreground="#6AA4FF" FontSize="10"/></StackPanel><TextBlock x:Name="GpuPanelTemperatureText" Text="—" Foreground="White" FontWeight="Bold" FontSize="16" Margin="0,5,0,0"/></StackPanel></Border>
+     <Border Grid.Row="3" Height="1" Background="#18354D" Margin="0,12,0,10"/>
+     <Grid Grid.Row="4">
+      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+      <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,10">
+       <Image Source="/images/nvidia_logo.png" Height="28" Width="Auto" Margin="0,0,10,0" RenderOptions.BitmapScalingMode="HighQuality"/>
+       <TextBlock Text="NVIDIA GPU" Foreground="White" FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
+      </StackPanel>
+      <UniformGrid Grid.Row="1" Rows="1" Columns="4">
+       <Border Background="#0A1C2B" BorderBrush="#18354D" BorderThickness="1" CornerRadius="5" Margin="0,0,6,0" Padding="10,7">
+        <StackPanel>
+         <StackPanel Orientation="Horizontal">
+          <Viewbox Width="14" Height="14" Margin="0,0,6,0"><Path Data="M1,3 H11 V11 H1 Z M11,5 H13 V9 H11 M3,11 V13 M5,11 V13 M7,11 V13 M3.3,5.3 A1.7,1.7 0 1 0 3.3,8.7 A1.7,1.7 0 1 0 3.3,5.3 M7,6 H9 M7,8 H9" Stroke="#6AA4FF" StrokeThickness="1.25" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"/></Viewbox>
+          <TextBlock Text="Thiết bị" Foreground="#6AA4FF" FontSize="10"/>
+         </StackPanel>
+         <TextBlock x:Name="GpuPanelCountText" Text="—" Foreground="White" FontWeight="Bold" FontSize="18" Margin="0,4,0,0"/>
+        </StackPanel>
+       </Border>
+       <Border Background="#0A1C2B" BorderBrush="#18354D" BorderThickness="1" CornerRadius="5" Margin="0,0,6,0" Padding="10,7">
+        <StackPanel>
+         <StackPanel Orientation="Horizontal">
+          <Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="M7,1 L2,7 H6 L5,12 L11,5 H7 Z" Stroke="#8B5CF6" StrokeThickness="1.3" Fill="Transparent"/></Viewbox>
+          <TextBlock Text="Sử dụng" Foreground="#8B5CF6" FontSize="10"/>
+         </StackPanel>
+         <TextBlock x:Name="GpuPanelUtilizationText" Text="—" Foreground="White" FontWeight="Bold" FontSize="18" Margin="0,4,0,0"/>
+        </StackPanel>
+       </Border>
+       <Border Background="#0A1C2B" BorderBrush="#18354D" BorderThickness="1" CornerRadius="5" Margin="0,0,6,0" Padding="10,7">
+        <StackPanel>
+         <StackPanel Orientation="Horizontal">
+          <Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="M5,1 V7 A3,3 0 1 0 7,7 V1 A1,1 0 0 0 5,1" Stroke="#FF7925" StrokeThickness="1.3" Fill="Transparent"/></Viewbox>
+          <TextBlock Text="Nhiệt độ" Foreground="#FF9B5E" FontSize="10"/>
+         </StackPanel>
+         <TextBlock x:Name="GpuPanelTemperatureText" Text="—" Foreground="White" FontWeight="Bold" FontSize="18" Margin="0,4,0,0"/>
+        </StackPanel>
+       </Border>
+       <Border Background="#0A1C2B" BorderBrush="#18354D" BorderThickness="1" CornerRadius="5" Margin="0" Padding="10,7">
+        <StackPanel>
+         <StackPanel Orientation="Horizontal">
+          <Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="M1,3 H12 V10 H1 Z M3,5 H7 M3,8 H5" Stroke="#347DFF" StrokeThickness="1.3" Fill="Transparent"/></Viewbox>
+          <TextBlock Text="VRAM" Foreground="#6AA4FF" FontSize="10"/>
+         </StackPanel>
+         <TextBlock x:Name="GpuPanelMemoryText" Text="—" Foreground="White" FontWeight="Bold" FontSize="18" Margin="0,4,0,0"/>
+        </StackPanel>
+       </Border>
+      </UniformGrid>
      </Grid>
     </Grid>
    </Border>
-   <ItemsControl x:Name="GpusList" Visibility="Collapsed"/>
+    <ItemsControl x:Name="GpusList" Visibility="Collapsed" Grid.Column="1"/>
   </Grid>
-  <Grid Margin="0,0,0,9">
-   <Grid.RowDefinitions><RowDefinition Height="248"/><RowDefinition Height="12"/><RowDefinition Height="248"/></Grid.RowDefinitions>
-   <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition/></Grid.ColumnDefinitions>
-   <Border Style="{StaticResource Panel}" Margin="0,0,0,0"><Grid><Grid.RowDefinitions><RowDefinition Height="42"/><RowDefinition Height="28"/><RowDefinition Height="*"/></Grid.RowDefinitions><Border BorderBrush="#1C3850" BorderThickness="0,0,0,1"><TextBlock Text="CPU và bộ nhớ" Foreground="White" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Margin="12,0"/></Border><StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0"><Ellipse Width="11" Height="11" Fill="#347DFF"/><TextBlock Text="CPU" Foreground="#6AA4FF" FontSize="10" Margin="4,0,12,0"/><Ellipse Width="11" Height="11" Fill="#20D37B"/><TextBlock Text="Bộ nhớ" Foreground="#20D37B" FontSize="10" Margin="4,0,0,0"/></StackPanel><Canvas Grid.Row="2" x:Name="CpuMemoryChart" Background="Transparent" Margin="12,0,12,10" SizeChanged="Chart_SizeChanged" MouseMove="Chart_MouseMove" MouseLeave="Chart_MouseLeave" Cursor="Cross"/></Grid></Border>
-   <Border Grid.Column="2" Style="{StaticResource Panel}"><Grid><Grid.RowDefinitions><RowDefinition Height="42"/><RowDefinition Height="28"/><RowDefinition Height="*"/></Grid.RowDefinitions><Border BorderBrush="#1C3850" BorderThickness="0,0,0,1"><TextBlock Text="Nhiệt CPU" Foreground="White" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Margin="12,0"/></Border><StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0"><Ellipse Width="11" Height="11" Fill="#FF7925"/><TextBlock Text="Nhiệt CPU" Foreground="#FF9B5E" FontSize="10" Margin="4,0,0,0"/></StackPanel><Canvas Grid.Row="2" x:Name="CpuTemperatureChart" Background="Transparent" Margin="12,0,12,10" SizeChanged="Chart_SizeChanged" MouseMove="Chart_MouseMove" MouseLeave="Chart_MouseLeave" Cursor="Cross"/></Grid></Border>
-   <Border Grid.Row="2" Style="{StaticResource Panel}"><Grid><Grid.RowDefinitions><RowDefinition Height="42"/><RowDefinition Height="28"/><RowDefinition Height="*"/></Grid.RowDefinitions><Border BorderBrush="#1C3850" BorderThickness="0,0,0,1"><TextBlock Text="GPU và VRAM" Foreground="White" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Margin="12,0"/></Border><StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0"><Ellipse Width="11" Height="11" Fill="#8B5CF6"/><TextBlock Text="GPU sử dụng" Foreground="#A678FF" FontSize="10" Margin="4,0,12,0"/><Ellipse Width="11" Height="11" Fill="#347DFF"/><TextBlock Text="Bộ nhớ GPU" Foreground="#6AA4FF" FontSize="10" Margin="4,0,0,0"/></StackPanel><Canvas Grid.Row="2" x:Name="GpuChart" Background="Transparent" Margin="12,0,12,10" SizeChanged="Chart_SizeChanged" MouseMove="Chart_MouseMove" MouseLeave="Chart_MouseLeave" Cursor="Cross"/></Grid></Border>
-   <Border Grid.Row="2" Grid.Column="2" Style="{StaticResource Panel}"><Grid><Grid.RowDefinitions><RowDefinition Height="42"/><RowDefinition Height="28"/><RowDefinition Height="*"/></Grid.RowDefinitions><Border BorderBrush="#1C3850" BorderThickness="0,0,0,1"><TextBlock Text="Disk đọc / ghi" Foreground="White" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Margin="12,0"/></Border><StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0"><Ellipse Width="11" Height="11" Fill="#347DFF"/><TextBlock Text="Đọc" Foreground="#6AA4FF" FontSize="10" Margin="4,0,12,0"/><Ellipse Width="11" Height="11" Fill="#FF7925"/><TextBlock Text="Ghi" Foreground="#FF9B5E" FontSize="10" Margin="4,0,0,0"/></StackPanel><Canvas Grid.Row="2" x:Name="DiskChart" Background="Transparent" Margin="12,0,12,10" SizeChanged="Chart_SizeChanged" MouseMove="Chart_MouseMove" MouseLeave="Chart_MouseLeave" Cursor="Cross"/></Grid></Border>
-  </Grid>
-  <Border Style="{StaticResource Panel}" Height="302" Margin="0,0,0,9"><Grid><Grid.RowDefinitions><RowDefinition Height="42"/><RowDefinition Height="28"/><RowDefinition Height="*"/></Grid.RowDefinitions><Border BorderBrush="#1C3850" BorderThickness="0,0,0,1"><StackPanel Margin="12,0" VerticalAlignment="Center"><TextBlock Text="Mạng RX / TX" Foreground="White" FontSize="13" FontWeight="SemiBold"/><TextBlock x:Name="NetworkDetailText" Text="NIC vật lý" Foreground="#B3C7DD" FontSize="10" Margin="0,2,0,0"/></StackPanel></Border><StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0"><Ellipse Width="11" Height="11" Fill="#20D37B"/><TextBlock Text="RX" Foreground="#20D37B" FontSize="10" Margin="4,0,12,0"/><Ellipse Width="11" Height="11" Fill="#FF7085"/><TextBlock Text="TX" Foreground="#FF9B5E" FontSize="10" Margin="4,0,0,0"/></StackPanel><Canvas Grid.Row="2" x:Name="NetworkChart" Background="Transparent" Margin="12,0,12,10" SizeChanged="Chart_SizeChanged" MouseMove="Chart_MouseMove" MouseLeave="Chart_MouseLeave" Cursor="Cross"/></Grid></Border>
   </StackPanel>
- </ScrollViewer>
+   <!-- Chart Tabs Container -->
+   <Border Grid.Row="1" Style="{StaticResource Panel}" Margin="8,0,8,8">
+    <Grid>
+     <Grid.RowDefinitions>
+      <RowDefinition Height="40"/>
+      <RowDefinition Height="*"/>
+     </Grid.RowDefinitions>
+     <!-- Tab Bar -->
+     <Border BorderBrush="#1C3850" BorderThickness="0,0,0,1">
+      <StackPanel Orientation="Horizontal" VerticalAlignment="Stretch">
+       <RadioButton x:Name="TabOverview" Style="{StaticResource ChartTab}" GroupName="ChartTabs" Content="Tổng quan" IsChecked="True" Checked="ChartTab_Checked"/>
+       <RadioButton x:Name="TabGpu" Style="{StaticResource ChartTab}" GroupName="ChartTabs" Content="GPU và VRAM" Checked="ChartTab_Checked"/>
+       <RadioButton x:Name="TabDisk" Style="{StaticResource ChartTab}" GroupName="ChartTabs" Content="Disk" Checked="ChartTab_Checked"/>
+       <RadioButton x:Name="TabNetwork" Style="{StaticResource ChartTab}" GroupName="ChartTabs" Content="Mạng" Checked="ChartTab_Checked"/>
+      </StackPanel>
+     </Border>
+     <!-- Tab Content -->
+     <!-- Tab: Tổng quan (CPU + Memory & CPU Temp) -->
+     <Grid x:Name="TabContentOverview" Grid.Row="1" Margin="0">
+      <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="10"/><ColumnDefinition/></Grid.ColumnDefinitions>
+      <Border Style="{StaticResource Panel}" Margin="0,10,0,0">
+       <Grid>
+        <Grid.RowDefinitions><RowDefinition Height="42"/><RowDefinition Height="28"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <Border BorderBrush="#1C3850" BorderThickness="0,0,0,1"><TextBlock Text="CPU và bộ nhớ" Foreground="White" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Margin="12,0"/></Border>
+        <StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0"><Ellipse Width="11" Height="11" Fill="#347DFF"/><TextBlock Text="CPU" Foreground="#6AA4FF" FontSize="10" Margin="4,0,12,0"/><Ellipse Width="11" Height="11" Fill="#20D37B"/><TextBlock Text="Bộ nhớ" Foreground="#20D37B" FontSize="10" Margin="4,0,0,0"/></StackPanel>
+        <Canvas Grid.Row="2" x:Name="CpuMemoryChart" Background="Transparent" Margin="12,0,12,10" SizeChanged="Chart_SizeChanged" MouseMove="Chart_MouseMove" MouseLeave="Chart_MouseLeave" Cursor="Cross"/>
+       </Grid>
+      </Border>
+      <Border Grid.Column="2" Style="{StaticResource Panel}" Margin="0,10,0,0">
+       <Grid>
+        <Grid.RowDefinitions><RowDefinition Height="42"/><RowDefinition Height="28"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <Border BorderBrush="#1C3850" BorderThickness="0,0,0,1"><TextBlock Text="Nhiệt CPU" Foreground="White" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Margin="12,0"/></Border>
+        <StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0"><Ellipse Width="11" Height="11" Fill="#FF7925"/><TextBlock Text="Nhiệt CPU" Foreground="#FF9B5E" FontSize="10" Margin="4,0,0,0"/></StackPanel>
+        <Canvas Grid.Row="2" x:Name="CpuTemperatureChart" Background="Transparent" Margin="12,0,12,10" SizeChanged="Chart_SizeChanged" MouseMove="Chart_MouseMove" MouseLeave="Chart_MouseLeave" Cursor="Cross"/>
+       </Grid>
+      </Border>
+     </Grid>
+     <!-- Tab: GPU và VRAM -->
+     <Border x:Name="TabContentGpu" Grid.Row="1" Style="{StaticResource Panel}" Margin="0,10,0,0" Visibility="Collapsed">
+      <Grid>
+       <Grid.RowDefinitions><RowDefinition Height="42"/><RowDefinition Height="28"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+       <Border BorderBrush="#1C3850" BorderThickness="0,0,0,1"><TextBlock Text="GPU và VRAM" Foreground="White" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Margin="12,0"/></Border>
+       <StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0"><Ellipse Width="11" Height="11" Fill="#8B5CF6"/><TextBlock Text="GPU sử dụng" Foreground="#A678FF" FontSize="10" Margin="4,0,12,0"/><Ellipse Width="11" Height="11" Fill="#347DFF"/><TextBlock Text="Bộ nhớ GPU" Foreground="#6AA4FF" FontSize="10" Margin="4,0,0,0"/></StackPanel>
+       <Canvas Grid.Row="2" x:Name="GpuChart" Background="Transparent" Margin="12,0,12,10" SizeChanged="Chart_SizeChanged" MouseMove="Chart_MouseMove" MouseLeave="Chart_MouseLeave" Cursor="Cross"/>
+      </Grid>
+     </Border>
+     <!-- Tab: Disk -->
+     <Border x:Name="TabContentDisk" Grid.Row="1" Style="{StaticResource Panel}" Margin="0,10,0,0" Visibility="Collapsed">
+      <Grid>
+       <Grid.RowDefinitions><RowDefinition Height="42"/><RowDefinition Height="28"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+       <Border BorderBrush="#1C3850" BorderThickness="0,0,0,1"><TextBlock Text="Disk đọc / ghi" Foreground="White" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Margin="12,0"/></Border>
+       <StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0"><Ellipse Width="11" Height="11" Fill="#347DFF"/><TextBlock Text="Đọc" Foreground="#6AA4FF" FontSize="10" Margin="4,0,12,0"/><Ellipse Width="11" Height="11" Fill="#FF7925"/><TextBlock Text="Ghi" Foreground="#FF9B5E" FontSize="10" Margin="4,0,0,0"/></StackPanel>
+       <Canvas Grid.Row="2" x:Name="DiskChart" Background="Transparent" Margin="12,0,12,10" SizeChanged="Chart_SizeChanged" MouseMove="Chart_MouseMove" MouseLeave="Chart_MouseLeave" Cursor="Cross"/>
+      </Grid>
+     </Border>
+     <!-- Tab: Mạng -->
+     <Border x:Name="TabContentNetwork" Grid.Row="1" Style="{StaticResource Panel}" Margin="0,10,0,0" Visibility="Collapsed">
+      <Grid>
+       <Grid.RowDefinitions><RowDefinition Height="42"/><RowDefinition Height="28"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+       <Border BorderBrush="#1C3850" BorderThickness="0,0,0,1">
+        <StackPanel Margin="12,0" VerticalAlignment="Center"><TextBlock Text="Mạng RX / TX" Foreground="White" FontSize="13" FontWeight="SemiBold"/><TextBlock x:Name="NetworkDetailText" Text="NIC vật lý" Foreground="#B3C7DD" FontSize="10" Margin="0,2,0,0"/></StackPanel>
+       </Border>
+       <StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0"><Ellipse Width="11" Height="11" Fill="#20D37B"/><TextBlock Text="RX" Foreground="#20D37B" FontSize="10" Margin="4,0,12,0"/><Ellipse Width="11" Height="11" Fill="#FF7085"/><TextBlock Text="TX" Foreground="#FF9B5E" FontSize="10" Margin="4,0,0,0"/></StackPanel>
+       <Canvas Grid.Row="2" x:Name="NetworkChart" Background="Transparent" Margin="12,0,12,10" SizeChanged="Chart_SizeChanged" MouseMove="Chart_MouseMove" MouseLeave="Chart_MouseLeave" Cursor="Cross"/>
+      </Grid>
+     </Border>
+    </Grid>
+   </Border>
+  </Grid>
 </UserControl>

@@ -81,8 +81,8 @@ namespace V3SClient.window
         private void ApplyInitialWindowSize()
         {
             Rect workArea = SystemParameters.WorkArea;
-            double width = Math.Max(MinWidth, Math.Round(workArea.Width * 0.85));
-            double height = Math.Max(MinHeight, Math.Round(workArea.Height * 0.85));
+            double width = Math.Max(MinWidth, Math.Round(workArea.Width * 1));
+            double height = Math.Max(MinHeight, Math.Round(workArea.Height * 1));
 
             Width = Math.Min(width, workArea.Width);
             Height = Math.Min(height, workArea.Height);

@@ -1157,6 +1157,7 @@
     <Resource Include="images\speaker_off.png" />
     <Resource Include="images\speaker_on.png" />
     <Resource Include="images\zoom_out.png" />
+    <Resource Include="images\nvidia_logo.png" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="images\arrow_square_left.png" />
