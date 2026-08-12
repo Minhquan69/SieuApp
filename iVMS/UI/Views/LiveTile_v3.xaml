@@ -97,6 +97,15 @@
                 </StackPanel>
             </Border>
 
+            <!-- A manually disconnected camera is not offline. Keep its
+                 identity visible and offer the four compact tile actions. -->
+            <Border x:Name="DisconnectedOverlay" Panel.ZIndex="25" Background="{StaticResource VmsSurfaceBrush_v3}" Visibility="Collapsed" IsHitTestVisible="False">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock x:Name="DisconnectedCameraText" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" HorizontalAlignment="Center"/>
+                    <TextBlock x:Name="DisconnectedGroupText" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" HorizontalAlignment="Center" Margin="0,12,0,0"/>
+                </StackPanel>
+            </Border>
+
             <Border x:Name="ErrorOverlay" Panel.ZIndex="30" Background="{StaticResource VmsSurfaceBrush_v3}" Visibility="Collapsed" Padding="8" IsHitTestVisible="True" ClipToBounds="True">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="280">
                     <Icon:PackIconMaterial x:Name="ErrorIcon" Kind="AlertCircleOutline" Width="32" Height="32" Foreground="{StaticResource VmsErrorBrush_v3}" HorizontalAlignment="Center"/>
@@ -109,13 +118,19 @@
             <Popup x:Name="ActionPopup" Placement="AbsolutePoint" AllowsTransparency="True" StaysOpen="True" PopupAnimation="Fade">
             <Border x:Name="ActionBar" Panel.ZIndex="30" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0" Padding="0" Background="Transparent" BorderThickness="0" Opacity="1" IsHitTestVisible="True" MouseEnter="ActionBar_MouseEnter" MouseLeave="ActionBar_MouseLeave">
                 <StackPanel Orientation="Horizontal">
-                    <Button x:Name="ConnectButton" Click="Connect_Click" Style="{StaticResource LiveTileActionPrimaryButton_v3}" ToolTip="Kết nối camera"><Icon:PackIconMaterial Kind="Play" Width="13" Height="13"/></Button>
-                    <Button x:Name="DisconnectButton" Click="Disconnect_Click" Style="{StaticResource LiveTileActionButton_v3}" ToolTip="Ngắt kết nối"><Icon:PackIconMaterial Kind="PowerPlugOff" Width="13" Height="13"/></Button>
-                    <ComboBox x:Name="StreamSelector" Width="105" Height="26" DisplayMemberPath="StreamType" SelectionChanged="StreamSelector_SelectionChanged" Style="{StaticResource VmsComboBoxStyle_v3}" Margin="1" Visibility="Collapsed"/>
-                    <Button x:Name="MuteButton" Click="Mute_Click" Style="{StaticResource LiveTileActionButton_v3}" ToolTip="Tắt âm thanh"><Icon:PackIconMaterial x:Name="MuteIcon" Kind="VolumeHigh" Width="13" Height="13"/></Button>
-                    <Button x:Name="SnapshotButton" Click="Snapshot_Click" Style="{StaticResource LiveTileActionButton_v3}" ToolTip="Chụp ảnh camera này"><Icon:PackIconMaterial Kind="CameraOutline" Width="13" Height="13"/></Button>
+                    <!-- Grid controls are intentionally limited to these four
+                         actions. Legacy connection/audio/snapshot controls
+                         remain below only as non-visual compatibility hosts. -->
+                    <Button x:Name="CollapseActionsButton" Click="CollapseActions_Click" Style="{StaticResource LiveTileActionButton_v3}" ToolTip="Thu gọn thanh công cụ"><Icon:PackIconMaterial Kind="ChevronUp" Width="16" Height="16"/></Button>
                     <Button x:Name="FullscreenButton" Click="Fullscreen_Click" Style="{StaticResource LiveTileActionButton_v3}" ToolTip="Toàn màn hình"><Icon:PackIconMaterial x:Name="FullscreenIcon" Kind="Fullscreen" Width="13" Height="13"/></Button>
+                    <Button x:Name="DisconnectButton" Click="Disconnect_Click" Style="{StaticResource LiveTileActionButton_v3}" ToolTip="Kết nối camera"><Icon:PackIconMaterial x:Name="StreamConnectionIcon" Kind="PowerPlug" Width="14" Height="14"/></Button>
                     <Button x:Name="RemoveButton" Click="Remove_Click" Style="{StaticResource LiveTileActionButton_v3}" Background="#18364B" BorderBrush="#416177" BorderThickness="1" Foreground="{StaticResource VmsErrorBrush_v3}" ToolTip="Xóa camera"><Icon:PackIconMaterial Kind="DeleteOutline" Width="13" Height="13"/></Button>
+                    <StackPanel Visibility="Collapsed">
+                        <Button x:Name="ConnectButton" Click="Connect_Click"/>
+                        <ComboBox x:Name="StreamSelector" DisplayMemberPath="StreamType" SelectionChanged="StreamSelector_SelectionChanged"/>
+                        <Button x:Name="MuteButton" Click="Mute_Click"><Icon:PackIconMaterial x:Name="MuteIcon" Kind="VolumeHigh"/></Button>
+                        <Button x:Name="SnapshotButton" Click="Snapshot_Click"/>
+                    </StackPanel>
                 </StackPanel>
             </Border>
             </Popup>

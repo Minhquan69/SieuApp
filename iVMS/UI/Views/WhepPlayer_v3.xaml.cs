@@ -218,6 +218,15 @@ namespace V3SClient.UI.Views
         private const int StableVideoFrameCount = 6;
         private const int StableVideoFrameWaitMilliseconds = 1500;
         private int _decodedVideoFrameCount;
+        // A prepared native window is not proof that the decoder has output a
+        // valid image.  Keep the WindowsFormsHost hidden until both signals
+        // have happened; otherwise its black/corrupt initial frame wins the
+        // WPF airspace battle over the loading layer.
+        private int _nativeVideoWindowPrepared;
+        private int _playingStateRaised;
+        private IntPtr _decodedFramePadHandle;
+        private int _consecutiveCorruptedDecodedFrames;
+        private int _decoderCorruptionPublished;
         private TaskCompletionSource<bool> _stableVideoFrames =
             new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         private int _aiOverlayEnabled;
@@ -692,6 +701,7 @@ namespace V3SClient.UI.Views
             try
             {
                 _videoWindowHandle = videoWindowHandle;
+                ResetStableVideoFrameWait();
             // Keep the same Direct3D11 decode and render path as the original
             // V3 client.  This avoids software decode and the CPU-side
             // videoconvert copy once several cameras are open.  The URL and
@@ -699,19 +709,20 @@ namespace V3SClient.UI.Views
             // always match the actual selected RTSP stream.
                 // Keep the encoded access-unit stream in Annex-B/NAL form
                 // until after identity.  AI cameras carry their metadata in
-                // H.264/H.265 SEI NAL units, exactly as the original player
-                // reads it; no Kafka/WebSocket metadata is involved here.
-                var videoChain = isH264
-                    ? "rtph264depay ! video/x-h264,stream-format=(string)byte-stream,alignment=(string)nal ! identity name=aiMetadataIdentity ! h264parse ! video/x-h264,stream-format=(string)avc,alignment=(string)au ! d3d11h264dec qos=false"
-                    : "rtph265depay ! video/x-h265,stream-format=(string)byte-stream,alignment=(string)nal ! identity name=aiMetadataIdentity ! h265parse ! video/x-h265,stream-format=(string)hvc1,alignment=(string)au ! d3d11h265dec";
-                var pipelineText =
-                    "rtspsrc name=videoSource protocols=tcp latency=300 timeout=15000000 drop-on-latency=true " +
-                    "videoSource. ! queue leaky=downstream max-size-buffers=8 ! application/x-rtp,media=video ! " +
-                    videoChain + " ! d3d11convert ! queue leaky=downstream max-size-buffers=4 ! " +
-                    "d3d11overlay name=videoOverlay ! d3d11videosink name=videoSink force-aspect-ratio=" +
-                    (PreserveCameraAspectRatio ? "true" : "false") +
-                    " async=false sync=false qos=false " +
-                    "videoSource. ! queue ! application/x-rtp,media=audio ! decodebin ! audioconvert ! volume name=audioVolume mute=" + (_isMuted ? "true" : "false") + " ! autoaudiosink sync=false";
+                // Retain the production-tested RTSP pipeline from the legacy
+                // iVista client. Its element order and timings are intentional
+                // and have been exercised against the deployed camera relays.
+                var pipelineText = isH264
+                    ? "rtspsrc protocols=tcp name=videoSource latency=2000 timeout=300000 do-retransmission=false videoSource. ! " +
+                      "queue leaky=1 name=video-queue ! watchdog timeout=300000 ! rtph264depay ! video/x-h264, stream-format=byte-stream, alignment=nal " +
+                      "! identity name=identity ! h264parse ! video/x-h264, stream-format=(string)avc, alignment=(string)au ! d3d11h264dec qos=false ! d3d11convert ! queue leaky=1 ! d3d11overlay name=videoOverlay ! d3d11videosink name=videoSink force-aspect-ratio=" +
+                      (PreserveCameraAspectRatio ? "true" : "false") +
+                      " async=false sync=false qos=false videoSource. ! queue leaky=1 name=audio-queue ! application/x-rtp,media=audio ! decodebin ! audioconvert ! audioresample ! volume name=audioVolume mute=" + (_isMuted ? "true" : "false") + " ! wasapisink async=false sync=false"
+                    : "rtspsrc name=videoSource latency=2000 timeout=5000 videoSource. ! " +
+                      "queue leaky=1 name=video-queue ! watchdog timeout=15000 ! rtph265depay ! video/x-h265, stream-format=byte-stream, alignment=nal " +
+                      "! identity name=identity ! h265parse ! video/x-h265, stream-format=(string)hvc1, alignment=(string)au ! d3d11h265dec ! d3d11convert ! queue leaky=1 ! d3d11overlay name=videoOverlay ! d3d11videosink name=videoSink force-aspect-ratio=" +
+                      (PreserveCameraAspectRatio ? "true" : "false") +
+                      " async=false sync=false qos=false videoSource. ! queue leaky=1 name=audio-queue ! application/x-rtp,media=audio ! decodebin ! audioconvert ! audioresample ! volume name=audioVolume mute=" + (_isMuted ? "true" : "false") + " ! wasapisink async=false sync=false";
                 pipeline = (Pipeline)Parse.Launch(pipelineText);
                 if (pipeline == null)
                     throw new InvalidOperationException("GStreamer returned an empty playback pipeline.");
@@ -728,7 +739,7 @@ namespace V3SClient.UI.Views
                     _aiOverlayPipeline = pipeline;
                 }
 
-                using (var metadataIdentity = pipeline.GetByName("aiMetadataIdentity"))
+                using (var metadataIdentity = pipeline.GetByName("identity"))
                 {
                     if (metadataIdentity == null)
                         throw new InvalidOperationException("GStreamer did not create the AI metadata identity element.");
@@ -748,17 +759,22 @@ namespace V3SClient.UI.Views
                     source["location"] = rtspUrl;
                 }
                 AttachBusMessagePump(pipeline);
-                ResetStableVideoFrameWait();
+                // Make the active pipeline visible before entering Playing.
+                // A fast RTSP source can decode and invoke the frame probe
+                // synchronously during SetState; publishing it afterwards
+                // loses the only Playing notification and the tile times out.
+                _pipeline = pipeline;
                 if (pipeline.SetState(State.Playing) == StateChangeReturn.Failure)
                     throw new InvalidOperationException("GStreamer could not start the direct RTSP playback pipeline.");
 
-                _pipeline = pipeline;
                 return true;
             }
             catch (Exception ex)
             {
                 _lastPipelineBuildError = ex.Message;
                 LoggerManager.LogException(ex, "Live View _v3 GStreamer pipeline creation failed");
+                if (ReferenceEquals(_pipeline, pipeline))
+                    _pipeline = null;
                 if (pipeline != null) DisposePipelineInstance(pipeline);
                 return false;
             }
@@ -788,6 +804,30 @@ namespace V3SClient.UI.Views
                 buffer.Unmap(mapInfo);
             }
             return PadProbeReturn.Ok;
+        }
+
+        private PadProbeReturn OnDecodedVideoBuffer(Pad pad, PadProbeInfo info)
+        {
+            var buffer = info.Buffer;
+            if (buffer == null || pad == null || pad.Handle != _decodedFramePadHandle)
+                return PadProbeReturn.Ok;
+
+            if ((buffer.Flags & BufferFlags.Corrupted) == 0)
+            {
+                Interlocked.Exchange(ref _consecutiveCorruptedDecodedFrames, 0);
+                // Count readiness at the decoded-buffer boundary rather than
+                // from the overlay draw callback. This is available for every
+                // camera, including streams without AI metadata.
+                ObserveDecodedVideoFrame();
+                return PadProbeReturn.Ok;
+            }
+
+            // A relay can begin in the middle of a GOP. The first H.264/H.265
+            // frames are then legitimately undecodable until the next IDR.
+            // Suppress damaged output but keep the source alive for keyframe
+            // recovery instead of disconnecting after three startup frames.
+            Interlocked.Increment(ref _consecutiveCorruptedDecodedFrames);
+            return PadProbeReturn.Drop;
         }
 
         private void ParseAiSeiNal(byte[] data)
@@ -926,7 +966,6 @@ namespace V3SClient.UI.Views
         // disposed from this callback.
         protected void Draw(object o, SignalArgs args)
         {
-            ObserveDecodedVideoFrame(o);
             AiMetadataFrame_v3 incomingFrame;
             if (_aiResult.TryTake(out incomingFrame, 0))
                 Interlocked.Exchange(ref _lastAiFrame, incomingFrame);
@@ -1248,24 +1287,42 @@ namespace V3SClient.UI.Views
         private void ResetStableVideoFrameWait()
         {
             Interlocked.Exchange(ref _decodedVideoFrameCount, 0);
+            Interlocked.Exchange(ref _nativeVideoWindowPrepared, 0);
+            Interlocked.Exchange(ref _playingStateRaised, 0);
+            Interlocked.Exchange(ref _decodedFramePadHandle, IntPtr.Zero);
+            Interlocked.Exchange(ref _consecutiveCorruptedDecodedFrames, 0);
+            Interlocked.Exchange(ref _decoderCorruptionPublished, 0);
             var replacement = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             var previous = Interlocked.Exchange(ref _stableVideoFrames, replacement);
             previous.TrySetResult(true);
         }
 
-        private void ObserveDecodedVideoFrame(object sender)
+        private void ObserveDecodedVideoFrame()
         {
-            // GStreamer can finish a draw callback from a disposed pipeline
-            // while a replacement is being built.  Count only the active
-            // overlay so old frames never make a new stream look ready.
-            lock (_aiRendererSync)
-            {
-                if (!ReferenceEquals(_aiOverlayElement, sender)) return;
-            }
-
             if (Interlocked.Increment(ref _decodedVideoFrameCount) != StableVideoFrameCount)
                 return;
             Volatile.Read(ref _stableVideoFrames).TrySetResult(true);
+            PublishPlayingWhenVideoIsStable();
+        }
+
+        private void PublishPlayingWhenVideoIsStable()
+        {
+            if (Volatile.Read(ref _nativeVideoWindowPrepared) == 0 ||
+                Volatile.Read(ref _decodedVideoFrameCount) < StableVideoFrameCount ||
+                Interlocked.CompareExchange(ref _playingStateRaised, 1, 0) != 0)
+                return;
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                // A late callback from a just-disposed pipeline must not
+                // reveal a replacement/empty tile.
+                if (Volatile.Read(ref _disposed) != 0 || _pipeline == null)
+                    return;
+                StatusPanel.Visibility = Visibility.Collapsed;
+                _useAlternateCodec = false;
+                _alternateCodecAttempted = false;
+                RaiseState(WhepPlaybackState_v3.Playing);
+            }), System.Windows.Threading.DispatcherPriority.Render);
         }
 
         private static SolidColorBrush GetRoiBrush(int index, SolidColorBrush first, SolidColorBrush second,

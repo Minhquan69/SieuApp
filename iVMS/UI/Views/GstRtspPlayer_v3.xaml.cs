@@ -76,14 +76,18 @@ namespace V3SClient.UI.Views
 
         private void CreatePipeline(string rtspUrl, bool isH264)
         {
-            var videoChain = isH264
-                ? "rtph264depay ! h264parse ! d3d11h264dec qos=false"
-                : "rtph265depay ! h265parse ! d3d11h265dec";
-            var pipelineText =
-                "rtspsrc name=videoSource protocols=tcp latency=300 timeout=15000000 do-retransmission=false " +
-                "videoSource. ! queue leaky=downstream max-size-buffers=8 ! application/x-rtp,media=video ! " +
-                videoChain +
-                " ! d3d11convert ! d3d11overlay name=videoOverlay ! d3d11videosink async=false sync=false qos=false";
+            // Same production-tested RTSP topology used by models.RtspPlayer
+            // and the legacy client. Keep its queue order/timeouts identical
+            // so floating/secondary live surfaces behave like the main wall.
+            var pipelineText = isH264
+                ? "rtspsrc protocols=tcp name=videoSource latency=2000 timeout=300000 do-retransmission=false videoSource. ! " +
+                  "queue leaky=1 name=video-queue ! watchdog timeout=300000 ! rtph264depay ! video/x-h264, stream-format=byte-stream, alignment=nal " +
+                  "! identity name=identity ! h264parse ! video/x-h264, stream-format=(string)avc, alignment=(string)au ! d3d11h264dec qos=false ! d3d11convert ! queue leaky=1 ! d3d11overlay name=videoOverlay ! d3d11videosink async=false sync=false qos=false " +
+                  "videoSource. ! queue leaky=1 name=audio-queue ! application/x-rtp,media=audio ! decodebin ! audioconvert ! audioresample ! volume name=audioVolume ! wasapisink async=false sync=false"
+                : "rtspsrc name=videoSource latency=2000 timeout=5000 videoSource. ! " +
+                  "queue leaky=1 name=video-queue ! watchdog timeout=15000 ! rtph265depay ! video/x-h265, stream-format=byte-stream, alignment=nal " +
+                  "! identity name=identity ! h265parse ! video/x-h265, stream-format=(string)hvc1, alignment=(string)au ! d3d11h265dec ! d3d11convert ! queue leaky=1 ! d3d11overlay name=videoOverlay ! d3d11videosink async=false sync=false qos=false " +
+                  "videoSource. ! queue leaky=1 name=audio-queue ! application/x-rtp,media=audio ! decodebin ! audioconvert ! audioresample ! volume name=audioVolume ! wasapisink async=false sync=false";
 
             try
             {

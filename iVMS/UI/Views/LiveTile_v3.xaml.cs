@@ -65,13 +65,9 @@ namespace V3SClient.UI.Views
         public LiveTile_v3()
         {
             InitializeComponent();
-            // Match the web tile controls: compact square actions and a
-            // clearly destructive red disconnect action.
+            // Match the compact four-action grid toolbar.
             ConnectButton.Width = DisconnectButton.Width = 28;
             ConnectButton.Height = DisconnectButton.Height = 28;
-            DisconnectButton.Background = (Brush)FindResource("VmsErrorBrush_v3");
-            DisconnectButton.BorderBrush = (Brush)FindResource("VmsErrorBrush_v3");
-            DisconnectButton.Foreground = (Brush)FindResource("VmsTextInverseBrush_v3");
             _loadingSpinnerTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(30) };
             _loadingSpinnerTimer.Tick += LoadingSpinnerTimer_Tick;
             _retryTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
@@ -788,7 +784,16 @@ namespace V3SClient.UI.Views
         }
 
         private async void Connect_Click(object sender, RoutedEventArgs e) { await ConnectAsync(); }
-        private void Disconnect_Click(object sender, RoutedEventArgs e) { Disconnect(); }
+        private async void Disconnect_Click(object sender, RoutedEventArgs e)
+        {
+            if (Slot == null || Slot.Camera == null) return;
+            if (Slot.State == LiveConnectionState_v3.Connected ||
+                Slot.State == LiveConnectionState_v3.Connecting)
+                Disconnect();
+            else
+                await ConnectAsync();
+        }
+        private void CollapseActions_Click(object sender, RoutedEventArgs e) { HideActions(); }
         private void Remove_Click(object sender, RoutedEventArgs e) { RemoveRequested?.Invoke(this, EventArgs.Empty); }
         private void Fullscreen_Click(object sender, RoutedEventArgs e) { FullscreenRequested?.Invoke(this, EventArgs.Empty); }
         private void Snapshot_Click(object sender, RoutedEventArgs e) { SnapshotRequested?.Invoke(this, EventArgs.Empty); }
@@ -1058,7 +1063,8 @@ namespace V3SClient.UI.Views
             var empty = Slot == null || Slot.Camera == null;
             var showCameraId = !empty;
             var reportedOffline = !empty && Slot.Camera.is_online == false;
-            var showVideo = !empty && !reportedOffline && Slot.State != LiveConnectionState_v3.Error &&
+            var manuallyDisconnected = !empty && !reportedOffline && Slot.State == LiveConnectionState_v3.Offline;
+            var showVideo = !empty && !reportedOffline && !manuallyDisconnected && Slot.State != LiveConnectionState_v3.Error &&
                 Slot.State != LiveConnectionState_v3.Retrying &&
                 Slot.State != LiveConnectionState_v3.Connecting &&
                 Slot.State != LiveConnectionState_v3.Disconnecting;
@@ -1069,6 +1075,11 @@ namespace V3SClient.UI.Views
             MainPlayer.SetPresentationVisible(showVideo && _usingMainPresentation);
             EmptyOverlay.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
             OfflineOverlay.Visibility = reportedOffline ? Visibility.Visible : Visibility.Collapsed;
+            DisconnectedOverlay.Visibility = manuallyDisconnected ? Visibility.Visible : Visibility.Collapsed;
+            DisconnectedCameraText.Text = manuallyDisconnected
+                ? Slot.DisplayName + " - " + (string.IsNullOrWhiteSpace(Slot.StreamLabel) ? "main" : Slot.StreamLabel)
+                : string.Empty;
+            DisconnectedGroupText.Text = manuallyDisconnected ? GetCameraGroupName(Slot.Camera) : string.Empty;
             // Keep an in-tile fallback for error/retrying states. The native
             // video surface is hidden in those states, so the WPF badge is
             // visible and guarantees that every selected camera still shows
@@ -1082,6 +1093,16 @@ namespace V3SClient.UI.Views
                 _actionsPinned = false;
                 HideActions();
             }
+            else if (manuallyDisconnected)
+            {
+                _actionsPinned = true;
+                ActionPopup.IsOpen = true;
+                ActionBar.Opacity = 1;
+                ActionBar.IsHitTestVisible = true;
+                Dispatcher.BeginInvoke(new Action(PositionActionPopup), DispatcherPriority.Loaded);
+            }
+            else if (!_fullscreenMode)
+                _actionsPinned = false;
             ErrorOverlay.Visibility = !empty && !reportedOffline && Slot.HasError &&
                 (Slot.State == LiveConnectionState_v3.Error || Slot.State == LiveConnectionState_v3.Retrying)
                 ? Visibility.Visible : Visibility.Collapsed;
@@ -1133,8 +1154,20 @@ namespace V3SClient.UI.Views
             MainPlayer.SetCameraBadge(cameraBadgeText, showCameraId && showVideo && _usingMainPresentation,
                 Slot != null && Slot.State == LiveConnectionState_v3.Connected,
                 Slot != null && Slot.HasError && Slot.State == LiveConnectionState_v3.Error);
-            ConnectButton.Visibility = !empty && !reportedOffline && (Slot == null || !Slot.IsConnected) ? Visibility.Visible : Visibility.Collapsed;
-            DisconnectButton.Visibility = !empty && Slot != null && (Slot.IsConnected || Slot.State == LiveConnectionState_v3.Connecting) ? Visibility.Visible : Visibility.Collapsed;
+            // The visible grid bar is fixed to four actions. Keep the legacy
+            // connect control hidden and retain the broken-link action for
+            // every populated slot, including a camera that is reconnecting.
+            ConnectButton.Visibility = Visibility.Collapsed;
+            DisconnectButton.Visibility = !empty ? Visibility.Visible : Visibility.Collapsed;
+            var streamIsActive = Slot != null &&
+                (Slot.State == LiveConnectionState_v3.Connected || Slot.State == LiveConnectionState_v3.Connecting);
+            StreamConnectionIcon.Kind = streamIsActive
+                ? MahApps.Metro.IconPacks.PackIconMaterialKind.PowerPlugOff
+                : MahApps.Metro.IconPacks.PackIconMaterialKind.PowerPlug;
+            DisconnectButton.Foreground = (Brush)FindResource(streamIsActive
+                ? "VmsErrorBrush_v3"
+                : "VmsSuccessBrush_v3");
+            DisconnectButton.ToolTip = streamIsActive ? "Ngắt kết nối camera" : "Kết nối camera";
             StreamSelector.ItemsSource = empty || Slot.Camera.Streams == null ? null : Slot.Camera.Streams;
             StreamSelector.SelectedItem = empty ? null : Slot.SelectedStream;
             // Stream selection is managed by the camera/session, while the
@@ -1153,6 +1186,37 @@ namespace V3SClient.UI.Views
             }
             _changingStream = false;
             OpenCameraBadgeIfActive();
+        }
+
+        private static string GetCameraGroupName(Camera camera)
+        {
+            if (camera == null) return string.Empty;
+            var groups = GlobalSystem.Instance == null || GlobalSystem.Instance.CameraGroups == null
+                ? null
+                : GlobalSystem.Instance.CameraGroups.CamGroupList;
+            var group = EnumerateCameraGroups(groups).FirstOrDefault(item => item.Cameras != null &&
+                item.Cameras.Any(member => ReferenceEquals(member, camera) ||
+                    (!string.IsNullOrWhiteSpace(member == null ? null : member.camID) &&
+                     string.Equals(member.camID, camera.camID, StringComparison.OrdinalIgnoreCase))));
+            // Camera.groupID is an internal numeric Group_Id, while the live
+            // sidebar is grouped by API Unit_Name. Resolve via membership so
+            // users see the real unit/group label (for example, “Hà Nội”).
+            return !string.IsNullOrWhiteSpace(group == null ? null : group.name)
+                ? group.name
+                : "Chưa phân nhóm";
+        }
+
+        private static System.Collections.Generic.IEnumerable<VMTalkGroup> EnumerateCameraGroups(
+            System.Collections.Generic.IEnumerable<VMTalkGroup> groups)
+        {
+            if (groups == null) yield break;
+            foreach (var group in groups)
+            {
+                if (group == null) continue;
+                yield return group;
+                foreach (var child in EnumerateCameraGroups(group.SubGroups))
+                    yield return child;
+            }
         }
 
         public void Dispose()
