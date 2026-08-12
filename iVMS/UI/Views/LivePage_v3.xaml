@@ -77,6 +77,21 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+        <Style x:Key="AiFeedRefreshInputStyle_v3" TargetType="TextBox">
+            <Setter Property="Width" Value="42"/><Setter Property="Height" Value="30"/><Setter Property="Padding" Value="7,2"/>
+            <Setter Property="Background" Value="#0B2032"/><Setter Property="Foreground" Value="#E2EEF7"/>
+            <Setter Property="BorderBrush" Value="#2A5574"/><Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize" Value="11"/><Setter Property="HorizontalContentAlignment" Value="Center"/><Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox"><Border x:Name="InputBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6"><ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"/></Border><ControlTemplate.Triggers><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="InputBorder" Property="BorderBrush" Value="#3B82F6"/><Setter TargetName="InputBorder" Property="Background" Value="#102A40"/></Trigger><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="InputBorder" Property="BorderBrush" Value="#3C6E91"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+        </Style>
+        <Style x:Key="AiFeedIconButtonStyle_v3" TargetType="Button">
+            <Setter Property="Width" Value="30"/><Setter Property="Height" Value="30"/><Setter Property="Padding" Value="0"/>
+            <Setter Property="Background" Value="#0D2639"/><Setter Property="BorderBrush" Value="#244B68"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Foreground" Value="#C7D9E8"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="ButtonBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ButtonBorder" Property="Background" Value="#153954"/><Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#3B82F6"/></Trigger><Trigger Property="IsPressed" Value="True"><Setter TargetName="ButtonBorder" Property="Background" Value="#1A4C70"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter TargetName="ButtonBorder" Property="Opacity" Value="0.45"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+        </Style>
+        <Style x:Key="AiFeedDetailButtonStyle_v3" TargetType="Button" BasedOn="{StaticResource AiFeedIconButtonStyle_v3}">
+            <Setter Property="Width" Value="Auto"/><Setter Property="Padding" Value="10,0"/><Setter Property="Foreground" Value="#CFE4F5"/>
+        </Style>
     </UserControl.Resources>
     <Grid>
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
@@ -412,12 +427,12 @@
                     <TextBlock Text="Sự kiện AI mới nhất" Foreground="#9FB3C8" FontSize="10" Margin="10,0,0,0" VerticalAlignment="Center"/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBox x:Name="AiFeedRefreshText" Text="5" Width="34" Height="24" Padding="5,1" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Background="#0B2032" Foreground="#CBD5E1" BorderBrush="#24445E" FontSize="10" VerticalAlignment="Center" Margin="0,0,3,0" ToolTip="Nhập số giây rồi bấm Enter" KeyDown="AiFeedRefreshSeconds_KeyDown"/>
-                    <TextBlock Text="s" Foreground="#CBD5E1" FontSize="10" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <Button Click="OpenAiFeedDetails_Click" Content="Xem chi tiết" Style="{StaticResource SecondaryButtonStyle_v3}" Background="Transparent" BorderBrush="Transparent" BorderThickness="0" Padding="8,3" Margin="0,0,4,0" ToolTip="Mở trang Sự kiện" FontSize="10"/>
-                    <Button x:Name="AiFeedPauseButton" Click="ToggleAiFeedRefresh_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Background="Transparent" BorderBrush="Transparent" BorderThickness="0" Padding="6,3" Margin="0,0,4,0" ToolTip="Dừng tự làm mới"><Icon:PackIconMaterial x:Name="AiFeedPauseIcon" Kind="Pause" Width="13" Height="13"/></Button>
-                    <Button Click="RefreshAiEventFeed_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Background="Transparent" BorderBrush="Transparent" BorderThickness="0" Padding="6,3" ToolTip="Làm mới AI Feed"><Icon:PackIconMaterial Kind="Refresh" Width="13" Height="13"/></Button>
-                    <Button x:Name="AiFeedCollapseButton" Click="ToggleAiFeedCollapsed_Click" Style="{StaticResource SecondaryButtonStyle_v3}" Background="Transparent" BorderBrush="Transparent" BorderThickness="0" Padding="6,3" Margin="4,0,0,0" ToolTip="Thu gọn AI Feed"><Icon:PackIconMaterial x:Name="AiFeedCollapseIcon" Kind="ChevronUp" Width="13" Height="13"/></Button>
+                    <TextBox x:Name="AiFeedRefreshText" Text="5" Style="{StaticResource AiFeedRefreshInputStyle_v3}" VerticalAlignment="Center" Margin="0,0,4,0" ToolTip="Nhập số giây rồi bấm Enter" KeyDown="AiFeedRefreshSeconds_KeyDown"/>
+                    <TextBlock Text="s" Foreground="#AFC8DA" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <Button Click="OpenAiFeedDetails_Click" Content="Xem chi tiết" Style="{StaticResource AiFeedDetailButtonStyle_v3}" Margin="0,0,5,0" ToolTip="Mở trang Sự kiện" FontSize="11" FontWeight="SemiBold"/>
+                    <Button x:Name="AiFeedPauseButton" Click="ToggleAiFeedRefresh_Click" Style="{StaticResource AiFeedIconButtonStyle_v3}" Margin="0,0,5,0" ToolTip="Dừng tự làm mới"><Icon:PackIconMaterial x:Name="AiFeedPauseIcon" Kind="Pause" Width="15" Height="15"/></Button>
+                    <Button Click="RefreshAiEventFeed_Click" Style="{StaticResource AiFeedIconButtonStyle_v3}" Margin="0,0,5,0" ToolTip="Làm mới AI Feed"><Icon:PackIconMaterial Kind="Refresh" Width="17" Height="17"/></Button>
+                    <Button x:Name="AiFeedCollapseButton" Click="ToggleAiFeedCollapsed_Click" Style="{StaticResource AiFeedIconButtonStyle_v3}" ToolTip="Thu gọn AI Feed"><Icon:PackIconMaterial x:Name="AiFeedCollapseIcon" Kind="ChevronUp" Width="16" Height="16"><Icon:PackIconMaterial.RenderTransform><ScaleTransform ScaleY="-1" CenterY="8"/></Icon:PackIconMaterial.RenderTransform></Icon:PackIconMaterial></Button>
                 </StackPanel>
                 <ScrollViewer x:Name="AiFeedScroller" Grid.Row="1" Grid.ColumnSpan="2" Margin="0,7,0,0" HorizontalScrollBarVisibility="Visible" VerticalScrollBarVisibility="Disabled" CanContentScroll="False" PanningMode="HorizontalOnly" PanningDeceleration="0.001" HorizontalContentAlignment="Left">
                     <ItemsControl ItemsSource="{Binding AiEventFeedItems, ElementName=LivePageRoot}">

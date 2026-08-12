@@ -1,5 +1,36 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Defaults only add a cursor; they deliberately do not replace legacy
+         templates.  Every unstyled clickable control therefore behaves the
+         same across the application without visual regressions. -->
+    <Style TargetType="{x:Type Button}">
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style TargetType="{x:Type ToggleButton}">
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style TargetType="{x:Type MenuItem}">
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <!--
+        Shared interaction rules for migrated views.  Keep these as property
+        triggers (rather than Storyboards) so lists, grids and live video
+        controls stay responsive while their data is refreshed.
+    -->
+    <Style x:Key="VmsFocusVisual_v3" TargetType="{x:Type Control}">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Control}">
+                    <Border BorderBrush="{StaticResource VmsFocusBrush_v3}"
+                            BorderThickness="1"
+                            CornerRadius="5"
+                            SnapsToDevicePixels="True" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style x:Key="PrimaryButtonStyle_v3" TargetType="{x:Type Button}">
         <Setter Property="MinHeight" Value="32" />
         <Setter Property="Padding" Value="14,6" />
@@ -9,15 +40,17 @@
         <Setter Property="Foreground" Value="{StaticResource VmsTextInverseBrush_v3}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource VmsFocusVisual_v3}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type Button}">
-                    <Border x:Name="Root" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="4" SnapsToDevicePixels="True">
+                    <Border x:Name="Root" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6" SnapsToDevicePixels="True">
                         <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True" />
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Root" Property="Background" Value="{StaticResource VmsPrimaryHoverBrush_v3}" /><Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource VmsPrimaryHoverBrush_v3}" /></Trigger>
                         <Trigger Property="IsPressed" Value="True"><Setter TargetName="Root" Property="Background" Value="{StaticResource VmsPrimaryPressedBrush_v3}" /><Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource VmsPrimaryPressedBrush_v3}" /></Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource VmsFocusBrush_v3}" /></Trigger>
                         <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Root" Property="Opacity" Value="0.45" /></Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -29,6 +62,54 @@
         <Setter Property="Background" Value="{StaticResource VmsSurface2Brush_v3}" />
         <Setter Property="BorderBrush" Value="{StaticResource VmsBorderBrush_v3}" />
         <Setter Property="Foreground" Value="{StaticResource VmsTextPrimaryBrush_v3}" />
+    </Style>
+
+    <!-- Square action buttons (refresh, close, toolbar actions) can share this
+         style without creating a new hover template in each page. -->
+    <Style x:Key="VmsIconButtonStyle_v3" TargetType="{x:Type Button}" BasedOn="{StaticResource SecondaryButtonStyle_v3}">
+        <Setter Property="MinWidth" Value="32" />
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="Padding" Value="6" />
+    </Style>
+
+    <!-- One visual contract for refresh everywhere: compact square, quiet at
+         rest, clear blue border on hover and a pressed state without motion. -->
+    <Style x:Key="VmsRefreshButtonStyle_v3" TargetType="{x:Type Button}" BasedOn="{StaticResource VmsIconButtonStyle_v3}">
+        <Setter Property="Width" Value="36" />
+        <Setter Property="Height" Value="36" />
+        <Setter Property="MinWidth" Value="36" />
+        <Setter Property="MinHeight" Value="36" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Background" Value="{StaticResource VmsSurface2Brush_v3}" />
+        <Setter Property="BorderBrush" Value="{StaticResource VmsBorderStrongBrush_v3}" />
+        <Setter Property="Foreground" Value="{StaticResource VmsTextSecondaryBrush_v3}" />
+    </Style>
+
+    <!-- Reusable selectable item for side panels and compact result lists. -->
+    <Style x:Key="VmsListBoxItemStyle_v3" TargetType="{x:Type ListBoxItem}">
+        <Setter Property="Padding" Value="10,7" />
+        <Setter Property="Margin" Value="0,1" />
+        <Setter Property="Foreground" Value="{StaticResource VmsTextPrimaryBrush_v3}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource VmsFocusVisual_v3}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ListBoxItem}">
+                    <Border x:Name="Root" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="5" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Root" Property="Background" Value="{StaticResource VmsPrimarySofterBrush_v3}" /><Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource VmsPrimaryBorderBrush_v3}" /></Trigger>
+                        <Trigger Property="IsSelected" Value="True"><Setter TargetName="Root" Property="Background" Value="{StaticResource VmsPrimarySoftBrush_v3}" /><Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource VmsPrimaryBrush_v3}" /></Trigger>
+                        <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Root" Property="Opacity" Value="0.45" /></Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <Style x:Key="VmsSidebarToggleButton_v3" TargetType="{x:Type Button}">

@@ -41,12 +41,18 @@
    <Border Grid.Row="2" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="0,1,0,0" Padding="10,8,10,10">
     <StackPanel>
      <StackPanel x:Name="ExpandedFooter">
-      <StackPanel Orientation="Horizontal"><Ellipse Width="8" Height="8" Fill="{StaticResource VmsSuccessBrush_v3}" Margin="0,0,7,0" VerticalAlignment="Center"/><TextBlock Text="Hoạt động bình thường" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" FontSize="10"/></StackPanel>
+      <Grid Height="30">
+       <Grid.ColumnDefinitions><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+       <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+       <Icon:PackIconMaterial Grid.RowSpan="2" Kind="Pulse" Width="14" Height="14" VerticalAlignment="Center" Foreground="{Binding ConnectionStatusBrush}"/>
+       <TextBlock Grid.Column="1" Text="Trạng thái hệ thống" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontSize="10" FontWeight="SemiBold" VerticalAlignment="Bottom"/>
+       <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ConnectionStatusText}" Foreground="{Binding ConnectionStatusBrush}" FontSize="10" Margin="0,1,0,0"/>
+      </Grid>
       <StackPanel Orientation="Horizontal" Margin="0,8,0,0"><Icon:PackIconMaterial Kind="ClockOutline" Width="14" Height="14" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" Margin="0,0,6,0"/><TextBlock Text="{Binding ServerTime, StringFormat={}{0:dd/MM/yyyy, HH:mm:ss}}" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" FontSize="10"/></StackPanel>
       <TextBlock Text="Version — v2.5.0" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="9" Margin="0,7,0,8"/>
      </StackPanel>
      <StackPanel x:Name="CollapsedFooter" Visibility="Collapsed" HorizontalAlignment="Center" Width="34">
-      <Ellipse Width="8" Height="8" Fill="{StaticResource VmsSuccessBrush_v3}" HorizontalAlignment="Center" Margin="0,1,0,9"/>
+      <Ellipse Width="8" Height="8" Fill="{Binding ConnectionStatusBrush}" ToolTip="{Binding ConnectionStatusText}" HorizontalAlignment="Center" Margin="0,1,0,9"/>
       <Icon:PackIconMaterial Kind="ClockOutline" Width="14" Height="14" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" HorizontalAlignment="Center" Margin="0,0,0,7"/>
       <TextBlock Text="v2.4.1" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="8" HorizontalAlignment="Center"/>
      </StackPanel>

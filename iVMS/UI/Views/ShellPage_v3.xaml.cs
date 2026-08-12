@@ -208,6 +208,8 @@ namespace V3SClient.UI.Views
             if (module == null || ReferenceEquals(module, _activeModule))
                 return;
 
+            var isNewModule = !_moduleHost.Children.Contains(module);
+
             if (_activeModule != null)
             {
                 // LiveCharts keeps an internal dispatcher timer. Keep chart pages in
@@ -223,6 +225,45 @@ namespace V3SClient.UI.Views
                 _moduleHost.Children.Add(module);
             module.Visibility = Visibility.Visible;
             _activeModule = module;
+
+            // Only surface a syncing state for a newly created view. Cached
+            // views are already initialized and switching back to them should
+            // remain instant and quiet.
+            if (isNewModule)
+                TrackInitialSynchronization(module);
+        }
+
+        private void TrackInitialSynchronization(UIElement module)
+        {
+            if (_viewModel == null || module == null)
+                return;
+
+            _viewModel.BeginSynchronization();
+            var element = module as FrameworkElement;
+            if (element == null)
+            {
+                Dispatcher.BeginInvoke(new System.Action(() => _viewModel?.EndSynchronization()),
+                    System.Windows.Threading.DispatcherPriority.ContextIdle);
+                return;
+            }
+
+            RoutedEventHandler loaded = null;
+            loaded = (sender, args) =>
+            {
+                element.Loaded -= loaded;
+                Dispatcher.BeginInvoke(new System.Action(() => _viewModel?.EndSynchronization()),
+                    System.Windows.Threading.DispatcherPriority.ContextIdle);
+            };
+
+            if (element.IsLoaded)
+            {
+                Dispatcher.BeginInvoke(new System.Action(() => _viewModel?.EndSynchronization()),
+                    System.Windows.Threading.DispatcherPriority.ContextIdle);
+            }
+            else
+            {
+                element.Loaded += loaded;
+            }
         }
     }
 }

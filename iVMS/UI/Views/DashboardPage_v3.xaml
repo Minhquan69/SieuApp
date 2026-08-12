@@ -13,7 +13,7 @@
         <Setter Property="UIElement.ClipToBounds" Value="True">
         </Setter>
       </Style>
-      <Style x:Key="Card" TargetType="{x:Type Border}" BasedOn="{StaticResource Panel}">
+        <Style x:Key="Card" TargetType="{x:Type Border}" BasedOn="{StaticResource Panel}">
         <Setter Property="Border.Padding" Value="20,20,20,5">
         </Setter>
         <Setter Property="FrameworkElement.MinHeight" Value="112">
@@ -22,28 +22,18 @@
         </Setter>
         <Setter Property="FrameworkElement.Cursor" Value="Hand">
         </Setter>
-        <Setter Property="UIElement.RenderTransformOrigin" Value="0.5,0.5">
-        </Setter>
-        <Style.Triggers>
+          <Setter Property="UIElement.RenderTransformOrigin" Value="0.5,0.5">
+          </Setter>
+          <Style.Triggers>
           <Trigger Property="UIElement.IsMouseOver" Value="True">
-            <Setter Property="Panel.Background" Value="#FF102A3C">
-            </Setter>
             <Setter Property="UIElement.RenderTransform">
               <Setter.Value>
-                <ScaleTransform ScaleX="1.025" ScaleY="1.025">
-                </ScaleTransform>
+                <ScaleTransform ScaleX="1.012" ScaleY="1.012"/>
               </Setter.Value>
             </Setter>
-            <Setter Property="Panel.ZIndex" Value="2">
-            </Setter>
-            <Setter Property="UIElement.Effect">
-              <Setter.Value>
-                <DropShadowEffect Color="#2862B5" BlurRadius="16" ShadowDepth="0" Opacity="0.32">
-                </DropShadowEffect>
-              </Setter.Value>
-            </Setter>
+            <Setter Property="Panel.ZIndex" Value="2"/>
           </Trigger>
-        </Style.Triggers>
+          </Style.Triggers>
       </Style>
       <Style x:Key="HeaderButton" TargetType="{x:Type Button}">
         <Setter Property="Panel.Background" Value="#FF0B2032">
@@ -90,6 +80,14 @@
         </Setter>
         <Setter Property="TextElement.FontSize" Value="13">
         </Setter>
+      </Style>
+      <Style x:Key="InfrastructureMetricBar" TargetType="{x:Type ProgressBar}">
+        <Setter Property="Height" Value="8"/>
+        <Setter Property="Background" Value="#FF203E56"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="0"/>
+        <!-- Giữ template ProgressBar chuẩn: template Border trước đó không có Track
+             nên WPF không thể đo độ rộng phần đã hoàn thành từ Value/Maximum. -->
       </Style>
       <Style x:Key="CameraRangeButton" TargetType="{x:Type Button}">
         <Setter Property="Panel.Background" Value="#00FFFFFF">
@@ -250,7 +248,7 @@
   <Grid>
     <Grid Margin="10">
       <Grid.RowDefinitions>
-        <RowDefinition Height="36">
+        <RowDefinition Height="42">
         </RowDefinition>
         <RowDefinition Height="122">
         </RowDefinition>
@@ -269,11 +267,11 @@
         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
           <TextBlock x:Name="UpdatedText" Foreground="#FFC7D9E9" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0">
           </TextBlock>
-          <Button Style="{StaticResource HeaderButton}" ToolTip="Làm mới" Click="Refresh_Click">
+          <Button Style="{StaticResource VmsRefreshButtonStyle_v3}" Width="34" Height="34" MinWidth="34" MinHeight="34" Margin="0,0,8,0" ToolTip="Làm mới" Click="Refresh_Click">
             <Icon:PackIconMaterial Kind="Refresh" Width="15" Height="15">
             </Icon:PackIconMaterial>
           </Button>
-          <Button x:Name="AutoRefreshButton" Style="{StaticResource HeaderButton}" Content="Auto 30s" Foreground="#FF367BFF" BorderBrush="#FF2862B5" Margin="0">
+          <Button x:Name="AutoRefreshButton" Style="{StaticResource HeaderButton}" Content="Auto 30s" Foreground="#FF367BFF" BorderBrush="#FF2862B5" Margin="0" Click="AutoRefresh_Click">
           </Button>
         </StackPanel>
       </Grid>
@@ -367,7 +365,104 @@
           </Grid>
         </Border>
       </Grid>
-      <UniformGrid Grid.Row="1" Rows="1" Columns="6" Margin="0,3,0,2">
+      <!-- Compact overview: visual bindings below reuse the existing metric controls so no data logic changes. -->
+      <UniformGrid Grid.Row="1" Rows="1" Columns="4" Margin="0,3,0,2">
+        <Border Style="{StaticResource Card}" BorderBrush="#FF287BFF" Margin="0,0,7,0" Padding="20,12">
+          <Border.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+              <GradientStop Color="#FF103967" Offset="0"/>
+              <GradientStop Color="#FF091D35" Offset="1"/>
+            </LinearGradientBrush>
+          </Border.Background>
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="68"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Border Width="58" Height="58" CornerRadius="29" Background="#FF123C70" VerticalAlignment="Center">
+              <Icon:PackIconMaterial Kind="Cctv" Foreground="#FF4D91FF" Width="28" Height="28" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+              <TextBlock Text="Camera sức khỏe" Foreground="#FFD0E3F8" FontSize="13" FontWeight="SemiBold"/>
+              <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                <TextBlock Text="{Binding Text, ElementName=OverviewTotalText}" Foreground="#FFFFFFFF" FontSize="32" FontWeight="Bold"/>
+                <TextBlock Text=" camera" Foreground="#FFB9CAE0" FontSize="13" VerticalAlignment="Bottom" Margin="5,0,0,6"/>
+                <TextBlock Text="{Binding Text, ElementName=OverviewOnlineText}" Foreground="#FF51DD91" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Bottom" Margin="10,0,0,6"/>
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Margin="0,1,0,0">
+                <TextBlock Text="{Binding Text, ElementName=OverviewOnlineCountText}" Foreground="#FF51DD91" FontSize="11" FontWeight="SemiBold"/>
+                <Rectangle Width="1" Height="12" Fill="#FF355069" Margin="10,0"/>
+                <TextBlock Text="{Binding Text, ElementName=OverviewOfflineCountText}" Foreground="#FFFF879A" FontSize="11" FontWeight="SemiBold"/>
+              </StackPanel>
+            </StackPanel>
+          </Grid>
+        </Border>
+        <Border Style="{StaticResource Card}" BorderBrush="#FF9B5CFF" Margin="0,0,7,0" Padding="20,12">
+          <Border.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+              <GradientStop Color="#FF2B1E58" Offset="0"/>
+              <GradientStop Color="#FF151630" Offset="1"/>
+            </LinearGradientBrush>
+          </Border.Background>
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="68"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Border Width="58" Height="58" CornerRadius="29" Background="#FF392064" VerticalAlignment="Center">
+              <Icon:PackIconMaterial Kind="CarMultiple" Foreground="#FFAD72FF" Width="28" Height="28" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+              <TextBlock Text="Phương tiện hôm nay" Foreground="#FFE0D0FB" FontSize="13" FontWeight="SemiBold"/>
+              <TextBlock Text="{Binding Text, ElementName=OverviewVehicleText}" Foreground="#FFFFFFFF" FontSize="32" FontWeight="Bold" Margin="0,0,0,0"/>
+              <TextBlock Text="{Binding Text, ElementName=OverviewVehicleDetailText}" Foreground="#FFFF96AA" FontSize="12" TextTrimming="CharacterEllipsis"/>
+            </StackPanel>
+          </Grid>
+        </Border>
+        <Border Style="{StaticResource Card}" BorderBrush="#FF20BB77" Margin="0,0,7,0" Padding="20,12">
+          <Border.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+              <GradientStop Color="#FF0C4A3A" Offset="0"/>
+              <GradientStop Color="#FF092A2C" Offset="1"/>
+            </LinearGradientBrush>
+          </Border.Background>
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="68"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Border Width="58" Height="58" CornerRadius="29" Background="#FF0B513A" VerticalAlignment="Center">
+              <Icon:PackIconMaterial Kind="ChartBubble" Foreground="#FF42E98C" Width="28" Height="28" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+              <TextBlock Text="Mật độ phương tiện" Foreground="#FFC9F4DA" FontSize="13" FontWeight="SemiBold"/>
+              <TextBlock Text="{Binding Text, ElementName=OverviewDensityText}" Foreground="#FFFFFFFF" FontSize="32" FontWeight="Bold" Margin="0,0,0,0"/>
+              <TextBlock Text="Phương tiện trong trạm" Foreground="#FFA5F0C8" FontSize="12"/>
+            </StackPanel>
+          </Grid>
+        </Border>
+        <Border Style="{StaticResource Card}" BorderBrush="#FF8758D8" Padding="20,12">
+          <Border.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+              <GradientStop Color="#FF2A2455" Offset="0"/>
+              <GradientStop Color="#FF151934" Offset="1"/>
+            </LinearGradientBrush>
+          </Border.Background>
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="68"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Border Width="58" Height="58" CornerRadius="29" Background="#FF382564" VerticalAlignment="Center">
+              <Icon:PackIconMaterial Kind="Brain" Foreground="#FFC078FF" Width="28" Height="28" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+              <TextBlock Text="Camera AI / ghi hình" Foreground="#FFE2D7FB" FontSize="13" FontWeight="SemiBold"/>
+              <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                <TextBlock Text="{Binding Text, ElementName=OverviewAiText}" Foreground="#FFFFFFFF" FontSize="31" FontWeight="Bold"/>
+                <TextBlock Text=" bật AI" Foreground="#FFE1CAFF" FontSize="12" VerticalAlignment="Bottom" Margin="4,0,11,6"/>
+                <Rectangle Width="1" Height="26" Fill="#FF6C5391" Margin="0,0,11,0"/>
+                <TextBlock Text="{Binding Text, ElementName=OverviewRecordingText}" Foreground="#FFFFFFFF" FontSize="31" FontWeight="Bold"/>
+                <TextBlock Text=" ghi hình" Foreground="#FFC7F1D7" FontSize="12" VerticalAlignment="Bottom" Margin="4,0,0,6"/>
+              </StackPanel>
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Text="{Binding Text, ElementName=OverviewAiDetailText}" Foreground="#FFD3C4FF" FontSize="9"/>
+                <TextBlock Text="  •  " Foreground="#FF6F608A" FontSize="9"/>
+                <TextBlock Text="{Binding Text, ElementName=OverviewRecordingDetailText}" Foreground="#FF9EE7BF" FontSize="9"/>
+              </StackPanel>
+            </StackPanel>
+          </Grid>
+        </Border>
+      </UniformGrid>
+      <UniformGrid Grid.Row="1" Rows="1" Columns="6" Margin="0,3,0,2" Visibility="Collapsed">
         <FrameworkElement.Resources>
           <ResourceDictionary>
             <Style x:Key="{x:Type Border}" TargetType="{x:Type Border}">
@@ -1245,18 +1340,18 @@
       </Grid>
       <Grid Grid.Row="2" Margin="0,4,0,0">
         <Grid.RowDefinitions>
-          <RowDefinition Height="1.1*">
+          <RowDefinition Height="1.4*">
           </RowDefinition>
           <RowDefinition Height="1*">
           </RowDefinition>
         </Grid.RowDefinitions>
         <Grid Grid.Row="0">
           <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="1.4*">
-            </ColumnDefinition>
-            <ColumnDefinition Width="0.9*">
-            </ColumnDefinition>
             <ColumnDefinition Width="1.2*">
+            </ColumnDefinition>
+            <ColumnDefinition Width="0">
+            </ColumnDefinition>
+            <ColumnDefinition Width="1*">
             </ColumnDefinition>
           </Grid.ColumnDefinitions>
           <Border Style="{StaticResource Panel}" Margin="0,0,6,6">
@@ -1286,7 +1381,7 @@
                 </Grid>
               </Border>
               <Grid Grid.Row="1" Margin="12,10,12,12">
-                <lvc:CartesianChart LegendLocation="None" DisableAnimations="True" Hoverable="True" Foreground="#FFC7D9E9">
+                <lvc:CartesianChart LegendLocation="None" DisableAnimations="False" AnimationsSpeed="0:0:0.45" Hoverable="True" Foreground="#FFC7D9E9">
                   <lvc:CartesianChart.Series>
                     <Binding Path="CameraHealthSeries"/>
                   </lvc:CartesianChart.Series>
@@ -1342,7 +1437,8 @@
               </Grid>
             </Grid>
           </Border>
-          <Border Grid.Column="1" Style="{StaticResource Panel}" Margin="0,0,6,6">
+          <!-- Status ring intentionally removed: system activity and attention panels use the full row. -->
+          <Border Grid.Column="1" Style="{StaticResource Panel}" Margin="0,0,0,6" Visibility="Collapsed">
             <Grid>
               <Grid.RowDefinitions>
                 <RowDefinition Height="42">
@@ -1440,21 +1536,21 @@
           <Border Grid.Column="2" Style="{StaticResource Panel}" Margin="0,0,0,6">
             <Grid>
               <Grid.RowDefinitions>
-                <RowDefinition Height="42">
+                <RowDefinition Height="50">
                 </RowDefinition>
-                <RowDefinition Height="30">
+                <RowDefinition Height="34">
                 </RowDefinition>
                 <RowDefinition Height="*">
                 </RowDefinition>
               </Grid.RowDefinitions>
-              <Border BorderBrush="#FF193A56" BorderThickness="0,0,0,1" Padding="12,0">
+              <Border BorderBrush="#FF193A56" BorderThickness="0,0,0,1" Padding="14,0">
                 <Grid>
                   <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Width="25" Height="25" Background="#FF102B4A" CornerRadius="6" Margin="0,0,8,0">
-                      <Icon:PackIconMaterial Kind="AlertOutline" Foreground="#FF4B8CFF" Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Border Width="29" Height="29" Background="#FF301C29" BorderBrush="#FF7D3347" BorderThickness="1" CornerRadius="7" Margin="0,0,10,0">
+                      <Icon:PackIconMaterial Kind="AlertOutline" Foreground="#FFFF657C" Width="19" Height="19" HorizontalAlignment="Center" VerticalAlignment="Center">
                       </Icon:PackIconMaterial>
                     </Border>
-                    <TextBlock Text="Camera cần chú ý" Style="{StaticResource PanelTitle}">
+                    <TextBlock Text="Camera cần chú ý" Style="{StaticResource PanelTitle}" VerticalAlignment="Center">
                     </TextBlock>
                   </StackPanel>
                   <Border HorizontalAlignment="Right" VerticalAlignment="Center" Background="#FF2A1722" BorderBrush="#FF9B4157" BorderThickness="1" CornerRadius="5" Padding="7,3">
@@ -1463,15 +1559,15 @@
                   </Border>
                 </Grid>
               </Border>
-              <Grid Grid.Row="1" Margin="21,0">
+              <Grid Grid.Row="1" Margin="22,0">
                 <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="128">
+                  <ColumnDefinition Width="1.15*">
                   </ColumnDefinition>
-                  <ColumnDefinition Width="80">
+                  <ColumnDefinition Width="0.75*">
                   </ColumnDefinition>
-                  <ColumnDefinition Width="140">
+                  <ColumnDefinition Width="1.15*">
                   </ColumnDefinition>
-                  <ColumnDefinition Width="*">
+                  <ColumnDefinition Width="1.35*">
                   </ColumnDefinition>
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="CAMERA" Foreground="#FF86A9C4" FontSize="9" FontWeight="SemiBold" VerticalAlignment="Center">
@@ -1483,59 +1579,74 @@
                 <TextBlock Grid.Column="3" Text="MỨC ĐỘ" Foreground="#FF86A9C4" FontSize="9" FontWeight="SemiBold" VerticalAlignment="Center">
                 </TextBlock>
               </Grid>
-              <StackPanel Grid.Row="2" Margin="12,0,12,10">
-                <Border Background="#FF0B2032" BorderBrush="#FF173850" BorderThickness="1" CornerRadius="5" Padding="9,6" Margin="0,2">
+              <StackPanel Grid.Row="2" Margin="14,0,14,10">
+                <Border Background="#FF0B2032" BorderBrush="#FF1D4562" BorderThickness="1" CornerRadius="7" Padding="11,8" Margin="0,3">
                   <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="128"/><ColumnDefinition Width="80"/><ColumnDefinition Width="140"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock x:Name="AttentionCamera1IdCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
-                    <TextBlock x:Name="AttentionCamera1UptimeCell" Grid.Column="1" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
-                    <TextBlock x:Name="AttentionCamera1DowntimeCell" Grid.Column="2" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="0.75*"/><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="1.35*"/></Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                      <Ellipse Width="7" Height="7" Fill="#FFFF5E77" Margin="0,0,9,0" VerticalAlignment="Center"/>
+                      <TextBlock x:Name="AttentionCamera1IdCell" Foreground="#FFFF8FA1" FontFamily="Consolas" FontSize="11" FontWeight="SemiBold"/>
+                    </StackPanel>
+                    <TextBlock x:Name="AttentionCamera1UptimeCell" Grid.Column="1" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11"/>
+                    <TextBlock x:Name="AttentionCamera1DowntimeCell" Grid.Column="2" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11"/>
                     <Border x:Name="AttentionCamera1StatusBadge" Grid.Column="3" HorizontalAlignment="Left" BorderBrush="#FFFF8B9B" BorderThickness="1" CornerRadius="3" Padding="5,2">
-                      <TextBlock x:Name="AttentionCamera1StatusCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
+                      <TextBlock x:Name="AttentionCamera1StatusCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11" FontWeight="SemiBold"/>
                     </Border>
                   </Grid>
                 </Border>
-                <Border Background="#FF0D2639" BorderBrush="#FF173850" BorderThickness="1" CornerRadius="5" Padding="9,6" Margin="0,2">
+                <Border Background="#FF0D2639" BorderBrush="#FF1D4562" BorderThickness="1" CornerRadius="7" Padding="11,8" Margin="0,3">
                   <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="128"/><ColumnDefinition Width="80"/><ColumnDefinition Width="140"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock x:Name="AttentionCamera2IdCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
-                    <TextBlock x:Name="AttentionCamera2UptimeCell" Grid.Column="1" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
-                    <TextBlock x:Name="AttentionCamera2DowntimeCell" Grid.Column="2" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="0.75*"/><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="1.35*"/></Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                      <Ellipse Width="7" Height="7" Fill="#FFFF5E77" Margin="0,0,9,0" VerticalAlignment="Center"/>
+                      <TextBlock x:Name="AttentionCamera2IdCell" Foreground="#FFFF8FA1" FontFamily="Consolas" FontSize="11" FontWeight="SemiBold"/>
+                    </StackPanel>
+                    <TextBlock x:Name="AttentionCamera2UptimeCell" Grid.Column="1" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11"/>
+                    <TextBlock x:Name="AttentionCamera2DowntimeCell" Grid.Column="2" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11"/>
                     <Border x:Name="AttentionCamera2StatusBadge" Grid.Column="3" HorizontalAlignment="Left" BorderBrush="#FFFF8B9B" BorderThickness="1" CornerRadius="3" Padding="5,2">
-                      <TextBlock x:Name="AttentionCamera2StatusCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
+                      <TextBlock x:Name="AttentionCamera2StatusCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11" FontWeight="SemiBold"/>
                     </Border>
                   </Grid>
                 </Border>
-                <Border Background="#FF0B2032" BorderBrush="#FF173850" BorderThickness="1" CornerRadius="5" Padding="9,6" Margin="0,2">
+                <Border Background="#FF0B2032" BorderBrush="#FF1D4562" BorderThickness="1" CornerRadius="7" Padding="11,8" Margin="0,3">
                   <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="128"/><ColumnDefinition Width="80"/><ColumnDefinition Width="140"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock x:Name="AttentionCamera3IdCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
-                    <TextBlock x:Name="AttentionCamera3UptimeCell" Grid.Column="1" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
-                    <TextBlock x:Name="AttentionCamera3DowntimeCell" Grid.Column="2" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="0.75*"/><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="1.35*"/></Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                      <Ellipse Width="7" Height="7" Fill="#FFFF5E77" Margin="0,0,9,0" VerticalAlignment="Center"/>
+                      <TextBlock x:Name="AttentionCamera3IdCell" Foreground="#FFFF8FA1" FontFamily="Consolas" FontSize="11" FontWeight="SemiBold"/>
+                    </StackPanel>
+                    <TextBlock x:Name="AttentionCamera3UptimeCell" Grid.Column="1" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11"/>
+                    <TextBlock x:Name="AttentionCamera3DowntimeCell" Grid.Column="2" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11"/>
                     <Border x:Name="AttentionCamera3StatusBadge" Grid.Column="3" HorizontalAlignment="Left" BorderBrush="#FFFF8B9B" BorderThickness="1" CornerRadius="3" Padding="5,2">
-                      <TextBlock x:Name="AttentionCamera3StatusCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
+                      <TextBlock x:Name="AttentionCamera3StatusCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11" FontWeight="SemiBold"/>
                     </Border>
                   </Grid>
                 </Border>
-                <Border Background="#FF0D2639" BorderBrush="#FF173850" BorderThickness="1" CornerRadius="5" Padding="9,6" Margin="0,2">
+                <Border Background="#FF0D2639" BorderBrush="#FF1D4562" BorderThickness="1" CornerRadius="7" Padding="11,8" Margin="0,3">
                   <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="128"/><ColumnDefinition Width="80"/><ColumnDefinition Width="140"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock x:Name="AttentionCamera4IdCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
-                    <TextBlock x:Name="AttentionCamera4UptimeCell" Grid.Column="1" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
-                    <TextBlock x:Name="AttentionCamera4DowntimeCell" Grid.Column="2" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="0.75*"/><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="1.35*"/></Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                      <Ellipse Width="7" Height="7" Fill="#FFFF5E77" Margin="0,0,9,0" VerticalAlignment="Center"/>
+                      <TextBlock x:Name="AttentionCamera4IdCell" Foreground="#FFFF8FA1" FontFamily="Consolas" FontSize="11" FontWeight="SemiBold"/>
+                    </StackPanel>
+                    <TextBlock x:Name="AttentionCamera4UptimeCell" Grid.Column="1" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11"/>
+                    <TextBlock x:Name="AttentionCamera4DowntimeCell" Grid.Column="2" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11"/>
                     <Border x:Name="AttentionCamera4StatusBadge" Grid.Column="3" HorizontalAlignment="Left" BorderBrush="#FFFF8B9B" BorderThickness="1" CornerRadius="3" Padding="5,2">
-                      <TextBlock x:Name="AttentionCamera4StatusCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
+                      <TextBlock x:Name="AttentionCamera4StatusCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11" FontWeight="SemiBold"/>
                     </Border>
                   </Grid>
                 </Border>
-                <Border Background="#FF0B2032" BorderBrush="#FF173850" BorderThickness="1" CornerRadius="5" Padding="9,6" Margin="0,2">
+                <Border Background="#FF0B2032" BorderBrush="#FF1D4562" BorderThickness="1" CornerRadius="7" Padding="11,8" Margin="0,3">
                   <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="128"/><ColumnDefinition Width="80"/><ColumnDefinition Width="140"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock x:Name="AttentionCamera5IdCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
-                    <TextBlock x:Name="AttentionCamera5UptimeCell" Grid.Column="1" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
-                    <TextBlock x:Name="AttentionCamera5DowntimeCell" Grid.Column="2" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="0.75*"/><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="1.35*"/></Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                      <Ellipse Width="7" Height="7" Fill="#FFFF5E77" Margin="0,0,9,0" VerticalAlignment="Center"/>
+                      <TextBlock x:Name="AttentionCamera5IdCell" Foreground="#FFFF8FA1" FontFamily="Consolas" FontSize="11" FontWeight="SemiBold"/>
+                    </StackPanel>
+                    <TextBlock x:Name="AttentionCamera5UptimeCell" Grid.Column="1" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11"/>
+                    <TextBlock x:Name="AttentionCamera5DowntimeCell" Grid.Column="2" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11"/>
                     <Border x:Name="AttentionCamera5StatusBadge" Grid.Column="3" HorizontalAlignment="Left" BorderBrush="#FFFF8B9B" BorderThickness="1" CornerRadius="3" Padding="5,2">
-                      <TextBlock x:Name="AttentionCamera5StatusCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="10"/>
+                      <TextBlock x:Name="AttentionCamera5StatusCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11" FontWeight="SemiBold"/>
                     </Border>
                   </Grid>
                 </Border>
@@ -1561,14 +1672,17 @@
                 </RowDefinition>
               </Grid.RowDefinitions>
               <Border BorderBrush="#FF193A56" BorderThickness="0,0,0,1" Padding="12,7">
-                <StackPanel>
-                  <TextBlock Text="Sức khỏe hạ tầng" Style="{StaticResource PanelTitle}">
-                  </TextBlock>
-                  <TextBlock Text="Tổng hợp máy chủ và tài nguyên hệ thống" Foreground="#FFB7CDE0" FontSize="10" Margin="0,3,0,0">
-                  </TextBlock>
+                <StackPanel Orientation="Horizontal">
+                  <Border Width="28" Height="28" CornerRadius="7" Background="#FF102B4A" Margin="0,0,9,0">
+                    <Icon:PackIconMaterial Kind="Server" Foreground="#FF4B8CFF" Width="17" Height="17" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                  </Border>
+                  <StackPanel>
+                    <TextBlock Text="Sức khỏe hạ tầng" Style="{StaticResource PanelTitle}"/>
+                    <TextBlock Text="Tổng hợp máy chủ và tài nguyên hệ thống" Foreground="#FFB7CDE0" FontSize="10" Margin="0,3,0,0"/>
+                  </StackPanel>
                 </StackPanel>
               </Border>
-              <Grid Grid.Row="1" Margin="14">
+              <Grid Grid.Row="1" Margin="14" Visibility="Collapsed">
                 <Grid.ColumnDefinitions>
                   <ColumnDefinition Width="1.05*">
                   </ColumnDefinition>
@@ -1675,22 +1789,85 @@
                   </TextBlock>
                 </Grid>
               </Grid>
+              <Grid Grid.Row="1" Margin="12,10,12,12">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="1.25*"/>
+                  <ColumnDefinition Width="1*"/>
+                  <ColumnDefinition Width="1.2*"/>
+                  <ColumnDefinition Width="1*"/>
+                </Grid.ColumnDefinitions>
+                <Border Padding="3,0,12,0">
+                  <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="20"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    <TextBlock Text="MÁY CHỦ" Foreground="#FF8EA7BC" FontSize="9" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly" Margin="0,2,0,0">
+                      <ItemsControl ItemsSource="{Binding InfrastructureNodes, RelativeSource={RelativeSource AncestorType={x:Type local:DashboardPage_v3}}}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate>
+                            <Grid Margin="0,2">
+                              <Grid.ColumnDefinitions><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                              <Ellipse Width="6" Height="6" Fill="{Binding StatusBrush}" VerticalAlignment="Center"/>
+                              <StackPanel Grid.Column="1">
+                                <TextBlock Text="{Binding Name}" Foreground="#FFFFFFFF" FontSize="11" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding Status}" Foreground="{Binding StatusBrush}" FontSize="9" FontWeight="SemiBold" Margin="0,1,0,0"/>
+                              </StackPanel>
+                            </Grid>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </ScrollViewer>
+                  </Grid>
+                </Border>
+                <Border Grid.Column="1" Padding="12,0">
+                  <StackPanel VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                      <Icon:PackIconMaterial Kind="Chip" Foreground="#FF4B8CFF" Width="14" Height="14" Margin="0,0,6,0"/>
+                      <TextBlock Text="CPU" Foreground="#FFB7CDE0" FontSize="10" FontWeight="SemiBold"/>
+                    </StackPanel>
+                    <TextBlock Text="{Binding Text, ElementName=InfrastructureCpuText}" Foreground="#FFFFFFFF" FontSize="16" FontWeight="Bold" Margin="0,7,0,7"/>
+                    <ProgressBar Style="{StaticResource InfrastructureMetricBar}" Value="{Binding Value, ElementName=InfrastructureCpuBar}" Maximum="100" Foreground="#FF367BFF"/>
+                  </StackPanel>
+                </Border>
+                <Border Grid.Column="2" Padding="12,0">
+                  <StackPanel VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                      <Icon:PackIconMaterial Kind="Memory" Foreground="#FF27C96D" Width="14" Height="14" Margin="0,0,6,0"/>
+                      <TextBlock Text="Bộ nhớ" Foreground="#FFB7CDE0" FontSize="10" FontWeight="SemiBold"/>
+                    </StackPanel>
+                    <TextBlock Text="{Binding Text, ElementName=InfrastructureMemoryText}" Foreground="#FFFFFFFF" FontSize="16" FontWeight="Bold" Margin="0,7,0,7"/>
+                    <ProgressBar Style="{StaticResource InfrastructureMetricBar}" Value="{Binding Value, ElementName=InfrastructureMemoryBar}" Maximum="100" Foreground="#FF27C96D"/>
+                  </StackPanel>
+                </Border>
+                <Border Grid.Column="3" Padding="12,0,0,0">
+                  <StackPanel VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                      <Icon:PackIconMaterial Kind="ExpansionCard" Foreground="#FFA66CFF" Width="14" Height="14" Margin="0,0,6,0"/>
+                      <TextBlock Text="GPU" Foreground="#FFB7CDE0" FontSize="10" FontWeight="SemiBold"/>
+                    </StackPanel>
+                    <TextBlock Text="{Binding Text, ElementName=InfrastructureGpuText}" Foreground="#FFFFFFFF" FontSize="16" FontWeight="Bold" Margin="0,7,0,7"/>
+                    <ProgressBar Style="{StaticResource InfrastructureMetricBar}" Value="{Binding Value, ElementName=InfrastructureGpuBar}" Maximum="100" Foreground="#FFA66CFF"/>
+                  </StackPanel>
+                </Border>
+              </Grid>
             </Grid>
           </Border>
           <Border Grid.Column="1" Style="{StaticResource Panel}" Margin="0,0,6,0">
             <Grid>
               <Grid.RowDefinitions>
-                <RowDefinition Height="56">
+                <RowDefinition Height="50">
                 </RowDefinition>
                 <RowDefinition Height="*">
                 </RowDefinition>
               </Grid.RowDefinitions>
               <Border BorderBrush="#FF193A56" BorderThickness="0,0,0,1" Padding="12,7">
-                <StackPanel>
-                  <TextBlock Text="Lưu trữ" Style="{StaticResource PanelTitle}">
-                  </TextBlock>
-                  <TextBlock Text="Dung lượng đĩa đang sử dụng" Foreground="#FFB7CDE0" FontSize="10" Margin="0,3,0,0">
-                  </TextBlock>
+                <StackPanel Orientation="Horizontal">
+                  <Border Width="28" Height="28" CornerRadius="7" Background="#FF1C2942" Margin="0,0,9,0">
+                    <Icon:PackIconMaterial Kind="Database" Foreground="#FFA66CFF" Width="17" Height="17" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                  </Border>
+                  <StackPanel>
+                    <TextBlock Text="Lưu trữ" Style="{StaticResource PanelTitle}"/>
+                    <TextBlock Text="Dung lượng đĩa đang sử dụng" Foreground="#FFB7CDE0" FontSize="10" Margin="0,3,0,0"/>
+                  </StackPanel>
                 </StackPanel>
               </Border>
               <Grid Grid.Row="1" Margin="12,8,12,10">
@@ -1803,14 +1980,18 @@
                 </RowDefinition>
               </Grid.RowDefinitions>
               <Border BorderBrush="#FF193A56" BorderThickness="0,0,0,1" Padding="12,7">
-                <StackPanel>
-                  <TextBlock Text="Mạng và chất lượng luồng" Style="{StaticResource PanelTitle}">
-                  </TextBlock>
-                  <TextBlock Foreground="#FFB7CDE0" FontSize="10" Margin="0,3,0,0">
-                    <TextBlock.Text>
-                      <Binding Path="Text" ElementName="NetworkStatusText"/>
-                    </TextBlock.Text>
-                  </TextBlock>
+                <StackPanel Orientation="Horizontal">
+                  <Border Width="28" Height="28" CornerRadius="7" Background="#FF0D352F" Margin="0,0,9,0">
+                    <Icon:PackIconMaterial Kind="AccessPointNetwork" Foreground="#FF32D986" Width="17" Height="17" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                  </Border>
+                  <StackPanel>
+                    <TextBlock Text="Mạng và chất lượng luồng" Style="{StaticResource PanelTitle}"/>
+                    <TextBlock Foreground="#FFB7CDE0" FontSize="10" Margin="0,3,0,0">
+                      <TextBlock.Text>
+                        <Binding Path="Text" ElementName="NetworkStatusText"/>
+                      </TextBlock.Text>
+                    </TextBlock>
+                  </StackPanel>
                 </StackPanel>
               </Border>
               <Grid Grid.Row="1" Margin="12,8,12,10">

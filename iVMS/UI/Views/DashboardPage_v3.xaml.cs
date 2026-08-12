@@ -70,6 +70,13 @@ namespace V3SClient.UI.Views
         public event PropertyChangedEventHandler PropertyChanged;
     }
 
+    public sealed class DashboardInfrastructureNodeItem
+    {
+        public string Name { get; set; }
+        public string Status { get; set; }
+        public Brush StatusBrush { get; set; }
+    }
+
     public partial class DashboardPage_v3 : UserControl
     {
         private readonly DispatcherTimer _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
@@ -117,6 +124,7 @@ namespace V3SClient.UI.Views
         public Func<double, string> NetworkRateLabelFormatter { get; } = value => value >= 1000d ? (value / 1000d).ToString("0.0") + " Gbps" : value.ToString(value >= 100d ? "0" : "0.0") + " Mbps";
         public ObservableCollection<DashboardVehicleItem> LatestVehicles { get; } = new ObservableCollection<DashboardVehicleItem>();
         public ObservableCollection<DashboardCameraPickerItem> CameraPickerItems { get; } = new ObservableCollection<DashboardCameraPickerItem>();
+        public ObservableCollection<DashboardInfrastructureNodeItem> InfrastructureNodes { get; } = new ObservableCollection<DashboardInfrastructureNodeItem>();
         public event EventHandler OpenFullMapRequested;
         public event EventHandler OpenFullLiveRequested;
 
@@ -431,8 +439,11 @@ namespace V3SClient.UI.Views
                 var statusBrush = camera == null ? new SolidColorBrush(Color.FromRgb(173, 190, 203)) : GetAttentionCameraStatusBrush(camera);
                 statusBadges[index].BorderBrush = statusBrush;
                 statusBadges[index].Background = camera == null ? Brushes.Transparent : new SolidColorBrush(Color.FromArgb(35, statusBrush.Color.R, statusBrush.Color.G, statusBrush.Color.B));
-                foreach (var cell in cellRows[index])
-                    cell.Foreground = camera == null ? new SolidColorBrush(Color.FromRgb(213, 227, 238)) : new SolidColorBrush(Color.FromRgb(255, 160, 175));
+                var neutralBrush = new SolidColorBrush(Color.FromRgb(213, 227, 238));
+                var alertBrush = new SolidColorBrush(Color.FromRgb(255, 160, 175));
+                cellRows[index][0].Foreground = neutralBrush;
+                cellRows[index][1].Foreground = alertBrush;
+                cellRows[index][2].Foreground = neutralBrush;
                 cellRows[index][3].Foreground = statusBrush;
             }
         }
@@ -501,6 +512,7 @@ namespace V3SClient.UI.Views
             catch (Exception ex)
             {
                 LoggerManager.LogException(ex, "Dashboard system metrics refresh");
+                InfrastructureNodes.Clear();
                 InfrastructureHostText.Text = "Không tải được Metrics API";
                 InfrastructureStatusText.Text = "Cần kiểm tra kết nối";
                 StorageUsageText.Text = "—"; StorageReadText.Text = "—"; StorageWriteText.Text = "—";
@@ -543,6 +555,19 @@ namespace V3SClient.UI.Views
             var host = overview["host"] as JObject ?? overview["resources"] as JObject ?? new JObject();
             var gpu = overview["gpu"] as JObject ?? new JObject();
             var nodes = nodesResponse["nodes"] as JArray ?? new JArray();
+            InfrastructureNodes.Clear();
+            foreach (var node in nodes.OfType<JObject>())
+            {
+                var nodeOnline = node.Value<bool?>("up") == true;
+                InfrastructureNodes.Add(new DashboardInfrastructureNodeItem
+                {
+                    Name = MetricText(node["display_name"] ?? node["instance"]),
+                    Status = nodeOnline ? "Healthy" : "Ngoại tuyến",
+                    StatusBrush = nodeOnline
+                        ? new SolidColorBrush(Color.FromRgb(39, 201, 109))
+                        : new SolidColorBrush(Color.FromRgb(255, 112, 133))
+                });
+            }
             var firstNode = nodes.OfType<JObject>().FirstOrDefault();
             var hasNode = firstNode != null;
             var isOnline = firstNode?.Value<bool?>("up") == true;

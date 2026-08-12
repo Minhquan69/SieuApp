@@ -10,6 +10,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Linq;
 using System.IO;
+using V3SClient.Services;
 
 namespace V3SClient.libs
 {
@@ -193,13 +194,13 @@ namespace V3SClient.libs
 
         private ApiManager()
         {
-            _httpClient = new HttpClient();
+            _httpClient = new HttpClient(new SynchronizationTrackingHandler_v3(new HttpClientHandler()));
             _httpClient.Timeout = TimeSpan.FromSeconds(30);
             var loginHandler = new HttpClientHandler { UseProxy = false };
-            _loginHttpClient = new HttpClient(loginHandler);
+            _loginHttpClient = new HttpClient(new SynchronizationTrackingHandler_v3(loginHandler));
             _loginHttpClient.Timeout = TimeSpan.FromSeconds(12);
             var statusHandler = new HttpClientHandler { UseProxy = false };
-            _deviceStatusHttpClient = new HttpClient(statusHandler);
+            _deviceStatusHttpClient = new HttpClient(new SynchronizationTrackingHandler_v3(statusHandler));
             _deviceStatusHttpClient.Timeout = TimeSpan.FromSeconds(12);
             LoadConfig();
             LoadBackendTokenFromEnvironment();

@@ -460,6 +460,8 @@
     </Compile>
     <Compile Include="Services\LiveStreamService_v3.cs" />
     <Compile Include="Services\MetadataSocketService_v3.cs" />
+    <Compile Include="Services\AppSynchronizationStatus_v3.cs" />
+    <Compile Include="Services\SynchronizationTrackingHandler_v3.cs" />
     <Compile Include="UI\Views\AiMetadataOverlay_v3.cs" />
     <Compile Include="window\ShellWindow_v3.xaml.cs">
       <DependentUpon>ShellWindow_v3.xaml</DependentUpon>
