@@ -240,20 +240,28 @@ namespace V3SClient.UI.Views
         // intentionally retained.
         private void ReleaseLivePreviewTiles()
         {
+            ClearLivePreviewTiles();
+            _previewInitialized = false;
+        }
+
+        private void ClearLivePreviewTiles()
+        {
             foreach (var tile in _previewTiles.ToList())
             {
-                tile.Disconnect();
-                tile.Dispose();
+                try { tile.HideForFullscreen(); } catch { }
+                try { tile.Disconnect(); } catch { }
+                try { tile.Dispose(); } catch { }
             }
 
             _previewTiles.Clear();
             _previewHosts.Clear();
             LivePreviewHost.Children.Clear();
-            _previewInitialized = false;
         }
 
         private List<string> GetProfileCameraIds()
         {
+            // CameraList is populated from the active profile during login/client
+            // selection. Do not rebuild it synchronously while Dashboard opens.
             return (GlobalSystem.Instance.CameraList ?? new List<Camera>())
                 .Where(camera => camera != null && !string.IsNullOrWhiteSpace(camera.camID))
                 .Select(camera => camera.camID.Trim())
@@ -321,6 +329,32 @@ namespace V3SClient.UI.Views
                 var statuses = await statusTask ?? new List<ApiManager.DeviceStatusResponse>();
                 ApplyDeviceStatuses(profileCameras, statuses);
 
+                // Publish the camera state immediately. The remaining AI,
+                // chart and infrastructure requests may be slow on mobile
+                // networks and must not delay the primary online/offline KPI.
+                var immediateTotal = cameraIds.Count;
+                var immediateHasStates = statuses.Any(status => status != null && !string.IsNullOrWhiteSpace(status.DeviceId));
+                var immediateOnline = immediateHasStates
+                    ? statuses.Count(status => status != null && status.IsOnline == true)
+                    : profileCameras.Count(camera => camera.is_online == true);
+                var immediateOffline = Math.Max(0, immediateTotal - immediateOnline);
+                var immediatePercent = immediateTotal == 0 ? 0 : immediateOnline * 100d / immediateTotal;
+                TotalText.Text = immediateTotal.ToString("N0");
+                OnlineText.Text = immediatePercent.ToString("0.0") + "%";
+                StatusText.Text = string.Format("{0} online · {1} offline", immediateOnline, immediateOffline);
+                OverviewTotalText.Text = immediateTotal.ToString("N0");
+                OverviewOnlineText.Text = immediatePercent.ToString("0.0") + "%";
+                OverviewOnlineCountText.Text = immediateOnline + " trực tuyến";
+                OverviewOfflineCountText.Text = immediateOffline + " ngoại tuyến";
+                CameraStatusTotalText.Text = immediateTotal.ToString("N0");
+                CameraStatusOnlineText.Text = immediateOnline.ToString("N0");
+                CameraStatusOfflineText.Text = immediateOffline.ToString("N0");
+
+                // Do not block the primary dashboard state on slow secondary
+                // APIs (AI, charts and infrastructure) over 3G. Those tasks
+                // continue in the background and the next refresh will publish
+                // their latest values.
+                _ = Task.WhenAll(vehicleTask, densityTask, eventTask, trendTask, attentionTask, infrastructureMetricsTask);
                 await Task.WhenAll(vehicleTask, densityTask, eventTask, trendTask, attentionTask, infrastructureMetricsTask);
                 var total = cameraIds.Count;
                 var hasDeviceReportStates = statuses.Any(status => status != null && !string.IsNullOrWhiteSpace(status.DeviceId));
@@ -1017,38 +1051,7 @@ namespace V3SClient.UI.Views
 
         private async Task RenderLivePreviewAsync()
         {
-            // Keep existing native pipelines alive. Only the camera that was
-            // added or removed is touched; rebuilding all tiles caused every
-            // visible stream to reconnect after a simple picker change.
-            var desired = _selectedPreviewCameras.Take(6).ToList();
-            foreach (var tile in _previewTiles.Where(tile => tile.Slot?.Camera == null ||
-                !desired.Any(camera => string.Equals(camera.camID, tile.Slot.Camera.camID, StringComparison.OrdinalIgnoreCase))).ToList())
-            {
-                tile.Disconnect();
-                tile.Dispose();
-                if (_previewHosts.TryGetValue(tile, out var host)) LivePreviewHost.Children.Remove(host);
-                _previewHosts.Remove(tile);
-                _previewTiles.Remove(tile);
-            }
-            foreach (var camera in desired.Where(camera => !_previewTiles.Any(tile => tile.Slot?.Camera != null &&
-                string.Equals(tile.Slot.Camera.camID, camera.camID, StringComparison.OrdinalIgnoreCase))))
-                await AddPreviewTileAsync(camera);
-
-            foreach (var button in LivePreviewHost.Children.OfType<Button>()
-                .Where(button => Equals(button.Tag, "dashboard-add-camera")).ToList())
-                LivePreviewHost.Children.Remove(button);
-            AddCameraButton();
-            _quickViewStartIndex = Math.Min(_quickViewStartIndex, GetMaxQuickViewStart());
-            UpdateQuickViewPage();
-            return;
-
-            foreach (var tile in _previewTiles)
-            {
-                tile.Disconnect();
-                tile.Dispose();
-            }
-            _previewTiles.Clear();
-            LivePreviewHost.Children.Clear();
+            ClearLivePreviewTiles();
             foreach (var camera in _selectedPreviewCameras.Take(6).ToList())
             {
                 var slot = new LiveSlotViewModel_v3 { SlotId = _previewTiles.Count + 1, Camera = camera, SelectedStream = camera.Streams?.FirstOrDefault() };
@@ -1057,10 +1060,12 @@ namespace V3SClient.UI.Views
                 _previewTiles.Add(tile);
                 var host = new Grid { Width = QuickViewTileWidth, Height = 82, Margin = new Thickness(0, 0, QuickViewTileSpacing, 0), VerticalAlignment = VerticalAlignment.Top, ClipToBounds = true };
                 host.Children.Add(tile);
-                tile.RemoveRequested += async (s, e) =>
+                tile.RemoveRequested += (s, e) =>
                 {
-                    _selectedPreviewCameras.Remove(camera);
-                    await RenderLivePreviewAsync();
+                    tile.HideForFullscreen();
+                    _selectedPreviewCameras.RemoveAll(item => string.Equals(item.camID, camera.camID, StringComparison.OrdinalIgnoreCase));
+                    Dispatcher.BeginInvoke(new Action(async () => await RenderLivePreviewAsync()),
+                        DispatcherPriority.ContextIdle);
                 };
                 LivePreviewHost.Children.Add(host);
             }
@@ -1068,6 +1073,7 @@ namespace V3SClient.UI.Views
             {
                 await tile.ConnectAsync();
                 tile.SynchronizeNativeVideoSurfaces();
+                tile.EnsureCompactActionsVisible();
             }
             var add = new Button
             {
@@ -1102,10 +1108,12 @@ namespace V3SClient.UI.Views
             host.Children.Add(tile);
             _previewTiles.Add(tile);
             _previewHosts[tile] = host;
-            tile.RemoveRequested += async (s, e) =>
+            tile.RemoveRequested += (s, e) =>
             {
-                _selectedPreviewCameras.Remove(camera);
-                await RenderLivePreviewAsync();
+                tile.HideForFullscreen();
+                _selectedPreviewCameras.RemoveAll(item => string.Equals(item.camID, camera.camID, StringComparison.OrdinalIgnoreCase));
+                Dispatcher.BeginInvoke(new Action(async () => await RenderLivePreviewAsync()),
+                    DispatcherPriority.ContextIdle);
             };
             LivePreviewHost.Children.Add(host);
             await tile.ConnectAsync();
@@ -1173,7 +1181,10 @@ namespace V3SClient.UI.Views
             {
                 var visible = visibleTiles.Contains(pair.Key);
                 pair.Value.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-                if (visible) pair.Key.SynchronizeNativeVideoSurfaces();
+                if (visible)
+                {
+                    pair.Key.SynchronizeNativeVideoSurfaces();
+                }
             }
 
             foreach (var button in LivePreviewHost.Children.OfType<Button>()

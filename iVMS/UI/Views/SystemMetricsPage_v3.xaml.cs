@@ -19,7 +19,9 @@ namespace V3SClient.UI.Views
     public partial class SystemMetricsPage_v3 : UserControl
     {
         private const string MetricEndpointKey = "_systemMetric";
-        private readonly HttpClient _http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        // The dashboard loads overview, node, GPU and several time-series
+        // requests in parallel. Metrics aggregation can exceed 15 seconds.
+        private readonly HttpClient _http = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
         private readonly DispatcherTimer _refreshTimer = new DispatcherTimer();
         private readonly Dictionary<string, List<double>> _history = new Dictionary<string, List<double>>();
         private readonly Dictionary<string, List<DateTime?>> _historyTimes = new Dictionary<string, List<DateTime?>>();
@@ -34,7 +36,10 @@ namespace V3SClient.UI.Views
             KeepOnlyRequestedSummaryKpis();
             ApplyOverviewKpiPalette();
             Loaded += async (s, e) => { ConfigureRefreshTimer(); await RefreshAsync(); };
-            Unloaded += (s, e) => { _refreshTimer.Stop(); _http.Dispose(); };
+            // This view can be unloaded and loaded again when switching tabs.
+            // Keep the shared HttpClient alive; disposing it here makes the
+            // next refresh fail with a canceled/disposed request.
+            Unloaded += (s, e) => { _refreshTimer.Stop(); };
             _refreshTimer.Tick += async (s, e) => await RefreshAsync();
             HostBox.SelectionChanged += async (s, e) => { if (IsLoaded && !_updatingHostList) await RefreshAsync(); };
         }
@@ -196,18 +201,54 @@ namespace V3SClient.UI.Views
                     ["cpu_temperature"] = GetSeriesAsync("cpu_temperature", instance, start, end, historyStep), ["gpu_utilization"] = GetSeriesAsync("gpu_utilization", instance, start, end, historyStep),
                     ["gpu_memory"] = GetSeriesAsync("gpu_memory", instance, start, end, historyStep), ["disk_read"] = GetSeriesAsync("disk_read", instance, start, end, historyStep), ["disk_write"] = GetSeriesAsync("disk_write", instance, start, end, historyStep)
                 };
-                await Task.WhenAll(historyTasks.Values.Append(overviewTask).Append(nodesTask).Append(allNodesTask).Append(gpusTask));
-                var overview = await overviewTask;
-                RenderOverview(overview);
-                RenderNodes(await nodesTask);
-                PopulateHosts(await allNodesTask);
-                RenderGpus(await gpusTask);
-                foreach (var item in historyTasks)
+                // Process requests as each one completes. A slow chart or
+                // GPU endpoint must not delay the overview already available.
+                JObject overview = null;
+                var pending = new HashSet<Task<JObject>>(historyTasks.Values
+                    .Append(overviewTask).Append(nodesTask).Append(allNodesTask).Append(gpusTask));
+                while (pending.Count > 0)
                 {
-                    var series = await item.Value;
-                    _history[item.Key] = LimitPoints(Points(series), historyPointLimit);
-                    _historyTimes[item.Key] = LimitPoints(PointTimes(series), historyPointLimit);
+                    var completed = await Task.WhenAny(pending);
+                    pending.Remove(completed);
+                    try
+                    {
+                        var data = await completed;
+                        if (ReferenceEquals(completed, overviewTask))
+                        {
+                            overview = data;
+                            RenderOverview(data);
+                        }
+                        else if (ReferenceEquals(completed, nodesTask))
+                        {
+                            RenderNodes(data);
+                            if (ReferenceEquals(allNodesTask, nodesTask))
+                                PopulateHosts(data);
+                        }
+                        else if (ReferenceEquals(completed, allNodesTask))
+                            PopulateHosts(data);
+                        else if (ReferenceEquals(completed, gpusTask))
+                            RenderGpus(data);
+                        else
+                        {
+                            var item = historyTasks.FirstOrDefault(entry => ReferenceEquals(entry.Value, completed));
+                            if (!string.IsNullOrEmpty(item.Key))
+                            {
+                                _history[item.Key] = LimitPoints(Points(data), historyPointLimit);
+                                _historyTimes[item.Key] = LimitPoints(PointTimes(data), historyPointLimit);
+                                DrawCharts();
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // Keep rendering successful sections when one metric
+                        // endpoint is unavailable or times out.
+                        LoggerManager.LogException(ex, "Tải riêng metric thất bại");
+                    }
                 }
+
+                if (overview == null)
+                    throw new InvalidOperationException("Không tải được dữ liệu tổng quan hệ thống.");
                 var network = overview["network"] as JObject;
                 var networkDevice = Text(network?["device"], string.Empty);
                 NetworkDetailText.Text = string.IsNullOrWhiteSpace(networkDevice) ? "Chưa xác định NIC" : networkDevice + " · NIC vật lý";

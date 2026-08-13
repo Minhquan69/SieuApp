@@ -105,6 +105,7 @@ namespace V3SClient.models
         protected Element videoOverlay { get; set; }
         protected Element audioQueue { get; set; }
         protected Element audioVolume { get; set; }
+        public bool HasAudio { get; private set; }
         protected float currentRate { get; set; } = 1.0f;
         protected float stepRate { get; set; } = 0.3f;
         // Opt-in visual cue for playback capture/download selection. It is drawn
@@ -578,6 +579,7 @@ namespace V3SClient.models
                 videoOverlay = player.GetByName("videoOverlay");
                 audioVolume = player.GetByName("audioVolume");
                 audioVolume["volume"] = 0;
+                HasAudio = false;
                 videoSource.PadAdded += (sender, args) =>
                 {
                     Pad newPad = args.NewPad;
@@ -598,6 +600,7 @@ namespace V3SClient.models
                     }
                     if (capsStr.Contains("audio"))
                     {
+                        HasAudio = true;
                         Pad audioPad = audioQueue.GetStaticPad("sink");
                         newPad.Link(audioPad);
                         audioPad.Dispose();
@@ -914,6 +917,17 @@ namespace V3SClient.models
                 return false;
             }
 
+        }
+
+        public bool SetVolume(double volume)
+        {
+            try
+            {
+                if (audioVolume == null || !HasAudio) return false;
+                audioVolume["volume"] = Math.Max(0d, Math.Min(1d, volume));
+                return true;
+            }
+            catch { return false; }
         }
 
         public void Dispose()

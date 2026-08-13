@@ -220,8 +220,11 @@ namespace V3SClient.UI.Views
         private void ApplyCompactDashboardMode()
         {
             if (!_compactDashboardMode) return;
-            ConnectButton.Visibility = DisconnectButton.Visibility = StreamSelector.Visibility = Visibility.Collapsed;
-            MuteButton.Visibility = SnapshotButton.Visibility = FullscreenButton.Visibility = Visibility.Collapsed;
+            // Keep the four compact dashboard actions available when
+            // ShowActions reapplies this style during hover. Only hide the
+            // legacy controls that are not part of the compact toolbar.
+            ConnectButton.Visibility = StreamSelector.Visibility = Visibility.Collapsed;
+            MuteButton.Visibility = SnapshotButton.Visibility = Visibility.Collapsed;
             // Dashboard quick view keeps only the lightweight spinner. The
             // full live page retains its connection/status messages.
             LoadingText.Visibility = Visibility.Collapsed;
@@ -279,6 +282,8 @@ namespace V3SClient.UI.Views
         public event EventHandler FullscreenRequested;
         public event EventHandler SnapshotRequested;
         public event EventHandler StateChanged;
+        public event EventHandler AudioRequested;
+        public event EventHandler AudioStateChanged;
 
         public void Bind(LiveSlotViewModel_v3 slot)
         {
@@ -352,11 +357,17 @@ namespace V3SClient.UI.Views
         public void SetMuted(bool muted)
         {
             _isMuted = muted;
-            Player.SetMuted(muted);
-            MainPlayer.SetMuted(muted);
+            if (Player != null) Player.SetMuted(muted);
+            if (MainPlayer != null) MainPlayer.SetMuted(muted);
             MuteButton.ToolTip = muted ? "Bật âm thanh" : "Tắt âm thanh";
             MuteIcon.Kind = muted ? MahApps.Metro.IconPacks.PackIconMaterialKind.VolumeOff : MahApps.Metro.IconPacks.PackIconMaterialKind.VolumeHigh;
+            AudioPlayingIcon.Visibility = !muted && Slot != null && Slot.Camera != null
+                ? Visibility.Visible : Visibility.Collapsed;
         }
+
+        public bool HasAudio => Player != null && Player.HasAudio;
+        public bool IsMuted => _isMuted;
+
 
         public bool TrySaveSnapshot(out string savedPath) { return Player.TrySaveSnapshot(out savedPath); }
         public System.Threading.Tasks.Task<string> TrySaveSourceSnapshotAsync() { return Player.TrySaveSourceSnapshotAsync(); }
@@ -805,7 +816,42 @@ namespace V3SClient.UI.Views
         private void Remove_Click(object sender, RoutedEventArgs e) { RemoveRequested?.Invoke(this, EventArgs.Empty); }
         private void Fullscreen_Click(object sender, RoutedEventArgs e) { FullscreenRequested?.Invoke(this, EventArgs.Empty); }
         private void Snapshot_Click(object sender, RoutedEventArgs e) { SnapshotRequested?.Invoke(this, EventArgs.Empty); }
-        private void Mute_Click(object sender, RoutedEventArgs e) { SetMuted(!_isMuted); }
+        private void Mute_Click(object sender, RoutedEventArgs e)
+        {
+            if (MuteButton == null) return;
+            var wantsAudio = _isMuted;
+            if (wantsAudio) AudioRequested?.Invoke(this, EventArgs.Empty);
+            SetMuted(wantsAudio);
+            AudioStateChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        public void EnsureCompactActionsVisible()
+        {
+            if (!_compactDashboardMode || _disposed || !IsLoaded || Slot == null || Slot.Camera == null)
+                return;
+            ShowActions();
+            RemoveButton.Visibility = Visibility.Visible;
+            RemoveButton.IsHitTestVisible = true;
+            Panel.SetZIndex(RemoveButton, 100);
+        }
+
+        private void Ptz_Click(object sender, RoutedEventArgs e) { LoggerManager.LogInfo($"PTZ requested for camera {Slot?.Camera?.camID ?? "unknown"}."); }
+        private void CameraControl_Click(object sender, RoutedEventArgs e)
+        {
+            var open = CameraControlPanel.Visibility != Visibility.Visible;
+            // Pin the popup while its secondary controls are open. Otherwise
+            // the tile hover timer can close the native Popup before the
+            // volume button receives the mouse click.
+            _actionsPinned = open;
+            CameraControlPanel.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+            MuteButton.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+            CameraControlIcon.Kind = open
+                ? MahApps.Metro.IconPacks.PackIconMaterialKind.ChevronDown
+                : MahApps.Metro.IconPacks.PackIconMaterialKind.ChevronUp;
+            CameraControlButton.ToolTip = open ? "Đóng điều khiển camera" : "Mở điều khiển camera";
+            if (open) RefreshPopupPlacement();
+            else ScheduleHideActions();
+        }
 
         private void ShowActions()
         {
@@ -813,9 +859,23 @@ namespace V3SClient.UI.Views
             // WindowsFormsHost video surface.  Native video mouse messages can
             // arrive a little late after Alt+Tab; never let one reopen a popup
             // while the iVista window is inactive.
-            if (_disposed || _popupPlacementSuspended || !IsLoaded || _ownerWindow == null ||
-                !_ownerWindow.IsActive || ActionBar.Visibility != Visibility.Visible) return;
+            if (_disposed || _popupPlacementSuspended || !IsLoaded ||
+                ActionBar.Visibility != Visibility.Visible) return;
+            if (_ownerWindow == null)
+            {
+                _ownerWindow = Window.GetWindow(this);
+                if (_ownerWindow == null) return;
+            }
+            if (!_compactDashboardMode && !_ownerWindow.IsActive) return;
             ApplyCompactDashboardMode();
+            if (_compactDashboardMode && Slot != null && Slot.Camera != null)
+            {
+                CameraControlButton.Visibility = Visibility.Visible;
+                FullscreenButton.Visibility = Visibility.Visible;
+                DisconnectButton.Visibility = Visibility.Visible;
+                RemoveButton.Visibility = Visibility.Visible;
+                ActionPopup.IsOpen = false;
+            }
             OpenCameraBadgeIfActive();
             SafeStopHideActionsTimer();
             ActionPopup.IsOpen = true;
@@ -870,6 +930,12 @@ namespace V3SClient.UI.Views
             catch (InvalidOperationException) { }
         }
 
+        private void ActionBar_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (ActionPopup.IsOpen)
+                Dispatcher.BeginInvoke(new Action(PositionActionPopup), DispatcherPriority.Loaded);
+        }
+
         private void TileBorder_SizeChanged(object sender, SizeChangedEventArgs e)
         {
             UpdateErrorLayoutForTileSize();
@@ -909,6 +975,9 @@ namespace V3SClient.UI.Views
             if (_disposed || _actionsPinned || _fullscreenMode) return;
             SafeStopHideActionsTimer();
             ActionPopup.IsOpen = false;
+            CameraControlPanel.Visibility = Visibility.Collapsed;
+            CameraControlIcon.Kind = MahApps.Metro.IconPacks.PackIconMaterialKind.ChevronUp;
+            CameraControlButton.ToolTip = "Mở điều khiển camera";
             ActionBar.Opacity = 0;
             ActionBar.IsHitTestVisible = false;
         }
@@ -1070,6 +1139,13 @@ namespace V3SClient.UI.Views
             _changingStream = true;
             var empty = Slot == null || Slot.Camera == null;
             var showCameraId = !empty;
+            // A tile is reused when the user removes one camera and selects
+            // another. Restore the four visible actions on every bind/refresh
+            // so a previous camera's Collapsed state cannot leak forward.
+            CameraControlButton.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
+            FullscreenButton.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
+            DisconnectButton.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
+            RemoveButton.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
             var reportedOffline = !empty && Slot.Camera.is_online == false;
             var manuallyDisconnected = !empty && !reportedOffline && Slot.State == LiveConnectionState_v3.Offline;
             var showVideo = !empty && !reportedOffline && !manuallyDisconnected && Slot.State != LiveConnectionState_v3.Error &&
@@ -1092,11 +1168,23 @@ namespace V3SClient.UI.Views
             // video surface is hidden in those states, so the WPF badge is
             // visible and guarantees that every selected camera still shows
             // its ID even when the stream fails.
-            CameraBadgeInline.Visibility = showCameraId ? Visibility.Visible : Visibility.Collapsed;
+            // The native video host is an HWND and paints above WPF. Use the
+            // inline badge only while there is no video surface; once video
+            // is active, the player-owned badge is the visible one.
+            CameraBadgeInline.Visibility = showCameraId && !showVideo
+                ? Visibility.Visible : Visibility.Collapsed;
             if (!showCameraId)
                 HideCameraBadge(true);
             ActionBar.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
-            if (empty)
+            if (!empty && _compactDashboardMode)
+            {
+                SafeStopHideActionsTimer();
+                ActionPopup.IsOpen = true;
+                ActionBar.Opacity = 1;
+                ActionBar.IsHitTestVisible = true;
+                Dispatcher.BeginInvoke(new Action(PositionActionPopup), DispatcherPriority.Loaded);
+            }
+            else if (empty)
             {
                 _actionsPinned = false;
                 HideActions();
@@ -1109,10 +1197,14 @@ namespace V3SClient.UI.Views
                 ActionBar.IsHitTestVisible = true;
                 Dispatcher.BeginInvoke(new Action(PositionActionPopup), DispatcherPriority.Loaded);
             }
-            else if (!_fullscreenMode)
+            else if (!_actionsPinned && !_fullscreenMode &&
+                !TileBorder.IsMouseOver && !ActionBar.IsMouseOver)
             {
-                _actionsPinned = false;
                 HideActions();
+            }
+            else if (ActionPopup.IsOpen)
+            {
+                Dispatcher.BeginInvoke(new Action(PositionActionPopup), DispatcherPriority.Loaded);
             }
             ErrorOverlay.Visibility = !empty && !reportedOffline && Slot.HasError &&
                 (Slot.State == LiveConnectionState_v3.Error || Slot.State == LiveConnectionState_v3.Retrying)
@@ -1144,6 +1236,7 @@ namespace V3SClient.UI.Views
                 : Slot.DisplayName + " · " + (string.IsNullOrWhiteSpace(Slot.StreamLabel) ? "main" : Slot.StreamLabel);
             cameraBadgeText = empty ? string.Empty : Slot.DisplayName;
             CameraNameInline.Text = cameraBadgeText;
+            AudioPlayingIcon.Visibility = _isMuted || empty ? Visibility.Collapsed : Visibility.Visible;
             ErrorText.Text = "Kiểm tra mạng, cấu hình camera hoặc máy chủ phát trực tiếp.";
             ErrorText.Text = !string.IsNullOrWhiteSpace(Slot == null ? null : Slot.ErrorMessage)
                 ? Slot.ErrorMessage
@@ -1179,6 +1272,33 @@ namespace V3SClient.UI.Views
                 ? "VmsErrorBrush_v3"
                 : "VmsSuccessBrush_v3");
             DisconnectButton.ToolTip = streamIsActive ? "Ngắt kết nối camera" : "Kết nối camera";
+            PtzButton.Visibility = !empty && Slot.Camera != null && Slot.Camera.ptz_available == true ? Visibility.Visible : Visibility.Collapsed;
+            var hasAudio = !empty && Player != null && Player.HasAudio;
+            // Keep the control clickable while the pipeline is reconnecting;
+            // HasAudio can briefly be false during a refresh and disabling the
+            // button makes it appear to work only on the first click.
+            MuteButton.IsEnabled = true;
+            MuteButton.IsHitTestVisible = true;
+            MuteButton.Visibility = empty || CameraControlPanel.Visibility != Visibility.Visible
+                ? Visibility.Collapsed : Visibility.Visible;
+            // Do not reset mute on every visual/status refresh. The page
+            // initializes new tiles muted; subsequent refreshes must preserve
+            // the user's per-camera audio choice.
+            CameraControlButton.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
+            // Do not reset the expanded control panel on every stream/status
+            // refresh. RefreshVisuals is called frequently while connecting;
+            // collapsing it here makes the popup lose buttons mid-interaction.
+            if (!ActionPopup.IsOpen)
+                CameraControlPanel.Visibility = Visibility.Collapsed;
+            else
+            {
+                CameraControlButton.Visibility = Visibility.Visible;
+                MuteButton.Visibility = Visibility.Visible;
+                MuteButton.IsEnabled = true;
+                MuteButton.IsHitTestVisible = true;
+                PtzButton.Visibility = !empty && Slot.Camera != null && Slot.Camera.ptz_available == true
+                    ? Visibility.Visible : Visibility.Collapsed;
+            }
             StreamSelector.ItemsSource = empty || Slot.Camera.Streams == null ? null : Slot.Camera.Streams;
             StreamSelector.SelectedItem = empty ? null : Slot.SelectedStream;
             // Stream selection is managed by the camera/session, while the
@@ -1187,13 +1307,18 @@ namespace V3SClient.UI.Views
             StreamSelector.Visibility = Visibility.Collapsed;
             if (_compactDashboardMode)
             {
-                // RefreshVisuals runs again while a stream is connecting and
-                // would otherwise briefly bring Disconnect back into view.
+                // Keep the four visible grid actions stable in compact mode.
+                // Only legacy controls remain hidden; hiding the visible
+                // actions here made them disappear after every refresh.
                 ConnectButton.Visibility = Visibility.Collapsed;
-                DisconnectButton.Visibility = Visibility.Collapsed;
                 MuteButton.Visibility = Visibility.Collapsed;
                 SnapshotButton.Visibility = Visibility.Collapsed;
-                FullscreenButton.Visibility = Visibility.Collapsed;
+                PtzButton.Visibility = Visibility.Collapsed;
+                CameraControlPanel.Visibility = Visibility.Collapsed;
+                DisconnectButton.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
+                FullscreenButton.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
+                RemoveButton.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
+                CameraControlButton.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
             }
             _changingStream = false;
             OpenCameraBadgeIfActive();

@@ -84,6 +84,7 @@ namespace V3SClient.UI.Views
         private LiveTile_v3 _fullscreenTile;
         private Camera _pendingCameraClick;
         private int _cameraClickVersion;
+        private int _gridMutationVersion;
         private WindowStyle _tileWindowStyle;
         private ResizeMode _tileResizeMode;
         private WindowState _tileWindowState;
@@ -99,7 +100,7 @@ namespace V3SClient.UI.Views
         private bool _gridFullscreen;
         private bool _gridUsesVirtualDesktop;
         private bool _cameraSidebarCollapsed;
-        private bool _allMuted;
+        private LiveTile_v3 _activeAudioTile;
         private bool _allDisconnected;
         private WindowState _gridWindowState;
         private double _gridWindowLeft;
@@ -154,9 +155,9 @@ namespace V3SClient.UI.Views
             // Refresh immediately on page load/Connect all, then every 30 s.
             _deviceStatusRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
             _deviceStatusRefreshTimer.Tick += DeviceStatusRefreshTimer_Tick;
-            _aiSummaryRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+            _aiSummaryRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
             _aiSummaryRefreshTimer.Tick += AiSummaryRefreshTimer_Tick;
-            _liveTrafficDensityRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+            _liveTrafficDensityRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
             _liveTrafficDensityRefreshTimer.Tick += LiveTrafficDensityRefreshTimer_Tick;
             _aiEventFeedRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
             _aiEventFeedRefreshTimer.Tick += AiEventFeedRefreshTimer_Tick;
@@ -623,12 +624,15 @@ namespace V3SClient.UI.Views
             foreach (var slot in _viewModel.Slots)
             {
                 LiveTile_v3 tile;
-                if (!previousTiles.TryGetValue(slot.SlotId, out tile) || tile.Slot == null)
+                var isNewTile = !previousTiles.TryGetValue(slot.SlotId, out tile) || tile.Slot == null;
+                if (isNewTile)
                 {
                     tile = new LiveTile_v3();
                     tile.RemoveRequested += Tile_RemoveRequested;
                     tile.FullscreenRequested += Tile_FullscreenRequested;
                     tile.SnapshotRequested += Tile_SnapshotRequested;
+                    tile.AudioRequested += Tile_AudioRequested;
+                    tile.AudioStateChanged += Tile_AudioStateChanged;
                     tile.StateChanged += Tile_StateChanged;
                     tile.AllowDrop = true;
                     tile.PreviewMouseLeftButtonDown += Tile_PreviewMouseLeftButtonDown;
@@ -642,7 +646,8 @@ namespace V3SClient.UI.Views
                 // newly created or its slot instance genuinely changed.
                 if (tile.RequiresBind(slot))
                     tile.Bind(slot);
-                tile.SetMuted(_allMuted);
+                // Do not force a global mute during grid construction. Each
+                // tile keeps its own audio state and can be toggled directly.
                 var customCell = hasMergedCustomLayout ? _customLayoutCells[visualIndex] : null;
                 var placement = customCell == null
                     ? GetPlacement(_viewModel.Layout, visualIndex, dimensions.Item2)
@@ -663,6 +668,8 @@ namespace V3SClient.UI.Views
                 stale.RemoveRequested -= Tile_RemoveRequested;
                 stale.FullscreenRequested -= Tile_FullscreenRequested;
                 stale.SnapshotRequested -= Tile_SnapshotRequested;
+                stale.AudioRequested -= Tile_AudioRequested;
+                stale.AudioStateChanged -= Tile_AudioStateChanged;
                 stale.StateChanged -= Tile_StateChanged;
                 stale.PreviewMouseLeftButtonDown -= Tile_PreviewMouseLeftButtonDown;
                 stale.PreviewMouseMove -= Tile_PreviewMouseMove;
@@ -1336,15 +1343,50 @@ namespace V3SClient.UI.Views
 
         private async void RemoveAll_Click(object sender, RoutedEventArgs e)
         {
-            var tiles = _tiles.Values.ToArray();
+            // Invalidate delayed sidebar clicks and in-flight camera fills
+            // before clearing slots; otherwise a late continuation can put a
+            // camera back into a grid that was just cleared.
+            ++_gridMutationVersion;
+            ++_cameraClickVersion;
+            _pendingCameraClick = null;
+            BeginCameraOperation();
+            await CleanupTilesAndRebuildAsync(_tiles.Values, _viewModel.ClearAll, recreateTileInstances: true);
+        }
+
+        private async Task CleanupTilesAndRebuildAsync(IEnumerable<LiveTile_v3> sourceTiles, Action updateSlots,
+            bool recreateTileInstances = false)
+        {
+            var tiles = (sourceTiles ?? Enumerable.Empty<LiveTile_v3>())
+                .Where(tile => tile != null).Distinct().ToArray();
             foreach (var tile in tiles) tile.RequestDisconnect();
             CameraGrid.Visibility = Visibility.Visible;
             var cleanupTasks = tiles.Select(tile => tile.DisconnectInBackgroundAsync()).ToArray();
             try { await Task.WhenAll(cleanupTasks); }
-            catch (Exception ex) { LoggerManager.LogException(ex, "Live View _v3 background remove cleanup failed"); }
-            _viewModel.ClearAll();
+            catch (Exception ex) { LoggerManager.LogException(ex, "Live View _v3 background tile cleanup failed"); }
+            updateSlots?.Invoke();
+            if (recreateTileInstances)
+                ResetGridTileInstances(tiles);
             BuildGrid();
             UpdateStatus();
+        }
+
+        private void ResetGridTileInstances(IEnumerable<LiveTile_v3> sourceTiles)
+        {
+            foreach (var tile in (sourceTiles ?? Enumerable.Empty<LiveTile_v3>()).Distinct().ToArray())
+            {
+                CameraGrid.Children.Remove(tile);
+                tile.RemoveRequested -= Tile_RemoveRequested;
+                tile.FullscreenRequested -= Tile_FullscreenRequested;
+                tile.SnapshotRequested -= Tile_SnapshotRequested;
+                tile.AudioRequested -= Tile_AudioRequested;
+                tile.AudioStateChanged -= Tile_AudioStateChanged;
+                tile.StateChanged -= Tile_StateChanged;
+                tile.PreviewMouseLeftButtonDown -= Tile_PreviewMouseLeftButtonDown;
+                tile.PreviewMouseMove -= Tile_PreviewMouseMove;
+                tile.Drop -= Tile_Drop;
+                tile.Dispose();
+            }
+            _tiles.Clear();
         }
 
         private async void RemoveFailedOffline_Click(object sender, RoutedEventArgs e)
@@ -1408,13 +1450,12 @@ namespace V3SClient.UI.Views
                 completed?.Invoke();
         }
 
-        private void Tile_RemoveRequested(object sender, EventArgs e)
+        private async void Tile_RemoveRequested(object sender, EventArgs e)
         {
             var tile = sender as LiveTile_v3;
             if (tile == null || tile.Slot == null) return;
-            tile.Disconnect();
-            _viewModel.ClearSlot(tile.Slot);
-            BuildGrid();
+            var slot = tile.Slot;
+            await CleanupTilesAndRebuildAsync(new[] { tile }, () => _viewModel.ClearSlot(slot));
         }
 
         private void Tile_FullscreenRequested(object sender, EventArgs e)
@@ -1783,12 +1824,21 @@ namespace V3SClient.UI.Views
             if (GridFullscreenIcon != null) GridFullscreenIcon.Kind = icon;
         }
 
-        private void ToggleAllMute_Click(object sender, RoutedEventArgs e)
+
+        private void Tile_AudioRequested(object sender, EventArgs e)
         {
-            _allMuted = !_allMuted;
-            foreach (var tile in _tiles.Values) tile.SetMuted(_allMuted);
-            GlobalMuteButton.ToolTip = _allMuted ? "Bật âm thanh tất cả" : "Tắt âm thanh tất cả";
-            GlobalMuteIcon.Kind = _allMuted ? MahApps.Metro.IconPacks.PackIconMaterialKind.VolumeOff : MahApps.Metro.IconPacks.PackIconMaterialKind.VolumeHigh;
+            var requested = sender as LiveTile_v3;
+            if (requested == null) return;
+            _activeAudioTile = requested;
+            foreach (var tile in _tiles.Values)
+                if (!ReferenceEquals(tile, requested)) tile.SetMuted(true);
+        }
+
+        private void Tile_AudioStateChanged(object sender, EventArgs e)
+        {
+            var tile = sender as LiveTile_v3;
+            if (tile != null && tile.IsMuted && ReferenceEquals(_activeAudioTile, tile))
+                _activeAudioTile = null;
         }
 
         private async void Tile_SnapshotRequested(object sender, EventArgs e)
@@ -1936,7 +1986,7 @@ namespace V3SClient.UI.Views
 
                 var counts = await ApiManager.Instance.GetLiveFrameDetectionCountsAsync(profileCameraIds, _lifetime.Token);
                 if (!_disposed && counts != null && AiTrafficDensityText != null)
-                    AiTrafficDensityText.Text = counts.TotalDetectionCount.ToString();
+                    AiTrafficDensityText.Text = (counts?.TotalDetectionCount ?? 0).ToString();
             }
             finally
             {

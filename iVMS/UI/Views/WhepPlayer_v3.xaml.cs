@@ -37,6 +37,7 @@ namespace V3SClient.UI.Views
         private const int Radius = 3;
         private string _cameraId = string.Empty;
         private System.Drawing.Color _statusColor = System.Drawing.Color.FromArgb(100, 116, 139);
+        private bool _audioEnabled;
 
         public CameraIdBadgeControl_v3()
         {
@@ -47,14 +48,27 @@ namespace V3SClient.UI.Views
             TabStop = false;
         }
 
-        public void SetBadge(string cameraId, System.Drawing.Color statusColor)
+        public void SetBadge(string cameraId, System.Drawing.Color statusColor, bool audioEnabled)
         {
             _cameraId = cameraId ?? string.Empty;
             _statusColor = statusColor;
+            _audioEnabled = audioEnabled;
             var measured = System.Windows.Forms.TextRenderer.MeasureText(_cameraId, Font,
                 new System.Drawing.Size(int.MaxValue, Height),
                 System.Windows.Forms.TextFormatFlags.NoPadding | System.Windows.Forms.TextFormatFlags.SingleLine);
-            Width = Math.Max(48, 30 + measured.Width + 7);
+            var audioWidth = 0;
+            if (audioEnabled)
+            {
+                using (var audioFont = new System.Drawing.Font("Segoe MDL2 Assets", 10F,
+                    System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Pixel))
+                {
+                    audioWidth = System.Windows.Forms.TextRenderer.MeasureText("\uE995", audioFont,
+                        new System.Drawing.Size(int.MaxValue, Height),
+                        System.Windows.Forms.TextFormatFlags.NoPadding |
+                        System.Windows.Forms.TextFormatFlags.SingleLine).Width;
+                }
+            }
+            Width = Math.Max(48, 28 + measured.Width + (audioEnabled ? audioWidth + 2 : 0) + 5);
             Invalidate();
         }
 
@@ -87,13 +101,39 @@ namespace V3SClient.UI.Views
                 e.Graphics.DrawLine(iconPen, iconX + 15F, iconY + 8F, iconX + 11F, iconY + 6F);
 
                 System.Windows.Forms.TextRenderer.DrawText(e.Graphics, _cameraId, Font,
-                    new System.Drawing.Rectangle(28, 0, Math.Max(1, Width - 33), Height),
+                    new System.Drawing.Rectangle(28, 0, Math.Max(1, Width - 49), Height),
                     System.Drawing.Color.White,
                     System.Windows.Forms.TextFormatFlags.Left |
                     System.Windows.Forms.TextFormatFlags.VerticalCenter |
                     System.Windows.Forms.TextFormatFlags.NoPadding |
                     System.Windows.Forms.TextFormatFlags.EndEllipsis |
                     System.Windows.Forms.TextFormatFlags.SingleLine);
+
+                // Match the WPF badge: show the green volume icon only when
+                // this player is currently unmuted.
+                if (_audioEnabled)
+                {
+                    // Use the Windows Segoe MDL2 volume glyph instead of
+                    // hand-built arcs, which can rasterize as a clipped blob
+                    // at the small native badge size.
+                    using (var audioFont = new System.Drawing.Font("Segoe MDL2 Assets", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Pixel))
+                    using (var audioBrush = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(34, 197, 94)))
+                    {
+                        const string volumeGlyph = "\uE995"; // Volume3
+                        var textSize = System.Windows.Forms.TextRenderer.MeasureText(_cameraId, Font,
+                            new System.Drawing.Size(int.MaxValue, Height),
+                            System.Windows.Forms.TextFormatFlags.NoPadding |
+                            System.Windows.Forms.TextFormatFlags.SingleLine);
+                        var audioX = 28 + textSize.Width + 2;
+                        System.Windows.Forms.TextRenderer.DrawText(e.Graphics, volumeGlyph, audioFont,
+                            new System.Drawing.Rectangle(audioX, 0, Width - audioX - 3, Height),
+                            audioBrush.Color,
+                            System.Windows.Forms.TextFormatFlags.Left |
+                            System.Windows.Forms.TextFormatFlags.VerticalCenter |
+                            System.Windows.Forms.TextFormatFlags.NoPadding |
+                            System.Windows.Forms.TextFormatFlags.SingleLine);
+                    }
+                }
             }
         }
 
@@ -504,7 +544,9 @@ namespace V3SClient.UI.Views
                 : connected
                     ? System.Drawing.Color.FromArgb(34, 197, 94) // VmsSuccess
                     : System.Drawing.Color.FromArgb(245, 158, 11); // VmsWarning
-            _cameraBadge.SetBadge(cameraId, statusColor);
+            // Only show the volume glyph when the current pipeline actually
+            // exposes an audio stream and that stream is not muted.
+            _cameraBadge.SetBadge(cameraId, statusColor, !_isMuted && HasAudio);
             _cameraBadge.Visible = visible && !string.IsNullOrWhiteSpace(cameraId) && _videoPanel.Visible;
             if (_cameraBadge.Visible)
                 _cameraBadge.BringToFront();
@@ -1100,12 +1142,44 @@ namespace V3SClient.UI.Views
         public void SetMuted(bool muted)
         {
             _isMuted = muted;
+            if (_cameraBadge != null && !_cameraBadge.IsDisposed)
+                _cameraBadge.Invalidate();
             var pipeline = _pipeline;
             if (pipeline == null) return;
             var volume = pipeline.GetByName("audioVolume");
             if (volume == null) return;
             try { volume["mute"] = muted; }
             finally { volume.Dispose(); }
+        }
+
+        public bool HasAudio
+        {
+            get
+            {
+                var pipeline = _pipeline;
+                if (pipeline == null) return false;
+                Element volume = null;
+                try { volume = pipeline.GetByName("audioVolume"); return volume != null; }
+                catch { return false; }
+                finally { volume?.Dispose(); }
+            }
+        }
+
+        public bool SetVolume(double volumeLevel)
+        {
+            var pipeline = _pipeline;
+            if (pipeline == null) return false;
+            Element volume = null;
+            try
+            {
+                volume = pipeline.GetByName("audioVolume");
+                if (volume == null) return false;
+                volume["volume"] = Math.Max(0d, Math.Min(1d, volumeLevel));
+                volume["mute"] = volumeLevel <= 0.001d;
+                return true;
+            }
+            catch { return false; }
+            finally { volume?.Dispose(); }
         }
 
         public bool TrySaveSnapshot(out string savedPath)

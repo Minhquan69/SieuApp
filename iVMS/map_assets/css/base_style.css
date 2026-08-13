@@ -771,8 +771,7 @@
             z-index: 1000;
             pointer-events: none;
         }
-        .camera-label-layer .camera-marker-label,
-        .maplibregl-marker.camera-marker-default .camera-marker-label {
+        .camera-label-layer .camera-marker-label {
             display: none;
             position: absolute;
             left: 50%;
@@ -791,8 +790,7 @@
             box-shadow: 0 2px 6px rgba(0,0,0,0.45);
             pointer-events: none;
         }
-        .camera-label-layer .camera-marker-label,
-        .maplibregl-marker.camera-marker-default.zoom-label-visible .camera-marker-label {
+        .camera-label-layer .camera-marker-label {
             display: block;
         }
         .maplibregl-marker.camera-marker-default > svg {
