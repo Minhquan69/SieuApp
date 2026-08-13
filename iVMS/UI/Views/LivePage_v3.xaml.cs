@@ -126,7 +126,11 @@ namespace V3SClient.UI.Views
         private bool _aiFeedInitialized;
         private readonly Dictionary<string, ImageSource> _aiFeedCropCache = new Dictionary<string, ImageSource>(StringComparer.OrdinalIgnoreCase);
         private readonly Queue<string> _aiFeedCropCacheOrder = new Queue<string>();
-        private const int MaxAiFeedCropCacheEntries = 100;
+        // Feed thumbnails are shown at 78px and at most 260px in the detail
+        // pane. Keeping 100 full-resolution decoded Bitmaps can consume GBs
+        // over a long-running live session.
+        private const int MaxAiFeedCropCacheEntries = 24;
+        private const int AiFeedCropDecodePixelWidth = 520;
         private readonly Stopwatch _resizeStopwatch = new Stopwatch();
         private bool _resizeOverlaysSuspended;
         private bool _geometryTransitionInProgress;
@@ -1374,6 +1378,7 @@ namespace V3SClient.UI.Views
         {
             foreach (var tile in (sourceTiles ?? Enumerable.Empty<LiveTile_v3>()).Distinct().ToArray())
             {
+                var slotId = tile.Slot == null ? (int?)null : tile.Slot.SlotId;
                 CameraGrid.Children.Remove(tile);
                 tile.RemoveRequested -= Tile_RemoveRequested;
                 tile.FullscreenRequested -= Tile_FullscreenRequested;
@@ -1385,8 +1390,9 @@ namespace V3SClient.UI.Views
                 tile.PreviewMouseMove -= Tile_PreviewMouseMove;
                 tile.Drop -= Tile_Drop;
                 tile.Dispose();
+                if (slotId.HasValue)
+                    _tiles.Remove(slotId.Value);
             }
-            _tiles.Clear();
         }
 
         private async void RemoveFailedOffline_Click(object sender, RoutedEventArgs e)
@@ -1455,7 +1461,12 @@ namespace V3SClient.UI.Views
             var tile = sender as LiveTile_v3;
             if (tile == null || tile.Slot == null) return;
             var slot = tile.Slot;
-            await CleanupTilesAndRebuildAsync(new[] { tile }, () => _viewModel.ClearSlot(slot));
+            // The per-tile toolbar is hosted in a native Popup. Reusing this
+            // tile after its player HWND has been torn down leaves that Popup
+            // without a valid owner, unlike Remove All which creates a fresh
+            // tile. Recreate only this slot; running cameras keep their tiles.
+            await CleanupTilesAndRebuildAsync(new[] { tile }, () => _viewModel.ClearSlot(slot),
+                recreateTileInstances: true);
         }
 
         private void Tile_FullscreenRequested(object sender, EventArgs e)
@@ -2120,6 +2131,7 @@ namespace V3SClient.UI.Views
                                 var crop = new BitmapImage();
                                 crop.BeginInit();
                                 crop.CacheOption = BitmapCacheOption.OnLoad;
+                                crop.DecodePixelWidth = AiFeedCropDecodePixelWidth;
                                 crop.StreamSource = imageStream;
                                 crop.EndInit();
                                 crop.Freeze();

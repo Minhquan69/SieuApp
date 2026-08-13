@@ -601,6 +601,41 @@ namespace V3SClient.UI.Views
         }
 
         /// <summary>
+        /// Cancels a pending connect and waits until it has released the
+        /// connection gate before disposing the native pipeline. A plain
+        /// cancellation is insufficient: Parse.Launch cannot be interrupted,
+        /// so an old pipeline could otherwise finish building after Clear All
+        /// and overlap the next camera-wall cycle.
+        /// </summary>
+        public async System.Threading.Tasks.Task DisconnectPipelineAsync()
+        {
+            var cancellation = _cancellation;
+            if (cancellation != null)
+                cancellation.Cancel();
+
+            await _connectionGate.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                if (ReferenceEquals(_cancellation, cancellation))
+                {
+                    _cancellation = null;
+                    if (cancellation != null)
+                        cancellation.Dispose();
+                }
+
+                await System.Threading.Tasks.Task.Run(() =>
+                {
+                    DisposePipeline();
+                    ReleaseInactiveAiResources();
+                }).ConfigureAwait(false);
+            }
+            finally
+            {
+                _connectionGate.Release();
+            }
+        }
+
+        /// <summary>
         /// Matches the original V3 live view: native GStreamer disposal is run
         /// concurrently for each camera. No WPF controls are touched here.
         /// </summary>
@@ -611,6 +646,38 @@ namespace V3SClient.UI.Views
             _cancellation = null;
             var pipeline = System.Threading.Interlocked.Exchange(ref _pipeline, null);
             DisposePipelineInstance(pipeline);
+            ReleaseInactiveAiResources();
+        }
+
+        /// <summary>
+        /// The tile can remain in an empty grid slot after its camera is removed.
+        /// Do not retain the latest AI frame or Direct2D/DirectWrite allocations
+        /// in that case; they are recreated lazily on the next AI frame.
+        /// </summary>
+        private void ReleaseInactiveAiResources()
+        {
+            if (System.Threading.Volatile.Read(ref _pipeline) != null) return;
+
+            ClearAiMetadata();
+            lock (_roiColorSync)
+                _roiColorIndices.Clear();
+
+            lock (_aiRendererSync)
+            {
+                // A new connection may have completed while this cleanup was
+                // waiting for the renderer lock. Its resources belong to the
+                // new pipeline and must remain intact.
+                if (System.Threading.Volatile.Read(ref _pipeline) != null) return;
+
+                _aiLabelMetrics.Clear();
+                _aiLabelMetricsOrder.Clear();
+                _aiTextFormat?.Dispose();
+                _aiTextFormat = null;
+                _aiTextFactory?.Dispose();
+                _aiTextFactory = null;
+                _aiDrawFactory?.Dispose();
+                _aiDrawFactory = null;
+            }
         }
 
         private async System.Threading.Tasks.Task ConnectAsync()

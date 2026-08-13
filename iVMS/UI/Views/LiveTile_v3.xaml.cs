@@ -134,12 +134,22 @@ namespace V3SClient.UI.Views
             _badgeOpenQueued = false;
         }
 
+        private void SafeCloseActionPopup()
+        {
+            try
+            {
+                if (ActionPopup != null && ActionPopup.IsOpen)
+                    ActionPopup.IsOpen = false;
+            }
+            catch (System.ComponentModel.Win32Exception) { }
+            catch (InvalidOperationException) { }
+        }
+
         private void LiveTile_Unloaded(object sender, RoutedEventArgs e)
         {
             SafeStopHideActionsTimer();
             _actionsPinned = false;
-            try { ActionPopup.IsOpen = false; }
-            catch (System.ComponentModel.Win32Exception) { }
+            SafeCloseActionPopup();
             if (_ownerWindow == null) return;
             _ownerWindow.Deactivated -= OwnerWindow_Deactivated;
             _ownerWindow.Activated -= OwnerWindow_Activated;
@@ -174,7 +184,7 @@ namespace V3SClient.UI.Views
         {
             SafeStopHideActionsTimer();
             _actionsPinned = false;
-            ActionPopup.IsOpen = false;
+            SafeCloseActionPopup();
             // Popup owns a native HWND and can otherwise remain above a
             // different foreground application.  Keep the badge scoped to
             // the iVista window; OwnerWindow_Activated restores it instantly.
@@ -186,7 +196,7 @@ namespace V3SClient.UI.Views
             SafeStopHideActionsTimer();
             _actionsPinned = false;
             HideCameraBadge(false);
-            ActionPopup.IsOpen = false;
+            SafeCloseActionPopup();
             if (_ownerWindow != null)
                 _ownerWindow.Topmost = false;
         }
@@ -325,14 +335,14 @@ namespace V3SClient.UI.Views
             // Popup controls are separate native windows because the video
             // renderer uses WindowsFormsHost. Collapsing or expanding a tile
             // alone does not close them, so do so explicitly.
-            ActionPopup.IsOpen = false;
+            SafeCloseActionPopup();
             HideCameraBadge(false);
         }
 
         /// <summary>Restores the ID only after the normal camera grid is back.</summary>
         public void RestoreAfterFullscreen()
         {
-            ActionPopup.IsOpen = false;
+            SafeCloseActionPopup();
             HideCameraBadge(false);
             OpenCameraBadgeIfActive();
         }
@@ -395,7 +405,7 @@ namespace V3SClient.UI.Views
             _popupPlacementSuspended = true;
             SafeStopHideActionsTimer();
             HideCameraBadge(false);
-            ActionPopup.IsOpen = false;
+            SafeCloseActionPopup();
         }
 
         /// <summary>Restores overlays after the grid receives stable bounds.</summary>
@@ -414,7 +424,7 @@ namespace V3SClient.UI.Views
         public void HideTransientOverlays()
         {
             HideCameraBadge(false);
-            ActionPopup.IsOpen = false;
+            SafeCloseActionPopup();
             ActionBar.Opacity = 0;
             ActionBar.IsHitTestVisible = false;
         }
@@ -478,7 +488,7 @@ namespace V3SClient.UI.Views
                 Player.SelectedStream = gridStream;
             }
             MainPlayer.RequestDisconnect();
-            _ = System.Threading.Tasks.Task.Run(() => MainPlayer.DisposePipelineInBackground());
+            _ = MainPlayer.DisconnectPipelineAsync();
             UpdateMetadataSubscription();
             RefreshVisuals();
         }
@@ -690,7 +700,11 @@ namespace V3SClient.UI.Views
             _badgeGeneration++;
             Player.RequestDisconnect();
             MainPlayer.RequestDisconnect();
-            await System.Threading.Tasks.Task.Run(() => Player.DisposePipelineInBackground());
+            // Wait for every pending native connection to finish cancelling
+            // before the tile can be reused. This prevents the previous
+            // camera wall from completing Parse.Launch after a new wall starts.
+            await Player.DisconnectPipelineAsync();
+            await MainPlayer.DisconnectPipelineAsync();
             if (_disposed) return;
             Dispatcher.BeginInvoke(new Action(() =>
             {
@@ -874,7 +888,7 @@ namespace V3SClient.UI.Views
                 FullscreenButton.Visibility = Visibility.Visible;
                 DisconnectButton.Visibility = Visibility.Visible;
                 RemoveButton.Visibility = Visibility.Visible;
-                ActionPopup.IsOpen = false;
+                SafeCloseActionPopup();
             }
             OpenCameraBadgeIfActive();
             SafeStopHideActionsTimer();
@@ -974,7 +988,7 @@ namespace V3SClient.UI.Views
         {
             if (_disposed || _actionsPinned || _fullscreenMode) return;
             SafeStopHideActionsTimer();
-            ActionPopup.IsOpen = false;
+            SafeCloseActionPopup();
             CameraControlPanel.Visibility = Visibility.Collapsed;
             CameraControlIcon.Kind = MahApps.Metro.IconPacks.PackIconMaterialKind.ChevronUp;
             CameraControlButton.ToolTip = "Mở điều khiển camera";
@@ -1369,7 +1383,7 @@ namespace V3SClient.UI.Views
             _hideActionsTimer.Tick -= HideActionsTimer_Tick;
             if (Application.Current != null)
                 Application.Current.Deactivated -= Application_Deactivated;
-            ActionPopup.IsOpen = false;
+            SafeCloseActionPopup();
             Loaded -= LiveTile_Loaded;
             Unloaded -= LiveTile_Unloaded;
             if (_ownerWindow != null)
