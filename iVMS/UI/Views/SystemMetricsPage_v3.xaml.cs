@@ -25,8 +25,10 @@ namespace V3SClient.UI.Views
         private readonly DispatcherTimer _refreshTimer = new DispatcherTimer();
         private readonly Dictionary<string, List<double>> _history = new Dictionary<string, List<double>>();
         private readonly Dictionary<string, List<DateTime?>> _historyTimes = new Dictionary<string, List<DateTime?>>();
+        private readonly Dictionary<string, JObject> _responseCache = new Dictionary<string, JObject>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<Canvas, int> _chartHoverIndexes = new Dictionary<Canvas, int>();
         private bool _loading;
+        private bool _usingCachedResponse;
         private bool _updatingHostList;
         private string _selectedHostCpuTemperature = "—";
 
@@ -180,6 +182,7 @@ namespace V3SClient.UI.Views
         {
             if (_loading) return;
             _loading = true;
+            _usingCachedResponse = false;
             try
             {
                 StatusText.Text = "Đang tải dữ liệu hạ tầng…";
@@ -271,7 +274,10 @@ namespace V3SClient.UI.Views
                 }
                 DrawCharts();
                 UpdatedText.Text = "Cập nhật: " + DateTime.Now.ToString("HH:mm:ss dd/MM/yyyy");
-                StatusText.Visibility = Visibility.Collapsed;
+                StatusText.Text = _usingCachedResponse
+                    ? "Đang hiển thị dữ liệu cache trong khi chờ Metrics API."
+                    : string.Empty;
+                StatusText.Visibility = _usingCachedResponse ? Visibility.Visible : Visibility.Collapsed;
             }
             catch (Exception ex)
             {
@@ -301,10 +307,39 @@ namespace V3SClient.UI.Views
             if (string.IsNullOrWhiteSpace(root)) throw new InvalidOperationException("Portal chưa cấu hình endpoint _systemMetric.");
             if (!root.EndsWith("/api/metrics", StringComparison.OrdinalIgnoreCase)) root += "/api/metrics";
             var token = ApiManager.Instance.GetEndpointToken(MetricEndpointKey);
-            var response = await _http.SendAsync(CreateMetricsRequest(root + path, token));
-            var body = await response.Content.ReadAsStringAsync();
-            if (!response.IsSuccessStatusCode) throw new InvalidOperationException("HTTP " + (int)response.StatusCode + ": " + body);
-            return JObject.Parse(body);
+            var cacheKey = MetricsCacheKey(path);
+            try
+            {
+                using (var request = CreateMetricsRequest(root + path, token))
+                using (var response = await _http.SendAsync(request))
+                {
+                    var body = await response.Content.ReadAsStringAsync();
+                    if (!response.IsSuccessStatusCode) throw new InvalidOperationException("HTTP " + (int)response.StatusCode + ": " + body);
+                    var data = JObject.Parse(body);
+                    _responseCache[cacheKey] = data;
+                    return data;
+                }
+            }
+            catch
+            {
+                JObject cached;
+                if (_responseCache.TryGetValue(cacheKey, out cached))
+                {
+                    _usingCachedResponse = true;
+                    return cached;
+                }
+                throw;
+            }
+        }
+
+        private static string MetricsCacheKey(string path)
+        {
+            var separator = path.IndexOf('?');
+            if (separator < 0) return path;
+            var stableParameters = path.Substring(separator + 1).Split('&')
+                .Where(parameter => !parameter.StartsWith("start=", StringComparison.OrdinalIgnoreCase) &&
+                                    !parameter.StartsWith("end=", StringComparison.OrdinalIgnoreCase));
+            return path.Substring(0, separator + 1) + string.Join("&", stableParameters);
         }
 
         private static HttpRequestMessage CreateMetricsRequest(string url, string token)

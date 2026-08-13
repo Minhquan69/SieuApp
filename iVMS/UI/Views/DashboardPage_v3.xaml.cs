@@ -105,6 +105,7 @@ namespace V3SClient.UI.Views
         private double _storageGaugeStartValue;
         private double _storageGaugeTargetValue;
         private double _storageGaugeDisplayedValue;
+        private InfrastructureMetricsSnapshot _infrastructureCache;
 
         public ObservableCollection<DashboardCameraHistoryItem> CameraHistory { get; } = new ObservableCollection<DashboardCameraHistoryItem>();
         public ObservableCollection<string> CameraHistoryLabels { get; } = new ObservableCollection<string>();
@@ -587,11 +588,32 @@ namespace V3SClient.UI.Views
                 var networkReceiveTask = string.IsNullOrWhiteSpace(networkDevice) ? Task.FromResult(new JObject { ["series"] = new JArray() }) : GetSystemMetricSeriesAsync("network_receive", start, end, networkDevice);
                 var networkTransmitTask = string.IsNullOrWhiteSpace(networkDevice) ? Task.FromResult(new JObject { ["series"] = new JArray() }) : GetSystemMetricSeriesAsync("network_transmit", start, end, networkDevice);
                 await Task.WhenAll(networkReceiveTask, networkTransmitTask);
-                ApplyInfrastructureMetrics(overview, await nodesTask, await diskReadTask, await diskWriteTask, await networkReceiveTask, await networkTransmitTask);
+                var snapshot = new InfrastructureMetricsSnapshot
+                {
+                    Overview = overview,
+                    Nodes = await nodesTask,
+                    DiskRead = await diskReadTask,
+                    DiskWrite = await diskWriteTask,
+                    NetworkReceive = await networkReceiveTask,
+                    NetworkTransmit = await networkTransmitTask
+                };
+                _infrastructureCache = snapshot;
+                ApplyInfrastructureMetrics(snapshot.Overview, snapshot.Nodes, snapshot.DiskRead, snapshot.DiskWrite,
+                    snapshot.NetworkReceive, snapshot.NetworkTransmit);
             }
             catch (Exception ex)
             {
                 LoggerManager.LogException(ex, "Dashboard system metrics refresh");
+                if (_infrastructureCache != null)
+                {
+                    ApplyInfrastructureMetrics(_infrastructureCache.Overview, _infrastructureCache.Nodes,
+                        _infrastructureCache.DiskRead, _infrastructureCache.DiskWrite,
+                        _infrastructureCache.NetworkReceive, _infrastructureCache.NetworkTransmit);
+                    InfrastructureStatusText.Text = "Dữ liệu cache";
+                    InfrastructureStatusText.Foreground = new SolidColorBrush(Color.FromRgb(255, 154, 61));
+                    NetworkStatusText.Text = "Dữ liệu cache · đang chờ Metrics API";
+                    return;
+                }
                 InfrastructureNodes.Clear();
                 InfrastructureHostText.Text = "Không tải được Metrics API";
                 InfrastructureStatusText.Text = "Cần kiểm tra kết nối";
@@ -745,6 +767,15 @@ namespace V3SClient.UI.Views
         }
         private static void SetMetricBar(ProgressBar bar, TextBlock label, JToken value) { var number = Math.Max(0, Math.Min(100, MetricNumber(value) ?? 0)); bar.Value = number; label.Text = MetricNumber(value).HasValue ? number.ToString("0.0", CultureInfo.GetCultureInfo("vi-VN")) + "%" : "—"; }
         private sealed class MetricPoint { public DateTime? Timestamp { get; set; } public double Value { get; set; } }
+        private sealed class InfrastructureMetricsSnapshot
+        {
+            public JObject Overview { get; set; }
+            public JObject Nodes { get; set; }
+            public JObject DiskRead { get; set; }
+            public JObject DiskWrite { get; set; }
+            public JObject NetworkReceive { get; set; }
+            public JObject NetworkTransmit { get; set; }
+        }
 
         private void ApplyVehicleStats(ApiManager.CameraVehicleCountsResponse vehicle)
         {

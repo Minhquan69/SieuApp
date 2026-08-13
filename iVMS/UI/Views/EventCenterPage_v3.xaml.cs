@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Shapes;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -136,6 +137,8 @@ namespace V3SClient.UI.Views
             CompletedGrid.ItemsSource = _pageRows;
             RecordedGrid.ItemsSource  = _pageRows;
             DetailList.ItemsSource = _pageRows;
+            ConfigureCompletedGridPresentation();
+            ConfigureRecordedGridPresentation();
 
             // Set up initial state for calendar
             _selectedDate = DateTime.Today;
@@ -143,7 +146,7 @@ namespace V3SClient.UI.Views
             var initialStr = _selectedDate.ToString("dd/MM/yyyy");
             DateFilterText.Text = initialStr;
             PopupDateInputText.Text = initialStr;
-            PageSizeCombo.SelectedIndex      = 0;
+            PageSizeCombo.SelectedIndex      = 1;
 
             ActivateTab("completed");
 
@@ -157,6 +160,48 @@ namespace V3SClient.UI.Views
             // navigating quickly).  Cancelling is sufficient; disposing here races
             // with RefreshAllAsync and causes ObjectDisposedException on Cancel().
             Unloaded += EventCenterPage_Unloaded;
+        }
+
+        private void ConfigureCompletedGridPresentation()
+        {
+            // This table is commonly used on a wide monitor. Larger rows and
+            // text make effective use of the available space without changing
+            // its data or pagination behaviour.
+            CompletedGrid.RowHeight = 66;
+            AddFilterHint(CompletedGrid, 0, "BIỂN SỐ", "Lọc theo biển số bằng ô tìm kiếm phía trên.");
+            AddFilterHint(CompletedGrid, 3, "CÔNG ĐOẠN", "Lọc theo công đoạn bằng bộ lọc Công đoạn phía trên.");
+            AddFilterHint(CompletedGrid, 4, "ĐỘ TIN CẬY", "Lọc theo độ tin cậy.");
+            AddFilterHint(CompletedGrid, 5, "THỜI GIAN VÀO", "Lọc theo thời gian vào.");
+            AddFilterHint(CompletedGrid, 6, "THỜI GIAN RA", "Lọc theo thời gian ra.");
+        }
+
+        private void ConfigureRecordedGridPresentation()
+        {
+            RecordedGrid.RowHeight = 66;
+            AddFilterHint(RecordedGrid, 0, "BIỂN SỐ", "Lọc theo biển số bằng ô tìm kiếm phía trên.");
+            AddFilterHint(RecordedGrid, 2, "CAMERA", "Lọc theo camera bằng bộ lọc Camera phía trên.");
+            AddFilterHint(RecordedGrid, 3, "THỜI GIAN", "Lọc theo thời gian bằng bộ lọc ngày phía trên.");
+            AddFilterHint(RecordedGrid, 4, "ĐỘ CHÍNH XÁC", "Lọc theo độ chính xác.");
+        }
+
+        private static void AddFilterHint(DataGrid grid, int index, string title, string hint)
+        {
+            if (grid == null || index < 0 || index >= grid.Columns.Count) return;
+            var header = new StackPanel { Orientation = Orientation.Horizontal };
+            header.Children.Add(new TextBlock { Text = title, VerticalAlignment = VerticalAlignment.Center });
+            var icon = new System.Windows.Shapes.Path
+            {
+                Data = Geometry.Parse("M3,5 H21 L14,13 V19 L10,21 V13 Z"),
+                Fill = new SolidColorBrush(Color.FromRgb(96, 165, 250)),
+                Width = 11,
+                Height = 11,
+                Stretch = Stretch.Uniform,
+                Margin = new Thickness(6, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            header.Children.Add(icon);
+            ToolTipService.SetToolTip(header, hint);
+            grid.Columns[index].Header = header;
         }
 
         private async void EventCenterPage_Loaded(object sender, RoutedEventArgs e)
@@ -490,12 +535,8 @@ namespace V3SClient.UI.Views
                 }
                 else
                 {
-                    var response = await ApiManager.Instance.GetAiEventObjectCropHistoryAsync(start, end, camIds, _currentPage, _pageSize, q, minConfidence: _minConfidence, cancellationToken: token);
+                    rows = await LoadRecordedPlateRowsAsync(start, end, camIds, q, token);
                     if (token.IsCancellationRequested) return;
-                    _totalItems = response?.TotalItems ?? 0;
-                    _totalPages = response?.TotalPages ?? 1;
-                    var items = response?.Items ?? new List<ApiManager.AiEventObjectCropItem>();
-                    rows = items.Select(MapRow).ToList();
                 }
 
                 await Dispatcher.InvokeAsync(() =>
@@ -578,24 +619,80 @@ namespace V3SClient.UI.Views
             DateTime.TryParse(x.EventTime, null, DateTimeStyles.RoundtripKind, out t);
             var timeStr = t == DateTime.MinValue ? x.EventTime : t.ToString("HH:mm:ss dd/MM/yyyy");
             var conf    = (x.Confidence ?? 0) * 100.0;
-            var objId   = string.IsNullOrWhiteSpace(x.ObjectId) ? (x.MetaType ?? "—") : x.ObjectId;
+            var plate = !string.IsNullOrWhiteSpace(x.Plate)
+                ? x.Plate.Trim()
+                : IsLicensePlate(x.ObjectId) ? x.ObjectId.Trim() : "—";
+
+            if (plate == "—") return null;
 
             return new EventRow_v3
             {
                 DetectionId  = x.DetectionId ?? x.MessageId ?? "—",
                 AssetId      = !string.IsNullOrWhiteSpace(x.AssetId) ? x.AssetId : (x.CropAssetId ?? "—"),
                 Camera       = x.CameraId ?? "—",
-                Title        = objId,
-                Type         = FriendlyType(x.EventType ?? x.MetaType ?? ""),
+                Title        = plate,
+                Type         = FriendlyType(x.MetaType ?? ""),
                 Confidence   = conf.ToString("0.#") + "%",
                 ConfidenceRaw = conf,
-                VehicleType  = FriendlyType(x.MetaType ?? x.EventType ?? ""),
+                VehicleType  = FriendlyType(x.MetaType ?? ""),
                 RoiName      = "—",
                 TimeIn       = timeStr,
                 TimeOut      = "—",
                 Duration     = "—",
                 PlaybackUrl  = null,
             };
+        }
+
+        private static bool IsLicensePlate(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return false;
+            var normalized = new string(value.Where(char.IsLetterOrDigit).ToArray());
+            if (normalized.Length < 6 || normalized.Length > 12) return false;
+            var digitCount = normalized.Count(char.IsDigit);
+            return digitCount >= 4 && normalized.Any(char.IsLetter);
+        }
+
+        private async Task<List<EventRow_v3>> LoadRecordedPlateRowsAsync(
+            DateTime start,
+            DateTime end,
+            List<string> cameraIds,
+            string query,
+            CancellationToken token)
+        {
+            const int sourcePageSize = 50;
+            var validRows = new List<EventRow_v3>();
+            var sourcePage = 1;
+            var sourceTotalPages = 1;
+
+            do
+            {
+                var response = await ApiManager.Instance.GetAiEventObjectCropHistoryAsync(
+                    start, end, cameraIds, sourcePage, sourcePageSize, query,
+                    minConfidence: _minConfidence, cancellationToken: token);
+
+                if (token.IsCancellationRequested)
+                    return new List<EventRow_v3>();
+
+                sourceTotalPages = Math.Max(1, response?.TotalPages ?? 1);
+                foreach (var item in response?.Items ?? Enumerable.Empty<ApiManager.AiEventObjectCropItem>())
+                {
+                    var row = MapRow(item);
+                    if (row != null)
+                        validRows.Add(row);
+                }
+
+                sourcePage++;
+            }
+            while (sourcePage <= sourceTotalPages);
+
+            _totalItems = validRows.Count;
+            _totalPages = Math.Max(1, (int)Math.Ceiling(_totalItems / (double)_pageSize));
+            _currentPage = Math.Max(1, Math.Min(_currentPage, _totalPages));
+
+            return validRows
+                .Skip((_currentPage - 1) * _pageSize)
+                .Take(_pageSize)
+                .ToList();
         }
 
         // ─────────────────────────────────────────────────────

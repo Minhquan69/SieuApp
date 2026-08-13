@@ -255,6 +255,13 @@
                                     <TextBlock Grid.Column="2" Text="Nhấn Enter để tự chia lưới" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" FontSize="10" VerticalAlignment="Center" Margin="9,0,0,0" TextWrapping="Wrap"/>
                                 </Grid>
                             </Border>
+                            <Button Content="Bố cục tùy chỉnh..."
+                                    Click="OpenCustomLayoutEditor_Click"
+                                    Style="{StaticResource PrimaryButtonStyle_v3}"
+                                    HorizontalAlignment="Stretch"
+                                    Margin="3,9,3,0"
+                                    Padding="8,6"
+                                    ToolTip="Tạo lưới và gộp/tách các ô camera theo ý muốn"/>
                         </StackPanel>
                     </Border>
                 </Popup>

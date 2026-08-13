@@ -175,7 +175,7 @@
                                         BorderBrush="{StaticResource VmsBorderStrongBrush_v3}"
                                         BorderThickness="1" CornerRadius="6" Margin="0,3,0,0">
                                     <StackPanel>
-                                        <Grid Margin="6,6,6,3">
+                                        <Grid x:Name="DropSearchArea" Margin="6,6,6,3">
                                             <Border Background="{StaticResource VmsSurfaceBrush_v3}"
                                                     BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="1"
                                                     CornerRadius="5" Height="30"/>
@@ -200,6 +200,9 @@
                             </Popup>
                         </Grid>
                         <ControlTemplate.Triggers>
+                            <Trigger Property="Tag" Value="NoSearch">
+                                <Setter TargetName="DropSearchArea" Property="Visibility" Value="Collapsed"/>
+                            </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bdr" Property="BorderBrush"
                                         Value="{StaticResource VmsBorderStrongBrush_v3}"/>
@@ -771,7 +774,7 @@
                             <!-- Tab Completed: xe hoàn thành công đoạn -->
                             <DataGrid x:Name="CompletedGrid"
                                       AutoGenerateColumns="False" IsReadOnly="True"
-                                      SelectionMode="Single" SelectionUnit="FullRow" RowHeight="58"
+                                      SelectionMode="Single" SelectionUnit="FullRow" RowHeight="66"
                                       SelectionChanged="Event_Selected"
                                       Sorting="CompletedGrid_Sorting" CanUserSortColumns="True"
                                       CanUserReorderColumns="False" CanUserResizeRows="False"
@@ -788,28 +791,28 @@
                                       RowStyle="{StaticResource DgRow}">
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="BIỂN SỐ" Binding="{Binding Title}" Width="140">
-                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="12,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="FontSize" Value="12"/><Setter Property="Foreground" Value="#3B82F6"/></Style></DataGridTextColumn.ElementStyle>
+                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="14,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="FontSize" Value="14"/><Setter Property="Foreground" Value="#3B82F6"/></Style></DataGridTextColumn.ElementStyle>
                                     </DataGridTextColumn>
                                     <DataGridTextColumn Header="LOẠI XE" Binding="{Binding VehicleType}" Width="110">
-                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="12,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontSize" Value="12"/></Style></DataGridTextColumn.ElementStyle>
+                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="14,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontSize" Value="14"/></Style></DataGridTextColumn.ElementStyle>
                                     </DataGridTextColumn>
                                     <DataGridTextColumn Header="CAMERA" Binding="{Binding Camera}" Width="130">
-                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="12,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontSize" Value="12"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Foreground" Value="#DCEBFA"/></Style></DataGridTextColumn.ElementStyle>
+                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="14,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontSize" Value="14"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Foreground" Value="#DCEBFA"/></Style></DataGridTextColumn.ElementStyle>
                                     </DataGridTextColumn>
-                                    <DataGridTextColumn Header="CÔNG ĐOẠN" Binding="{Binding RoiName}" Width="2*">
-                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="12,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontSize" Value="12"/></Style></DataGridTextColumn.ElementStyle>
+                                    <DataGridTextColumn Header="CÔNG ĐOẠN" Binding="{Binding RoiName}" Width="2*" MaxWidth="540">
+                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="14,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontSize" Value="14"/></Style></DataGridTextColumn.ElementStyle>
                                     </DataGridTextColumn>
                                     <DataGridTemplateColumn Header="ĐỘ TIN CẬY" SortMemberPath="ConfidenceRaw" Width="120">
-                                        <DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Confidence}" Foreground="#35D07F" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" Margin="12,0"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
+                                        <DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Confidence}" Foreground="#35D07F" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center" Margin="14,0"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
                                     </DataGridTemplateColumn>
                                     <DataGridTextColumn Header="THỜI GIAN VÀO" Binding="{Binding TimeIn}" SortMemberPath="TimeIn" Width="170">
-                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="12,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontSize" Value="12"/><Setter Property="Foreground" Value="{StaticResource VmsTextSecondaryBrush_v3}"/></Style></DataGridTextColumn.ElementStyle>
+                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="14,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontSize" Value="14"/><Setter Property="Foreground" Value="{StaticResource VmsTextSecondaryBrush_v3}"/></Style></DataGridTextColumn.ElementStyle>
                                     </DataGridTextColumn>
                                     <DataGridTextColumn Header="THỜI GIAN RA" Binding="{Binding TimeOut}" SortMemberPath="TimeOut" Width="170">
-                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="12,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontSize" Value="12"/><Setter Property="Foreground" Value="{StaticResource VmsTextSecondaryBrush_v3}"/></Style></DataGridTextColumn.ElementStyle>
+                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="14,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontSize" Value="14"/><Setter Property="Foreground" Value="{StaticResource VmsTextSecondaryBrush_v3}"/></Style></DataGridTextColumn.ElementStyle>
                                     </DataGridTextColumn>
                                     <DataGridTextColumn Header="THỜI GIAN THỰC HIỆN" Binding="{Binding Duration}" SortMemberPath="Duration" Width="160">
-                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="12,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontSize" Value="12"/></Style></DataGridTextColumn.ElementStyle>
+                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="14,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontSize" Value="14"/></Style></DataGridTextColumn.ElementStyle>
                                     </DataGridTextColumn>
                                     <DataGridTemplateColumn Header="ẢNH" Width="88">
                                         <DataGridTemplateColumn.CellTemplate>
@@ -827,7 +830,7 @@
                             <DataGrid x:Name="RecordedGrid"
                                       Visibility="Collapsed"
                                       AutoGenerateColumns="False" IsReadOnly="True"
-                                      SelectionMode="Single" SelectionUnit="FullRow" RowHeight="58"
+                                      SelectionMode="Single" SelectionUnit="FullRow" RowHeight="66"
                                       SelectionChanged="Event_Selected"
                                       CanUserReorderColumns="False" CanUserResizeRows="False"
                                       GridLinesVisibility="Horizontal"
@@ -842,29 +845,29 @@
                                       ColumnHeaderStyle="{StaticResource DgHeader}"
                                       RowStyle="{StaticResource DgRow}">
                                 <DataGrid.Columns>
-                                    <DataGridTextColumn Header="BIỂN SỐ / ID" Binding="{Binding Title}" Width="160">
-                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="12,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="FontSize" Value="12"/></Style></DataGridTextColumn.ElementStyle>
+                                    <DataGridTextColumn Header="BIỂN SỐ" Binding="{Binding Title}" Width="210">
+                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="14,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="FontSize" Value="14"/><Setter Property="Foreground" Value="#3B82F6"/></Style></DataGridTextColumn.ElementStyle>
                                     </DataGridTextColumn>
-                                    <DataGridTextColumn Header="LOẠI" Binding="{Binding Type}" Width="120">
-                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="12,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontSize" Value="12"/></Style></DataGridTextColumn.ElementStyle>
+                                    <DataGridTextColumn Header="LOẠI XE" Binding="{Binding Type}" Width="180">
+                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="14,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontSize" Value="14"/></Style></DataGridTextColumn.ElementStyle>
                                     </DataGridTextColumn>
-                                    <DataGridTextColumn Header="CAMERA" Binding="{Binding Camera}" Width="*">
-                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="12,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontSize" Value="12"/></Style></DataGridTextColumn.ElementStyle>
+                                    <DataGridTextColumn Header="CAMERA" Binding="{Binding Camera}" Width="1.2*">
+                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="14,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontSize" Value="14"/><Setter Property="FontWeight" Value="SemiBold"/></Style></DataGridTextColumn.ElementStyle>
                                     </DataGridTextColumn>
-                                    <DataGridTextColumn Header="THỜI GIAN" Binding="{Binding TimeIn}" Width="145">
-                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="12,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontSize" Value="12"/><Setter Property="Foreground" Value="{StaticResource VmsTextSecondaryBrush_v3}"/></Style></DataGridTextColumn.ElementStyle>
+                                    <DataGridTextColumn Header="THỜI GIAN" Binding="{Binding TimeIn}" Width="235">
+                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="Padding" Value="14,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="FontSize" Value="14"/><Setter Property="Foreground" Value="{StaticResource VmsTextSecondaryBrush_v3}"/></Style></DataGridTextColumn.ElementStyle>
                                     </DataGridTextColumn>
-                                    <DataGridTemplateColumn Header="ĐỘ CHÍNH XÁC" Width="110">
+                                    <DataGridTemplateColumn Header="ĐỘ CHÍNH XÁC" Width="145">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate>
-                                                <TextBlock Text="{Binding Confidence}" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Margin="12,0"/>
+                                                <TextBlock Text="{Binding Confidence}" Foreground="#35D07F" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" Margin="14,0"/>
                                             </DataTemplate>
                                         </DataGridTemplateColumn.CellTemplate>
                                     </DataGridTemplateColumn>
-                                    <DataGridTemplateColumn Header="ẢNH" Width="72">
+                                    <DataGridTemplateColumn Header="ẢNH" Width="108">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate>
-                                                <Border Margin="8,5" Width="64" Height="44" Background="{StaticResource VmsSurface2Brush_v3}" CornerRadius="5" ClipToBounds="True">
+                                                <Border Margin="8,5" Width="76" Height="52" Background="{StaticResource VmsSurface2Brush_v3}" CornerRadius="6" ClipToBounds="True">
                                                     <Image Source="{Binding ThumbnailSource}" Stretch="UniformToFill"/>
                                                 </Border>
                                             </DataTemplate>
@@ -892,7 +895,7 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock x:Name="PageInfoText" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="12" VerticalAlignment="Center"/>
                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                <ComboBox x:Name="PageSizeCombo" Style="{StaticResource FilterCB}" Width="95" Margin="0,0,10,0" SelectionChanged="PageSize_SelectionChanged">
+                                <ComboBox x:Name="PageSizeCombo" Tag="NoSearch" Style="{StaticResource FilterCB}" Width="95" Margin="0,0,10,0" SelectionChanged="PageSize_SelectionChanged">
                                     <ComboBoxItem Content="8 / trang"  Tag="8"/>
                                     <ComboBoxItem Content="10 / trang" Tag="10" IsSelected="True"/>
                                     <ComboBoxItem Content="20 / trang" Tag="20"/>
