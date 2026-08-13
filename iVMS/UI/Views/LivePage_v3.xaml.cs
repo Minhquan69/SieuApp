@@ -187,6 +187,7 @@ namespace V3SClient.UI.Views
             EmptyState.Visibility = _viewModel.CameraCount == 0 ? Visibility.Visible : Visibility.Collapsed;
             AllCameraFilterButton.IsEnabled = false;
             AiCameraFilterButton.IsEnabled = true;
+            PtzCameraFilterButton.IsEnabled = true;
             UpdateFilterButtonVisuals();
             NormalizeCameraSidebarLayout();
             UpdateCameraSidebarPlacement();
@@ -573,16 +574,19 @@ namespace V3SClient.UI.Views
             var normal = (System.Windows.Media.Brush)FindResource("VmsSurface2Brush_v3");
             var selectedBorder = (System.Windows.Media.Brush)FindResource("VmsPrimaryBrush_v3");
             var normalBorder = (System.Windows.Media.Brush)FindResource("VmsBorderBrush_v3");
-            var allSelected = !_viewModel.AiOnly && !_viewModel.OnlineOnly;
+            var allSelected = !_viewModel.AiOnly && !_viewModel.OnlineOnly && !_viewModel.PtzOnly;
             AllCameraFilterButton.Background = allSelected ? selected : normal;
             AllCameraFilterButton.BorderBrush = allSelected ? selectedBorder : normalBorder;
             OnlineCameraFilterButton.Background = _viewModel.OnlineOnly ? selected : normal;
             OnlineCameraFilterButton.BorderBrush = _viewModel.OnlineOnly ? selectedBorder : normalBorder;
             AiCameraFilterButton.Background = _viewModel.AiOnly ? selected : normal;
             AiCameraFilterButton.BorderBrush = _viewModel.AiOnly ? selectedBorder : normalBorder;
+            PtzCameraFilterButton.Background = _viewModel.PtzOnly ? selected : normal;
+            PtzCameraFilterButton.BorderBrush = _viewModel.PtzOnly ? selectedBorder : normalBorder;
             AllCameraFilterButton.IsEnabled = true;
             OnlineCameraFilterButton.IsEnabled = true;
             AiCameraFilterButton.IsEnabled = true;
+            PtzCameraFilterButton.IsEnabled = true;
         }
 
         private void BuildGrid(bool deferStaleCleanup = false, Action staleCleanupCompleted = null)
@@ -860,6 +864,7 @@ namespace V3SClient.UI.Views
         {
             _viewModel.AiOnly = false;
             _viewModel.OnlineOnly = false;
+            _viewModel.PtzOnly = false;
             _viewModel.ExpandCameraGroups();
             UpdateFilterButtonVisuals();
         }
@@ -868,6 +873,7 @@ namespace V3SClient.UI.Views
         {
             _viewModel.AiOnly = false;
             _viewModel.OnlineOnly = true;
+            _viewModel.PtzOnly = false;
             _viewModel.ExpandCameraGroups();
             UpdateFilterButtonVisuals();
         }
@@ -876,6 +882,16 @@ namespace V3SClient.UI.Views
         {
             _viewModel.AiOnly = true;
             _viewModel.OnlineOnly = false;
+            _viewModel.PtzOnly = false;
+            _viewModel.ExpandCameraGroups();
+            UpdateFilterButtonVisuals();
+        }
+
+        private void PtzCameraFilter_Click(object sender, RoutedEventArgs e)
+        {
+            _viewModel.AiOnly = false;
+            _viewModel.OnlineOnly = false;
+            _viewModel.PtzOnly = true;
             _viewModel.ExpandCameraGroups();
             UpdateFilterButtonVisuals();
         }

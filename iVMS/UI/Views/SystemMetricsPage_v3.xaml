@@ -119,15 +119,15 @@
    <Border Style="{StaticResource Panel}" Margin="0,0,5,0">
     <Grid>
      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-     <TextBlock Text="Sức khỏe máy chủ" Foreground="White" FontWeight="SemiBold" FontSize="13"/>
-     <TextBlock Grid.Row="1" Text="Máy chủ vật lý" Foreground="#B3C7DD" FontSize="10" Margin="0,3,0,9"/>
+     <TextBlock Text="Sức khỏe máy chủ" Foreground="White" FontWeight="SemiBold" FontSize="15"/>
+     <TextBlock Grid.Row="1" Text="Máy chủ vật lý" Foreground="#B3C7DD" FontSize="11" Margin="0,3,0,9"/>
      <DataGrid Grid.Row="2" x:Name="NodesGrid" AutoGenerateColumns="False" IsReadOnly="True" IsHitTestVisible="False" HeadersVisibility="Column" GridLinesVisibility="None" CanUserAddRows="False" CanUserDeleteRows="False" CanUserResizeRows="False" RowHeaderWidth="0" RowBackground="Transparent" AlternatingRowBackground="Transparent" RowStyle="{StaticResource MetricGridRow}" Background="Transparent" BorderThickness="0">
-      <DataGrid.ColumnHeaderStyle><Style TargetType="DataGridColumnHeader"><Setter Property="Foreground" Value="#89A9C4"/><Setter Property="Background" Value="#102B40"/><Setter Property="BorderBrush" Value="#1C3850"/><Setter Property="BorderThickness" Value="0,0,0,1"/><Setter Property="Padding" Value="0,5"/><Setter Property="FontSize" Value="10"/><Setter Property="FontWeight" Value="SemiBold"/></Style></DataGrid.ColumnHeaderStyle>
-      <DataGrid.CellStyle><Style TargetType="DataGridCell"><Setter Property="BorderThickness" Value="0"/><Setter Property="Background" Value="Transparent"/><Setter Property="Padding" Value="0,5"/><Setter Property="Foreground" Value="#F4F8FF"/><Setter Property="Focusable" Value="False"/></Style></DataGrid.CellStyle>
+      <DataGrid.ColumnHeaderStyle><Style TargetType="DataGridColumnHeader"><Setter Property="Foreground" Value="#89A9C4"/><Setter Property="Background" Value="#102B40"/><Setter Property="BorderBrush" Value="#1C3850"/><Setter Property="BorderThickness" Value="0,0,0,1"/><Setter Property="Padding" Value="0,6"/><Setter Property="FontSize" Value="11"/><Setter Property="FontWeight" Value="SemiBold"/></Style></DataGrid.ColumnHeaderStyle>
+      <DataGrid.CellStyle><Style TargetType="DataGridCell"><Setter Property="BorderThickness" Value="0"/><Setter Property="Background" Value="Transparent"/><Setter Property="Padding" Value="0,7"/><Setter Property="Foreground" Value="#F4F8FF"/><Setter Property="Focusable" Value="False"/></Style></DataGrid.CellStyle>
       <DataGrid.Columns>
-       <DataGridTemplateColumn Header="MÁY CHỦ" Width="*"><DataGridTemplateColumn.CellTemplate><DataTemplate><StackPanel><TextBlock Text="{Binding Host}" FontWeight="SemiBold" FontSize="11"/><TextBlock Text="{Binding Instance}" Foreground="#B3C7DD" FontSize="10" Margin="0,2,0,0"/></StackPanel></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
-       <DataGridTemplateColumn Header="TRẠNG THÁI" Width="100"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Status}" Foreground="{Binding StatusBrush}" FontWeight="SemiBold" FontSize="11"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
-       <DataGridTextColumn Header="NHIỆT CPU" Binding="{Binding CpuTemperature}" Width="74"/>
+       <DataGridTemplateColumn Header="MÁY CHỦ" Width="*"><DataGridTemplateColumn.CellTemplate><DataTemplate><StackPanel><TextBlock Text="{Binding Host}" FontWeight="SemiBold" FontSize="12"/><TextBlock Text="{Binding Instance}" Foreground="#B3C7DD" FontSize="11" Margin="0,2,0,0"/></StackPanel></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+       <DataGridTemplateColumn Header="TRẠNG THÁI" Width="110"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Status}" Foreground="{Binding StatusBrush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" Margin="0,2,0,0"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+       <DataGridTextColumn Header="NHIỆT CPU" Binding="{Binding CpuTemperature}" Width="82"><DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="FontSize" Value="12"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="Margin" Value="0,2,0,0"/></Style></DataGridTextColumn.ElementStyle></DataGridTextColumn>
       </DataGrid.Columns>
      </DataGrid>
     </Grid>

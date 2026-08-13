@@ -84,13 +84,14 @@ namespace V3SClient.UI.Views
 
         private void ResetActiveModuleAfterClientSwitch()
         {
-            if (_activeModule != null)
-            {
-                _moduleHost.Children.Remove(_activeModule);
-                _activeModule.Visibility = Visibility.Collapsed;
-            }
+            // Client-scoped views cache their own API results. Remove every cached
+            // view so the selected module is constructed again against the new client.
+            _moduleHost.Children.Clear();
             _activeModule = null;
             _playbackPage = null;
+            _dashboardPage = null;
+            _eventCenterPage = null;
+            _analysisPage = null;
         }
 
         private void OnLogoutRequested(object sender, System.EventArgs e)

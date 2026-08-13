@@ -96,6 +96,10 @@ namespace V3SClient.libs
 
         [JsonProperty("is_recording")]
         public bool is_recording { get; set; }
+
+        // PTZ capability returned by /api/user/cameras, matching the web client.
+        [JsonProperty("ptz_available")]
+        public bool? Ptz_Available { get; set; }
         
         [JsonIgnore]
         public bool HasAIStream => Streams != null && Streams.Any(s => s.IsAiMode == true);

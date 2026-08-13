@@ -39,6 +39,9 @@ namespace V3SClient.viewModels
                     // Preserve the API recording capability for Live and
                     // Playback camera-list filters (REC).
                     is_recording = camInfo.is_recording,
+                    // Preserve the camera catalog PTZ capability used by the
+                    // Live page filter (same ptz_available field as the web app).
+                    ptz_available = camInfo.Ptz_Available,
                     is_Master = camInfo.Device_Role != "client_device",
                     is_H264 = camInfo.CamInfo_Codec?.ToLower() == "h264",
                     Latitude = camInfo.Latitude,

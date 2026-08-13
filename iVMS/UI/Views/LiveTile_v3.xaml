@@ -121,7 +121,6 @@
                     <!-- Grid controls are intentionally limited to these four
                          actions. Legacy connection/audio/snapshot controls
                          remain below only as non-visual compatibility hosts. -->
-                    <Button x:Name="CollapseActionsButton" Click="CollapseActions_Click" Style="{StaticResource LiveTileActionButton_v3}" ToolTip="Thu gọn thanh công cụ"><Icon:PackIconMaterial Kind="ChevronUp" Width="16" Height="16"/></Button>
                     <Button x:Name="FullscreenButton" Click="Fullscreen_Click" Style="{StaticResource LiveTileActionButton_v3}" ToolTip="Toàn màn hình"><Icon:PackIconMaterial x:Name="FullscreenIcon" Kind="Fullscreen" Width="13" Height="13"/></Button>
                     <Button x:Name="DisconnectButton" Click="Disconnect_Click" Style="{StaticResource LiveTileActionButton_v3}" ToolTip="Kết nối camera"><Icon:PackIconMaterial x:Name="StreamConnectionIcon" Kind="PowerPlug" Width="14" Height="14"/></Button>
                     <Button x:Name="RemoveButton" Click="Remove_Click" Style="{StaticResource LiveTileActionButton_v3}" Background="#18364B" BorderBrush="#416177" BorderThickness="1" Foreground="{StaticResource VmsErrorBrush_v3}" ToolTip="Xóa camera"><Icon:PackIconMaterial Kind="DeleteOutline" Width="13" Height="13"/></Button>

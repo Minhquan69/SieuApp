@@ -102,6 +102,7 @@ namespace V3SClient.viewModels
                      (Camera.Streams != null && Camera.Streams.Any(stream => stream != null && stream.IsAiMode == true)));
             }
         }
+        public bool IsPtzCamera => Camera != null && Camera.ptz_available == true;
         private bool _isSelected;
         private string _stateText;
         private bool _isConnecting;
@@ -132,6 +133,7 @@ namespace V3SClient.viewModels
         private string _searchText;
         private bool _aiOnly;
         private bool _onlineOnly;
+        private bool _ptzOnly;
         private LiveLayoutMode_v3 _layout = LiveLayoutMode_v3.Layout2x2;
         private int _customSlotCount = 10;
 
@@ -154,6 +156,7 @@ namespace V3SClient.viewModels
         public int CameraCount { get { return _allCameras.Count; } }
         public int OnlineCameraCount { get { return _allCameras.Count(camera => camera != null && camera.is_online == true); } }
         public int AiCameraCount { get { return _allCameras.Count(camera => string.Equals(camera.type, "ai_processed", StringComparison.OrdinalIgnoreCase) || (camera.Streams != null && camera.Streams.Any(stream => stream.IsAiMode == true))); } }
+        public int PtzCameraCount { get { return _allCameras.Count(camera => camera != null && camera.ptz_available == true); } }
         public int GroupCount { get { return _sourceGroups.Count; } }
         public int ActiveCameraCount { get { return Slots.Count(slot => slot.Camera != null); } }
         public string StatusMessage { get; private set; }
@@ -165,6 +168,7 @@ namespace V3SClient.viewModels
         public string SearchText { get { return _searchText; } set { if (_searchText == value) return; _searchText = value; OnPropertyChanged(); ApplySearch(); } }
         public bool AiOnly { get { return _aiOnly; } set { if (_aiOnly == value) return; _aiOnly = value; OnPropertyChanged(); ApplySearch(); } }
         public bool OnlineOnly { get { return _onlineOnly; } set { if (_onlineOnly == value) return; _onlineOnly = value; OnPropertyChanged(); ApplySearch(); } }
+        public bool PtzOnly { get { return _ptzOnly; } set { if (_ptzOnly == value) return; _ptzOnly = value; OnPropertyChanged(); ApplySearch(); } }
 
         public void SetLayout(LiveLayoutMode_v3 layout)
         {
@@ -320,6 +324,7 @@ namespace V3SClient.viewModels
                 var cameras = (group.Cameras ?? new ObservableCollection<Camera>())
                     .Where(camera => !_aiOnly || IsAiCamera(camera))
                     .Where(camera => !_onlineOnly || camera.is_online == true)
+                    .Where(camera => !_ptzOnly || camera.ptz_available == true)
                     .Where(camera => groupMatch || CameraMatches(camera, query))
                     .OrderBy(camera => camera.name)
                     .ToList();

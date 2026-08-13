@@ -294,10 +294,11 @@ namespace V3SClient.UI.Views
                 var eventTask = ApiManager.Instance.GetLiveAiEventFeedAsync(GetLatestVehicleStart(now), now, cameraIds, cancellationToken: _lifetime.Token);
                 var trendTask = ApiManager.Instance.GetCameraHealthTimeseriesAsync(
                     now.AddHours(-_cameraHistoryHours), now, GetCameraHistoryBucket(), cameraIds, _lifetime.Token);
-                // Request beyond five records first.  The API sorts globally; filtering a
-                // global top-five could otherwise omit every camera in the active profile.
+                // Request every camera available to the active profile before ranking.
+                // This keeps 100% uptime cameras in the source list when all cameras
+                // are healthy, instead of treating the attention panel as empty.
                 var attentionTask = ApiManager.Instance.GetCameraHealthAttentionCamerasAsync(
-                    Math.Max(100, cameraIds.Count * 2), _lifetime.Token);
+                    Math.Max(100, cameraIds.Count), _lifetime.Token);
                 var infrastructureMetricsTask = RefreshInfrastructureMetricsAsync(now);
 
                 // Do not make independent cards wait for the slowest report.
@@ -396,15 +397,34 @@ namespace V3SClient.UI.Views
                     .Select(id => id.Trim()),
                 StringComparer.OrdinalIgnoreCase);
 
-            var rowsFromApi = (cameras ?? Enumerable.Empty<ApiManager.CameraHealthAttentionCamera>())
+            var reportedRows = (cameras ?? Enumerable.Empty<ApiManager.CameraHealthAttentionCamera>())
                 .Where(camera => camera != null)
                 .Where(camera => allowedCameraIds.Contains((camera.CameraId ?? string.Empty).Trim())
                     || allowedCameraIds.Contains((camera.CameraCode ?? string.Empty).Trim()))
                 .GroupBy(camera => (string.IsNullOrWhiteSpace(camera.CameraId) ? camera.CameraCode : camera.CameraId)?.Trim(),
                     StringComparer.OrdinalIgnoreCase)
                 .Select(group => group.OrderBy(camera => camera.UptimePercent ?? double.MaxValue).First())
+                .ToList();
+
+            // Some uptime service responses omit healthy cameras. Add every
+            // configured camera not returned by the API as 100% so an all-healthy
+            // client still has its eight lowest-uptime cameras shown.
+            var reportedCameraIds = new HashSet<string>(
+                reportedRows.SelectMany(camera => new[] { camera.CameraId, camera.CameraCode })
+                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                    .Select(id => id.Trim()),
+                StringComparer.OrdinalIgnoreCase);
+            var rowsFromApi = reportedRows
+                .Concat(allowedCameraIds
+                    .Where(id => !reportedCameraIds.Contains(id))
+                    .Select(id => new ApiManager.CameraHealthAttentionCamera
+                    {
+                        CameraId = id,
+                        UptimePercent = 100d,
+                        UnavailableSeconds = 0
+                    }))
                 .OrderBy(camera => camera.UptimePercent ?? double.MaxValue)
-                .Take(5)
+                .Take(8)
                 .ToList();
             var rows = new[] { AttentionCamera1Text, AttentionCamera2Text, AttentionCamera3Text, AttentionCamera4Text, AttentionCamera5Text };
             for (var index = 0; index < rows.Length; index++)
@@ -416,22 +436,41 @@ namespace V3SClient.UI.Views
                     : new SolidColorBrush(Color.FromRgb(213, 227, 238));
             }
 
+            AttentionCameraEmptyState.Visibility = rowsFromApi.Count == 0
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
             var cellRows = new[]
             {
                 new[] { AttentionCamera1IdCell, AttentionCamera1UptimeCell, AttentionCamera1DowntimeCell, AttentionCamera1StatusCell },
                 new[] { AttentionCamera2IdCell, AttentionCamera2UptimeCell, AttentionCamera2DowntimeCell, AttentionCamera2StatusCell },
                 new[] { AttentionCamera3IdCell, AttentionCamera3UptimeCell, AttentionCamera3DowntimeCell, AttentionCamera3StatusCell },
                 new[] { AttentionCamera4IdCell, AttentionCamera4UptimeCell, AttentionCamera4DowntimeCell, AttentionCamera4StatusCell },
-                new[] { AttentionCamera5IdCell, AttentionCamera5UptimeCell, AttentionCamera5DowntimeCell, AttentionCamera5StatusCell }
+                new[] { AttentionCamera5IdCell, AttentionCamera5UptimeCell, AttentionCamera5DowntimeCell, AttentionCamera5StatusCell },
+                new[] { AttentionCamera6IdCell, AttentionCamera6UptimeCell, AttentionCamera6DowntimeCell, AttentionCamera6StatusCell },
+                new[] { AttentionCamera7IdCell, AttentionCamera7UptimeCell, AttentionCamera7DowntimeCell, AttentionCamera7StatusCell },
+                new[] { AttentionCamera8IdCell, AttentionCamera8UptimeCell, AttentionCamera8DowntimeCell, AttentionCamera8StatusCell }
             };
             var statusBadges = new[]
             {
                 AttentionCamera1StatusBadge, AttentionCamera2StatusBadge, AttentionCamera3StatusBadge,
-                AttentionCamera4StatusBadge, AttentionCamera5StatusBadge
+                AttentionCamera4StatusBadge, AttentionCamera5StatusBadge, AttentionCamera6StatusBadge,
+                AttentionCamera7StatusBadge, AttentionCamera8StatusBadge
+            };
+            var rowBorders = new[]
+            {
+                AttentionCamera1Row, AttentionCamera2Row, AttentionCamera3Row, AttentionCamera4Row,
+                AttentionCamera5Row, AttentionCamera6Row, AttentionCamera7Row, AttentionCamera8Row
+            };
+            var indicators = new[]
+            {
+                AttentionCamera1Indicator, AttentionCamera2Indicator, AttentionCamera3Indicator, AttentionCamera4Indicator,
+                AttentionCamera5Indicator, AttentionCamera6Indicator, AttentionCamera7Indicator, AttentionCamera8Indicator
             };
             for (var index = 0; index < cellRows.Length; index++)
             {
                 var camera = index < rowsFromApi.Count ? rowsFromApi[index] : null;
+                rowBorders[index].Visibility = camera == null ? Visibility.Collapsed : Visibility.Visible;
                 cellRows[index][0].Text = camera == null ? string.Empty : (string.IsNullOrWhiteSpace(camera.CameraId) ? camera.CameraCode : camera.CameraId);
                 cellRows[index][1].Text = camera != null && camera.UptimePercent.HasValue ? Math.Max(0, Math.Min(100, camera.UptimePercent.Value)).ToString("0.0") + "%" : string.Empty;
                 cellRows[index][2].Text = camera != null && camera.UnavailableSeconds.HasValue ? FormatDuration(camera.UnavailableSeconds.Value) : string.Empty;
@@ -440,11 +479,18 @@ namespace V3SClient.UI.Views
                 statusBadges[index].BorderBrush = statusBrush;
                 statusBadges[index].Background = camera == null ? Brushes.Transparent : new SolidColorBrush(Color.FromArgb(35, statusBrush.Color.R, statusBrush.Color.G, statusBrush.Color.B));
                 var neutralBrush = new SolidColorBrush(Color.FromRgb(213, 227, 238));
-                var alertBrush = new SolidColorBrush(Color.FromRgb(255, 160, 175));
+                var uptimeBrush = camera == null || !camera.UptimePercent.HasValue
+                    ? neutralBrush
+                    : camera.UptimePercent.Value >= 90
+                        ? new SolidColorBrush(Color.FromRgb(39, 201, 109))
+                        : camera.UptimePercent.Value >= 50
+                            ? new SolidColorBrush(Color.FromRgb(255, 154, 61))
+                            : new SolidColorBrush(Color.FromRgb(255, 112, 133));
                 cellRows[index][0].Foreground = neutralBrush;
-                cellRows[index][1].Foreground = alertBrush;
+                cellRows[index][1].Foreground = uptimeBrush;
                 cellRows[index][2].Foreground = neutralBrush;
                 cellRows[index][3].Foreground = statusBrush;
+                indicators[index].Fill = uptimeBrush;
             }
         }
 

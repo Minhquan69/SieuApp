@@ -188,7 +188,10 @@ namespace V3SClient.window
                 Application.Current.MainWindow = login;
                 if (login.ShowDialog() == true)
                 {
+                    var loginBounds = login.WindowBoundsForNextShell;
+                    var loginWasVirtualDesktop = login.IsVirtualDesktopMode;
                     var next = new ShellWindow_v3();
+                    next.ApplyStartupWindowPlacement(loginBounds, loginWasVirtualDesktop);
                     Application.Current.MainWindow = next;
                     next.Show();
                 }

@@ -21,6 +21,8 @@ namespace V3SClient.models
         public bool is_Live { get; set; }
         // Returned directly by the camera-list API; retain its JSON name.
         public bool is_recording { get; set; }
+        // PTZ availability flag as returned by the camera-list API.
+        public bool? ptz_available { get; set; }
         public string rtps { get; set; }
         
         // Multi-stream properties

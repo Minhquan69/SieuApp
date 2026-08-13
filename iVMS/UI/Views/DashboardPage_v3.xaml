@@ -1370,6 +1370,22 @@
                     <TextBlock Text="Camera hệ thống" Style="{StaticResource PanelTitle}">
                     </TextBlock>
                   </StackPanel>
+                  <Border HorizontalAlignment="Center" VerticalAlignment="Center" Background="#FF10283A" CornerRadius="4" Padding="8,4" IsHitTestVisible="False">
+                    <StackPanel Orientation="Horizontal">
+                      <Ellipse Width="9" Height="9" Fill="#FF27C96D" Margin="0,0,4,0">
+                      </Ellipse>
+                      <TextBlock Text="Trực tuyến" Foreground="#FFB9D1E8" FontSize="10" Margin="0,0,12,0">
+                      </TextBlock>
+                      <Ellipse Width="9" Height="9" Fill="#FFFF7085" Margin="0,0,4,0">
+                      </Ellipse>
+                      <TextBlock Text="Ngoại tuyến" Foreground="#FFB9D1E8" FontSize="10" Margin="0,0,12,0">
+                      </TextBlock>
+                      <Ellipse Width="9" Height="9" Fill="#FF367BFF" Margin="0,0,4,0">
+                      </Ellipse>
+                      <TextBlock Text="Hoạt động" Foreground="#FFB9D1E8" FontSize="10">
+                      </TextBlock>
+                    </StackPanel>
+                  </Border>
                   <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                     <Button x:Name="CameraHistory24hButtonVisible" Tag="24" Content="24H" Style="{StaticResource CameraRangeButton}" Background="#FF2D6AFF" Foreground="#FFFFFFFF" Click="CameraHistoryRangeButton_Click">
                     </Button>
@@ -1418,22 +1434,6 @@
                     </lvc:Axis>
                   </lvc:CartesianChart.AxisY>
                 </lvc:CartesianChart>
-                <Border HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,28,0,0" Background="#FF10283A" CornerRadius="4" Padding="8,4" IsHitTestVisible="False">
-                  <StackPanel Orientation="Horizontal">
-                    <Ellipse Width="9" Height="9" Fill="#FF27C96D" Margin="0,0,4,0">
-                    </Ellipse>
-                    <TextBlock Text="Trực tuyến" Foreground="#FFB9D1E8" FontSize="10" Margin="0,0,12,0">
-                    </TextBlock>
-                    <Ellipse Width="9" Height="9" Fill="#FFFF7085" Margin="0,0,4,0">
-                    </Ellipse>
-                    <TextBlock Text="Ngoại tuyến" Foreground="#FFB9D1E8" FontSize="10" Margin="0,0,12,0">
-                    </TextBlock>
-                    <Ellipse Width="9" Height="9" Fill="#FF367BFF" Margin="0,0,4,0">
-                    </Ellipse>
-                    <TextBlock Text="Hoạt động" Foreground="#FFB9D1E8" FontSize="10">
-                    </TextBlock>
-                  </StackPanel>
-                </Border>
               </Grid>
             </Grid>
           </Border>
@@ -1580,11 +1580,12 @@
                 </TextBlock>
               </Grid>
               <StackPanel Grid.Row="2" Margin="14,0,14,10">
-                <Border Background="#FF0B2032" BorderBrush="#FF1D4562" BorderThickness="1" CornerRadius="7" Padding="11,8" Margin="0,3">
+                <TextBlock x:Name="AttentionCameraEmptyState" Text="Chưa có dữ liệu camera" Foreground="#FFB7CDE0" FontSize="11" HorizontalAlignment="Center" Margin="0,16" Visibility="Collapsed"/>
+                <Border x:Name="AttentionCamera1Row" Background="#FF0B2032" BorderBrush="#FF1D4562" BorderThickness="1" CornerRadius="7" Padding="11,8" Margin="0,3">
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="0.75*"/><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="1.35*"/></Grid.ColumnDefinitions>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                      <Ellipse Width="7" Height="7" Fill="#FFFF5E77" Margin="0,0,9,0" VerticalAlignment="Center"/>
+                      <Ellipse x:Name="AttentionCamera1Indicator" Width="7" Height="7" Fill="#FFFF5E77" Margin="0,0,9,0" VerticalAlignment="Center"/>
                       <TextBlock x:Name="AttentionCamera1IdCell" Foreground="#FFFF8FA1" FontFamily="Consolas" FontSize="11" FontWeight="SemiBold"/>
                     </StackPanel>
                     <TextBlock x:Name="AttentionCamera1UptimeCell" Grid.Column="1" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11"/>
@@ -1594,11 +1595,11 @@
                     </Border>
                   </Grid>
                 </Border>
-                <Border Background="#FF0D2639" BorderBrush="#FF1D4562" BorderThickness="1" CornerRadius="7" Padding="11,8" Margin="0,3">
+                <Border x:Name="AttentionCamera2Row" Background="#FF0D2639" BorderBrush="#FF1D4562" BorderThickness="1" CornerRadius="7" Padding="11,8" Margin="0,3">
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="0.75*"/><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="1.35*"/></Grid.ColumnDefinitions>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                      <Ellipse Width="7" Height="7" Fill="#FFFF5E77" Margin="0,0,9,0" VerticalAlignment="Center"/>
+                      <Ellipse x:Name="AttentionCamera2Indicator" Width="7" Height="7" Fill="#FFFF5E77" Margin="0,0,9,0" VerticalAlignment="Center"/>
                       <TextBlock x:Name="AttentionCamera2IdCell" Foreground="#FFFF8FA1" FontFamily="Consolas" FontSize="11" FontWeight="SemiBold"/>
                     </StackPanel>
                     <TextBlock x:Name="AttentionCamera2UptimeCell" Grid.Column="1" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11"/>
@@ -1608,11 +1609,11 @@
                     </Border>
                   </Grid>
                 </Border>
-                <Border Background="#FF0B2032" BorderBrush="#FF1D4562" BorderThickness="1" CornerRadius="7" Padding="11,8" Margin="0,3">
+                <Border x:Name="AttentionCamera3Row" Background="#FF0B2032" BorderBrush="#FF1D4562" BorderThickness="1" CornerRadius="7" Padding="11,8" Margin="0,3">
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="0.75*"/><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="1.35*"/></Grid.ColumnDefinitions>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                      <Ellipse Width="7" Height="7" Fill="#FFFF5E77" Margin="0,0,9,0" VerticalAlignment="Center"/>
+                      <Ellipse x:Name="AttentionCamera3Indicator" Width="7" Height="7" Fill="#FFFF5E77" Margin="0,0,9,0" VerticalAlignment="Center"/>
                       <TextBlock x:Name="AttentionCamera3IdCell" Foreground="#FFFF8FA1" FontFamily="Consolas" FontSize="11" FontWeight="SemiBold"/>
                     </StackPanel>
                     <TextBlock x:Name="AttentionCamera3UptimeCell" Grid.Column="1" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11"/>
@@ -1622,11 +1623,11 @@
                     </Border>
                   </Grid>
                 </Border>
-                <Border Background="#FF0D2639" BorderBrush="#FF1D4562" BorderThickness="1" CornerRadius="7" Padding="11,8" Margin="0,3">
+                <Border x:Name="AttentionCamera4Row" Background="#FF0D2639" BorderBrush="#FF1D4562" BorderThickness="1" CornerRadius="7" Padding="11,8" Margin="0,3">
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="0.75*"/><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="1.35*"/></Grid.ColumnDefinitions>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                      <Ellipse Width="7" Height="7" Fill="#FFFF5E77" Margin="0,0,9,0" VerticalAlignment="Center"/>
+                      <Ellipse x:Name="AttentionCamera4Indicator" Width="7" Height="7" Fill="#FFFF5E77" Margin="0,0,9,0" VerticalAlignment="Center"/>
                       <TextBlock x:Name="AttentionCamera4IdCell" Foreground="#FFFF8FA1" FontFamily="Consolas" FontSize="11" FontWeight="SemiBold"/>
                     </StackPanel>
                     <TextBlock x:Name="AttentionCamera4UptimeCell" Grid.Column="1" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11"/>
@@ -1636,11 +1637,11 @@
                     </Border>
                   </Grid>
                 </Border>
-                <Border Background="#FF0B2032" BorderBrush="#FF1D4562" BorderThickness="1" CornerRadius="7" Padding="11,8" Margin="0,3">
+                <Border x:Name="AttentionCamera5Row" Background="#FF0B2032" BorderBrush="#FF1D4562" BorderThickness="1" CornerRadius="7" Padding="11,8" Margin="0,3">
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="0.75*"/><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="1.35*"/></Grid.ColumnDefinitions>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                      <Ellipse Width="7" Height="7" Fill="#FFFF5E77" Margin="0,0,9,0" VerticalAlignment="Center"/>
+                      <Ellipse x:Name="AttentionCamera5Indicator" Width="7" Height="7" Fill="#FFFF5E77" Margin="0,0,9,0" VerticalAlignment="Center"/>
                       <TextBlock x:Name="AttentionCamera5IdCell" Foreground="#FFFF8FA1" FontFamily="Consolas" FontSize="11" FontWeight="SemiBold"/>
                     </StackPanel>
                     <TextBlock x:Name="AttentionCamera5UptimeCell" Grid.Column="1" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11"/>
@@ -1648,6 +1649,33 @@
                     <Border x:Name="AttentionCamera5StatusBadge" Grid.Column="3" HorizontalAlignment="Left" BorderBrush="#FFFF8B9B" BorderThickness="1" CornerRadius="3" Padding="5,2">
                       <TextBlock x:Name="AttentionCamera5StatusCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11" FontWeight="SemiBold"/>
                     </Border>
+                  </Grid>
+                </Border>
+                <Border x:Name="AttentionCamera6Row" Background="#FF0D2639" BorderBrush="#FF1D4562" BorderThickness="1" CornerRadius="7" Padding="11,8" Margin="0,3">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="0.75*"/><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="1.35*"/></Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Ellipse x:Name="AttentionCamera6Indicator" Width="7" Height="7" Fill="#FFFF5E77" Margin="0,0,9,0" VerticalAlignment="Center"/><TextBlock x:Name="AttentionCamera6IdCell" Foreground="#FFFF8FA1" FontFamily="Consolas" FontSize="11" FontWeight="SemiBold"/></StackPanel>
+                    <TextBlock x:Name="AttentionCamera6UptimeCell" Grid.Column="1" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11"/>
+                    <TextBlock x:Name="AttentionCamera6DowntimeCell" Grid.Column="2" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11"/>
+                    <Border x:Name="AttentionCamera6StatusBadge" Grid.Column="3" HorizontalAlignment="Left" BorderBrush="#FFFF8B9B" BorderThickness="1" CornerRadius="3" Padding="5,2"><TextBlock x:Name="AttentionCamera6StatusCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11" FontWeight="SemiBold"/></Border>
+                  </Grid>
+                </Border>
+                <Border x:Name="AttentionCamera7Row" Background="#FF0B2032" BorderBrush="#FF1D4562" BorderThickness="1" CornerRadius="7" Padding="11,8" Margin="0,3">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="0.75*"/><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="1.35*"/></Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Ellipse x:Name="AttentionCamera7Indicator" Width="7" Height="7" Fill="#FFFF5E77" Margin="0,0,9,0" VerticalAlignment="Center"/><TextBlock x:Name="AttentionCamera7IdCell" Foreground="#FFFF8FA1" FontFamily="Consolas" FontSize="11" FontWeight="SemiBold"/></StackPanel>
+                    <TextBlock x:Name="AttentionCamera7UptimeCell" Grid.Column="1" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11"/>
+                    <TextBlock x:Name="AttentionCamera7DowntimeCell" Grid.Column="2" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11"/>
+                    <Border x:Name="AttentionCamera7StatusBadge" Grid.Column="3" HorizontalAlignment="Left" BorderBrush="#FFFF8B9B" BorderThickness="1" CornerRadius="3" Padding="5,2"><TextBlock x:Name="AttentionCamera7StatusCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11" FontWeight="SemiBold"/></Border>
+                  </Grid>
+                </Border>
+                <Border x:Name="AttentionCamera8Row" Background="#FF0D2639" BorderBrush="#FF1D4562" BorderThickness="1" CornerRadius="7" Padding="11,8" Margin="0,3">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="0.75*"/><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="1.35*"/></Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Ellipse x:Name="AttentionCamera8Indicator" Width="7" Height="7" Fill="#FFFF5E77" Margin="0,0,9,0" VerticalAlignment="Center"/><TextBlock x:Name="AttentionCamera8IdCell" Foreground="#FFFF8FA1" FontFamily="Consolas" FontSize="11" FontWeight="SemiBold"/></StackPanel>
+                    <TextBlock x:Name="AttentionCamera8UptimeCell" Grid.Column="1" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11"/>
+                    <TextBlock x:Name="AttentionCamera8DowntimeCell" Grid.Column="2" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11"/>
+                    <Border x:Name="AttentionCamera8StatusBadge" Grid.Column="3" HorizontalAlignment="Left" BorderBrush="#FFFF8B9B" BorderThickness="1" CornerRadius="3" Padding="5,2"><TextBlock x:Name="AttentionCamera8StatusCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11" FontWeight="SemiBold"/></Border>
                   </Grid>
                 </Border>
               </StackPanel>
