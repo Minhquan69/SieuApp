@@ -38,6 +38,7 @@ namespace V3SClient.window
         /// after a successful sign-in.
         /// </summary>
         public bool IsVirtualDesktopMode { get { return _isVirtualDesktopMode; } }
+        public libs.ApiManager.ClientProfile SelectedProfile { get { return _viewModel.SelectedProfile; } }
 
         public Rect WindowBoundsForNextShell
         {

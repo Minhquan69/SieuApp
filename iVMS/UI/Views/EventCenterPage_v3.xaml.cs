@@ -912,6 +912,78 @@ namespace V3SClient.UI.Views
             RecordedGrid.UnselectAll();
         }
 
+        private async Task ShowRecordedDetailAsync(EventRow_v3 row)
+        {
+            if (row == null) return;
+
+            RecordedDetailTitle.Text = row.Title;
+            RecordedDetailObject.Text = string.IsNullOrWhiteSpace(row.Type) ? "Xe" : row.Type;
+            RecordedDetailPlate.Text = row.Title;
+            RecordedDetailCamera.Text = row.Camera;
+            RecordedDetailConfidence.Text = row.Confidence;
+            RecordedDetailConfidenceBar.Value = Math.Max(0, Math.Min(100, row.ConfidenceRaw));
+            RecordedDetailTime.Text = row.TimeIn;
+            RecordedDetailImage.Source = row.ThumbnailSource;
+            RecordedDetailImagePlaceholder.Visibility = row.ThumbnailSource == null
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+            RecordedDetailPanel.Visibility = Visibility.Visible;
+
+            if (string.IsNullOrWhiteSpace(row.AssetId) || row.AssetId == "—")
+                return;
+
+            try
+            {
+                var urls = await ApiManager.Instance.GetDashboardAssetAccessUrlsAsync(
+                    new[] { row.AssetId }, _cts.Token);
+                if (urls == null || !urls.TryGetValue(row.AssetId, out var url) ||
+                    string.IsNullOrWhiteSpace(url))
+                    return;
+
+                BitmapImage image;
+                using (var client = new WebClient())
+                using (var stream = new MemoryStream(await client.DownloadDataTaskAsync(new Uri(url)), writable: false))
+                {
+                    image = new BitmapImage();
+                    image.BeginInit();
+                    image.CacheOption = BitmapCacheOption.OnLoad;
+                    image.StreamSource = stream;
+                    image.EndInit();
+                    image.Freeze();
+                }
+
+                if (RecordedDetailPanel.Visibility == Visibility.Visible &&
+                    RecordedDetailTitle.Text == row.Title)
+                {
+                    RecordedDetailImage.Source = image;
+                    RecordedDetailImagePlaceholder.Visibility = Visibility.Collapsed;
+                    if (row.ThumbnailSource == null)
+                        row.ThumbnailSource = image;
+                }
+            }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "EventCenter.RecordedDetail.Image");
+            }
+        }
+
+        private void CloseRecordedDetail()
+        {
+            RecordedDetailPanel.Visibility = Visibility.Collapsed;
+            RecordedDetailImage.Source = null;
+            RecordedGrid.UnselectAll();
+        }
+
+        private void RecordedDetailBackdrop_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            CloseRecordedDetail();
+        }
+
+        private void RecordedDetailContent_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+        }
+
         private async Task OpenDetailPlaybackAsync(EventRow_v3 row)
         {
             DateTime start;
@@ -1187,10 +1259,14 @@ namespace V3SClient.UI.Views
         {
             var grid = s as DataGrid;
             var row  = grid?.SelectedItem as EventRow_v3;
-            await ShowDetailAsync(row);
+            if (ReferenceEquals(grid, RecordedGrid))
+                await ShowRecordedDetailAsync(row);
+            else
+                await ShowDetailAsync(row);
         }
 
         private void CloseDetail_Click(object s, RoutedEventArgs e) => CloseDetail();
+        private void CloseRecordedDetail_Click(object s, RoutedEventArgs e) => CloseRecordedDetail();
 
         private void TabCompleted_Click(object s, RoutedEventArgs e)
         {

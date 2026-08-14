@@ -48,14 +48,15 @@ namespace V3SClient
                         // the all-monitor fullscreen mode from login.
                         var loginBounds = loginWindow.WindowBoundsForNextShell;
                         var loginWasVirtualDesktop = loginWindow.IsVirtualDesktopMode;
-                        GlobalSystem.Instance.Init();
                         MetaAIResultStorage.Instance.ToString();
+                        var selectedProfile = loginWindow.SelectedProfile;
                         // Đăng nhập thành công, mở MainWindow
                         // Keep the migrated shell as the only startup shell for this copy.
-                        var mainWindow = new ShellWindow_v3();
+                        var mainWindow = new ShellWindow_v3(deferInitialNavigation: true);
                         mainWindow.ApplyStartupWindowPlacement(loginBounds, loginWasVirtualDesktop);
                         MainWindow = mainWindow;
                         mainWindow.Show();
+                        _ = CompleteStartupAsync(mainWindow, selectedProfile);
                     }
                     else
                     {
@@ -85,6 +86,22 @@ namespace V3SClient
 
         }
        
+        private async Task CompleteStartupAsync(ShellWindow_v3 shell, ApiManager.ClientProfile profile)
+        {
+            try
+            {
+                await new Services.ClientSessionService().SwitchClientAsync(profile, CancellationToken.None);
+                if (shell.IsVisible)
+                    shell.CompleteInitialNavigation();
+            }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Unable to load selected client during shell startup.");
+                if (shell.IsVisible)
+                    shell.ShowInitialLoadFailure("Unable to load devices for the selected client. Please restart the application and try again.");
+            }
+        }
+
         private void RegisterGlobalExceptionLogging()
         {
             var diagnosticDirectory = System.IO.Path.Combine(

@@ -100,7 +100,7 @@ namespace V3SClient.window
         [DllImport("user32.dll")]
         private static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool redraw);
 
-        public ShellWindow_v3()
+        public ShellWindow_v3(bool deferInitialNavigation = false)
         {
             InitializeComponent();
             // Keep the Live View usable when the shell is resized from a
@@ -108,12 +108,16 @@ namespace V3SClient.window
             // XAML values provide a safe fallback before the window is shown.
             MinWidth = Math.Max(MinWidth, SystemParameters.WorkArea.Width * 0.40);
             MinHeight = Math.Max(MinHeight, SystemParameters.WorkArea.Height * 0.40);
-            InitializeGStreamer_v3();
+            ShellView.DeferInitialNavigation = deferInitialNavigation;
             _viewModel = new ShellViewModel_v3();
             DataContext = _viewModel;
             ShellView.DataContext = _viewModel;
             SourceInitialized += ShellWindow_SourceInitialized;
-            Loaded += (s, e) => UpdateShellCornerClip();
+            Loaded += (s, e) =>
+            {
+                UpdateShellCornerClip();
+                Dispatcher.BeginInvoke(new Action(InitializeGStreamer_v3), System.Windows.Threading.DispatcherPriority.ContextIdle);
+            };
             SizeChanged += (s, e) => UpdateShellCornerClip();
             Closed += (s, e) =>
             {
@@ -122,6 +126,9 @@ namespace V3SClient.window
                     Application.Current.Shutdown();
             };
         }
+
+        public void CompleteInitialNavigation() { ShellView.CompleteInitialNavigation(); }
+        public void ShowInitialLoadFailure(string message) { ShellView.ShowInitialLoadFailure(message); }
 
         private void UpdateShellCornerClip()
         {

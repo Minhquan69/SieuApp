@@ -68,6 +68,11 @@ namespace V3SClient.viewModels
 
         private async Task ContinueAsync(object parameter)
         {
+            // Defer the camera inventory load until the shell is visible.
+            AuthenticationCompleted?.Invoke(this, EventArgs.Empty);
+            await Task.CompletedTask;
+            return;
+#if false // Profile loading is performed by App.CompleteStartupAsync after the shell renders.
             IsBusy = true; ErrorMessage = null; StatusMessage = "Đang tải thiết bị…";
             try
             {
@@ -78,6 +83,8 @@ namespace V3SClient.viewModels
             catch (OperationCanceledException) { StatusMessage = null; }
             catch (Exception ex) { LoggerManager.LogException(ex, "Login v3 profile selection failed."); ErrorMessage = "Không thể tải thiết bị cho profile được chọn."; StatusMessage = null; }
             finally { IsBusy = false; }
+        }
+#endif
         }
         private void BackToLogin()
         {

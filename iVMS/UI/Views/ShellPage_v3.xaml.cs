@@ -20,6 +20,7 @@ namespace V3SClient.UI.Views
         private EventCenterPage_v3 _eventCenterPage;
         private AnalysisPage_v3 _analysisPage;
         private UIElement _activeModule;
+        private bool _deferInitialNavigation;
 
         public ShellPage_v3()
         {
@@ -31,6 +32,23 @@ namespace V3SClient.UI.Views
             ShellHeader.SwitchClientRequested += OnSwitchClientRequested;
             ShellHeader.LogoutRequested += OnLogoutRequested;
             ShellSidebar.LayoutChangeStarting += OnShellSidebarLayoutChangeStarting;
+        }
+
+        public bool DeferInitialNavigation
+        {
+            get { return _deferInitialNavigation; }
+            set { _deferInitialNavigation = value; }
+        }
+
+        public void CompleteInitialNavigation()
+        {
+            _deferInitialNavigation = false;
+            NavigateToSelectedModule();
+        }
+
+        public void ShowInitialLoadFailure(string message)
+        {
+            ShowModule(CreateStartupStatus(message, "Unable to load selected client"));
         }
 
         private void CancelGlobalDownload_Click(object sender, RoutedEventArgs e)
@@ -122,6 +140,11 @@ namespace V3SClient.UI.Views
                 return;
 
             _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+            if (_deferInitialNavigation)
+            {
+                ShowModule(CreateStartupStatus("Loading selected client data...", "Starting iVista VMS"));
+                return;
+            }
             NavigateToSelectedModule();
         }
 
@@ -133,7 +156,7 @@ namespace V3SClient.UI.Views
 
         private void NavigateToSelectedModule()
         {
-            if (_viewModel == null || _viewModel.SelectedNavigationItem == null)
+            if (_deferInitialNavigation || _viewModel == null || _viewModel.SelectedNavigationItem == null)
                 return;
 
             if (_viewModel.SelectedNavigationItem.Route == "/live")
@@ -232,6 +255,33 @@ namespace V3SClient.UI.Views
             // remain instant and quiet.
             if (isNewModule)
                 TrackInitialSynchronization(module);
+        }
+
+        private static UIElement CreateStartupStatus(string message, string title)
+        {
+            var content = new StackPanel
+            {
+                Width = 420,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            content.Children.Add(new TextBlock
+            {
+                Text = title,
+                FontSize = 22,
+                FontWeight = FontWeights.SemiBold,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 0, 0, 10)
+            });
+            content.Children.Add(new TextBlock
+            {
+                Text = message,
+                FontSize = 14,
+                TextAlignment = TextAlignment.Center,
+                TextWrapping = TextWrapping.Wrap,
+                HorizontalAlignment = HorizontalAlignment.Center
+            });
+            return content;
         }
 
         private void TrackInitialSynchronization(UIElement module)

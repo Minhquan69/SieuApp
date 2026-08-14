@@ -38,14 +38,9 @@ namespace V3SClient.viewModels
                 new ShellNavigationItem_v3("Sự kiện", PackIconMaterialKind.RobotOutline, null, null),
                 new ShellNavigationItem_v3("Phát lại", PackIconMaterialKind.PlayCircleOutline, "/playback", null),
                 new ShellNavigationItem_v3("Bản đồ", PackIconMaterialKind.MapOutline, "/emap", null),
-                new ShellNavigationItem_v3("Thiết bị", PackIconMaterialKind.PackageVariantClosed, null, null),
                 new ShellNavigationItem_v3("Phân tích", PackIconMaterialKind.ChartBar, null, null),
-                new ShellNavigationItem_v3("Báo cáo", PackIconMaterialKind.FileDocumentOutline, null, null),
-                new ShellNavigationItem_v3("Cấu hình", PackIconMaterialKind.CogOutline, null, null),
                 new ShellNavigationItem_v3("Hệ thống", PackIconMaterialKind.Server, "/system", null)
             };
-            // Phân tích đứng trước Thiết bị như bố cục web.
-            NavigationItems.Move(6, 5);
             ActiveRoute = "/live";
             SelectedNavigationItem = NavigationItems[1];
             SelectNavigationCommand = new RelayCommand(item => SelectNavigation(item as ShellNavigationItem_v3));
