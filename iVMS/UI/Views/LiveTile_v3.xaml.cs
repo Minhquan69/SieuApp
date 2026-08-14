@@ -44,7 +44,7 @@ namespace V3SClient.UI.Views
         private bool _changingStream;
         private bool _actionsPinned;
         private bool _fullscreenMode;
-        private bool _isMuted;
+        private bool _isMuted = true;
         private bool _usingMainPresentation;
         private bool _gridStreamWarmedForRestore;
         private int _mainPresentationGeneration;
@@ -242,8 +242,8 @@ namespace V3SClient.UI.Views
             PendingStreamText.Visibility = Visibility.Collapsed;
             CameraBadgeInline.Padding = new Thickness(4, 2, 4, 2);
             CameraBadgeInline.Margin = new Thickness(5);
-            CameraNameInline.FontSize = 9;
-            CameraNameInline.MaxWidth = 86;
+            CameraNameInline.FontSize = 8;
+            CameraNameInline.MaxWidth = 120;
             HideOverlayContent(OfflineOverlay);
             HideOverlayContent(ErrorOverlay);
             ShowCompactConnectionStatus(OfflineOverlay);
@@ -302,7 +302,9 @@ namespace V3SClient.UI.Views
             HideCameraBadge(true);
             var previousCamera = _boundCamera;
             var nextCamera = slot == null ? null : slot.Camera;
-            if (previousCamera != null && !ReferenceEquals(previousCamera, nextCamera))
+            var sameCamera = previousCamera != null && nextCamera != null &&
+                string.Equals(previousCamera.camID, nextCamera.camID, StringComparison.OrdinalIgnoreCase);
+            if (previousCamera != null && (nextCamera == null || !sameCamera))
             {
                 Player.Disconnect();
                 MainPlayer.Disconnect();
@@ -313,6 +315,8 @@ namespace V3SClient.UI.Views
             _mainSwitchScheduledGeneration = -1;
             Slot = slot;
             _boundCamera = nextCamera;
+            if (slot == null || slot.Camera == null || !sameCamera)
+                _isMuted = true;
             DataContext = slot;
             RefreshVisuals();
             ApplyCompactDashboardMode();
@@ -320,11 +324,14 @@ namespace V3SClient.UI.Views
             {
                 Player.Camera = null;
                 MainPlayer.Camera = null;
+                SetMuted(true);
                 UpdateMetadataSubscription();
                 return;
             }
             Player.SelectedStream = slot.SelectedStream;
             Player.Camera = slot.Camera;
+            SetMuted(_isMuted);
+            SetMuted(_isMuted);
             MainPlayer.SetPresentationVisible(false);
             UpdateMetadataSubscription();
         }
@@ -373,6 +380,10 @@ namespace V3SClient.UI.Views
             MuteIcon.Kind = muted ? MahApps.Metro.IconPacks.PackIconMaterialKind.VolumeOff : MahApps.Metro.IconPacks.PackIconMaterialKind.VolumeHigh;
             AudioPlayingIcon.Visibility = !muted && Slot != null && Slot.Camera != null
                 ? Visibility.Visible : Visibility.Collapsed;
+            // The camera ID badge is rendered by the native video host. Force
+            // it to repaint immediately so its speaker icon follows the tile.
+            if (!_disposed && Slot != null && Slot.Camera != null)
+                RefreshVisuals();
         }
 
         public bool HasAudio => Player != null && Player.HasAudio;
@@ -832,11 +843,31 @@ namespace V3SClient.UI.Views
         private void Snapshot_Click(object sender, RoutedEventArgs e) { SnapshotRequested?.Invoke(this, EventArgs.Empty); }
         private void Mute_Click(object sender, RoutedEventArgs e)
         {
-            if (MuteButton == null) return;
+            if (MuteButton == null || _disposed || Slot == null || Slot.Camera == null) return;
+            // Keep the action popup alive while the user toggles audio.
+            // Otherwise the hover-hide timer can close it after the first click,
+            // making subsequent clicks appear unresponsive.
+            _actionsPinned = true;
+            CameraControlPanel.Visibility = Visibility.Visible;
+            MuteButton.Visibility = Visibility.Visible;
+            SafeStopHideActionsTimer();
+            ShowActions();
             var wantsAudio = _isMuted;
             if (wantsAudio) AudioRequested?.Invoke(this, EventArgs.Empty);
             SetMuted(wantsAudio);
             AudioStateChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void MutePreview_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ChangedButton != MouseButton.Left) return;
+            if (_disposed || Slot == null || Slot.Camera == null) return;
+            var muted = !IsMuted;
+            if (!muted)
+                AudioRequested?.Invoke(this, EventArgs.Empty);
+            SetMuted(muted);
+            AudioStateChanged?.Invoke(this, EventArgs.Empty);
+            e.Handled = true;
         }
 
         public void EnsureCompactActionsVisible()
@@ -853,10 +884,10 @@ namespace V3SClient.UI.Views
         private void CameraControl_Click(object sender, RoutedEventArgs e)
         {
             var open = CameraControlPanel.Visibility != Visibility.Visible;
-            // Pin the popup while its secondary controls are open. Otherwise
-            // the tile hover timer can close the native Popup before the
-            // volume button receives the mouse click.
-            _actionsPinned = open;
+            // Secondary controls follow the tile hover lifecycle. They should
+            // disappear when the pointer leaves the tile without requiring
+            // the user to click the chevron again.
+            _actionsPinned = false;
             CameraControlPanel.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
             MuteButton.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
             CameraControlIcon.Kind = open

@@ -52,7 +52,7 @@
                     <!-- Same camera outline geometry as the native badge used
                          above a running D3D stream. -->
                     <Path x:Name="StatusDotInline" Width="16" Height="12" Stretch="Uniform" Data="M 1,2 L 12,2 L 12,4 L 16,2 L 16,10 L 12,8 L 12,10 L 1,10 Z" Fill="Transparent" Stroke="{StaticResource VmsTextTertiaryBrush_v3}" StrokeThickness="1.35" StrokeLineJoin="Round" Margin="0,0,5,0" VerticalAlignment="Center"/>
-                    <TextBlock x:Name="CameraNameInline" Foreground="{StaticResource VmsTextInverseBrush_v3}" FontWeight="SemiBold" FontSize="11" TextTrimming="CharacterEllipsis" MaxWidth="210"/>
+                    <TextBlock x:Name="CameraNameInline" Foreground="{StaticResource VmsTextInverseBrush_v3}" FontWeight="SemiBold" FontSize="10" TextWrapping="Wrap" TextTrimming="None" MaxWidth="210" ToolTip="{Binding Camera.camID}"/>
                     <Icon:PackIconMaterial x:Name="AudioPlayingIcon" Kind="VolumeHigh" Width="12" Height="12" Margin="5,0,0,0" Foreground="{StaticResource VmsSuccessBrush_v3}" Visibility="Collapsed"/>
                 </StackPanel>
             </Border>
@@ -120,7 +120,7 @@
             <Border x:Name="ActionBar" Panel.ZIndex="100" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0" Padding="0" Background="#010B1622" BorderThickness="0" Opacity="1" IsHitTestVisible="True" MouseEnter="ActionBar_MouseEnter" MouseLeave="ActionBar_MouseLeave" SizeChanged="ActionBar_SizeChanged">
                 <StackPanel Orientation="Vertical">
                     <StackPanel x:Name="CameraControlPanel" Orientation="Vertical" HorizontalAlignment="Left" VerticalAlignment="Center" Visibility="Collapsed" Background="Transparent" IsHitTestVisible="True">
-                        <Button x:Name="MuteButton" Click="Mute_Click" IsHitTestVisible="True" IsEnabled="True" Focusable="True" Style="{StaticResource LiveTileActionButton_v3}" ToolTip="Bật âm thanh"><Icon:PackIconMaterial x:Name="MuteIcon" Kind="VolumeOff" Width="13" Height="13" IsHitTestVisible="False"/></Button>
+                        <Button x:Name="MuteButton" PreviewMouseLeftButtonDown="MutePreview_Click" IsHitTestVisible="True" IsEnabled="True" Focusable="True" Style="{StaticResource LiveTileActionButton_v3}" ToolTip="Bật âm thanh"><Icon:PackIconMaterial x:Name="MuteIcon" Kind="VolumeOff" Width="16" Height="16" IsHitTestVisible="False"/></Button>
                         <Button x:Name="PtzButton" Click="Ptz_Click" Style="{StaticResource LiveTileActionButton_v3}" ToolTip="Mở điều khiển PTZ" Visibility="Collapsed"><Icon:PackIconMaterial Kind="Crosshairs" Width="13" Height="13"/></Button>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">

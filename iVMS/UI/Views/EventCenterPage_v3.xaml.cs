@@ -565,8 +565,8 @@ namespace V3SClient.UI.Views
 
         private EventRow_v3 MapRow(ApiManager.RoiObjectItem x)
         {
-            var title = new[] { x.Plate, x.Label, x.DetectedObjectIds, x.Name, x.ObjectId }
-                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? "Không nhận diện";
+            var title = NormalizePlateDisplay(new[] { x.Plate, x.Label, x.DetectedObjectIds, x.Name, x.ObjectId }
+                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)));
             var rawType = new[] { x.ObjectType, x.MetaType, x.EventType }
                 .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? "";
             var timeIn = FormatEventDateTime(x.EnteredAt ?? x.EventTime);
@@ -619,11 +619,9 @@ namespace V3SClient.UI.Views
             DateTime.TryParse(x.EventTime, null, DateTimeStyles.RoundtripKind, out t);
             var timeStr = t == DateTime.MinValue ? x.EventTime : t.ToString("HH:mm:ss dd/MM/yyyy");
             var conf    = (x.Confidence ?? 0) * 100.0;
-            var plate = !string.IsNullOrWhiteSpace(x.Plate)
-                ? x.Plate.Trim()
-                : IsLicensePlate(x.ObjectId) ? x.ObjectId.Trim() : "—";
-
-            if (plate == "—") return null;
+            var plate = NormalizePlateDisplay(!string.IsNullOrWhiteSpace(x.Plate)
+                ? x.Plate
+                : x.ObjectId);
 
             return new EventRow_v3
             {
@@ -650,6 +648,16 @@ namespace V3SClient.UI.Views
             if (normalized.Length < 6 || normalized.Length > 12) return false;
             var digitCount = normalized.Count(char.IsDigit);
             return digitCount >= 4 && normalized.Any(char.IsLetter);
+        }
+
+        private static string NormalizePlateDisplay(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return "Không nhận diện";
+            var plate = value.Trim();
+            if (plate.IndexOf("OBJECT", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                plate.StartsWith("_", StringComparison.Ordinal))
+                return "Không nhận diện";
+            return IsLicensePlate(plate) ? plate : "Không nhận diện";
         }
 
         private async Task<List<EventRow_v3>> LoadRecordedPlateRowsAsync(

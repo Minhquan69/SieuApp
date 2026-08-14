@@ -101,12 +101,12 @@ namespace V3SClient.UI.Views
                 e.Graphics.DrawLine(iconPen, iconX + 15F, iconY + 8F, iconX + 11F, iconY + 6F);
 
                 System.Windows.Forms.TextRenderer.DrawText(e.Graphics, _cameraId, Font,
-                    new System.Drawing.Rectangle(28, 0, Math.Max(1, Width - 49), Height),
+                    new System.Drawing.Rectangle(28, 0,
+                        Math.Max(1, Width - 28 - (_audioEnabled ? 12 : 4)), Height),
                     System.Drawing.Color.White,
                     System.Windows.Forms.TextFormatFlags.Left |
                     System.Windows.Forms.TextFormatFlags.VerticalCenter |
                     System.Windows.Forms.TextFormatFlags.NoPadding |
-                    System.Windows.Forms.TextFormatFlags.EndEllipsis |
                     System.Windows.Forms.TextFormatFlags.SingleLine);
 
                 // Match the WPF badge: show the green volume icon only when
