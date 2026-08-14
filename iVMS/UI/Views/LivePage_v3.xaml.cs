@@ -122,7 +122,7 @@ namespace V3SClient.UI.Views
         private int _liveTrafficDensityRefreshInProgress;
         private int _aiEventFeedRefreshInProgress;
         private bool _aiEventFeedAutoRefresh = true;
-        private bool _aiFeedCollapsed;
+        private bool _aiFeedCollapsed = true;
         private bool _aiFeedInitialized;
         private readonly Dictionary<string, ImageSource> _aiFeedCropCache = new Dictionary<string, ImageSource>(StringComparer.OrdinalIgnoreCase);
         private readonly Queue<string> _aiFeedCropCacheOrder = new Queue<string>();
@@ -2326,10 +2326,14 @@ namespace V3SClient.UI.Views
                 AiFeedEmptyState.Visibility = Visibility.Collapsed;
             else
                 AiFeedEmptyState.ClearValue(VisibilityProperty);
-            AiFeedCollapseIcon.Kind = _aiFeedCollapsed
-                ? MahApps.Metro.IconPacks.PackIconMaterialKind.ChevronDown
-                : MahApps.Metro.IconPacks.PackIconMaterialKind.ChevronUp;
+            AiFeedCollapseIcon.Kind = MahApps.Metro.IconPacks.PackIconMaterialKind.Brain;
             AiFeedCollapseButton.ToolTip = _aiFeedCollapsed ? "Mở AI Feed" : "Thu gọn AI Feed";
+            var controlsVisibility = _aiFeedCollapsed ? Visibility.Collapsed : Visibility.Visible;
+            AiFeedRefreshText.Visibility = controlsVisibility;
+            AiFeedRefreshUnitText.Visibility = controlsVisibility;
+            AiFeedDetailButton.Visibility = controlsVisibility;
+            AiFeedPauseButton.Visibility = controlsVisibility;
+            AiFeedRefreshButton.Visibility = controlsVisibility;
         }
 
         private async void RefreshAiEventFeed_Click(object sender, RoutedEventArgs e)

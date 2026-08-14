@@ -194,13 +194,16 @@ namespace V3SClient.libs
 
         private ApiManager()
         {
-            _httpClient = new HttpClient(new SynchronizationTrackingHandler_v3(new HttpClientHandler()));
+            _httpClient = new HttpClient(new OfflineResponseCacheHandler_v3(
+                new SynchronizationTrackingHandler_v3(new HttpClientHandler())));
             _httpClient.Timeout = TimeSpan.FromSeconds(30);
             var loginHandler = new HttpClientHandler { UseProxy = false };
-            _loginHttpClient = new HttpClient(new SynchronizationTrackingHandler_v3(loginHandler));
+            _loginHttpClient = new HttpClient(new OfflineResponseCacheHandler_v3(
+                new SynchronizationTrackingHandler_v3(loginHandler)));
             _loginHttpClient.Timeout = TimeSpan.FromSeconds(12);
             var statusHandler = new HttpClientHandler { UseProxy = false };
-            _deviceStatusHttpClient = new HttpClient(new SynchronizationTrackingHandler_v3(statusHandler));
+            _deviceStatusHttpClient = new HttpClient(new OfflineResponseCacheHandler_v3(
+                new SynchronizationTrackingHandler_v3(statusHandler)));
             _deviceStatusHttpClient.Timeout = TimeSpan.FromSeconds(12);
             LoadConfig();
             LoadBackendTokenFromEnvironment();
@@ -448,6 +451,7 @@ namespace V3SClient.libs
         /// </summary>
         public void ClearAuthentication()
         {
+            OfflineResponseCacheHandler_v3.Clear();
             _backendToken = null;
             _storageToken = null;
             _assetsToken = null;
@@ -3384,7 +3388,7 @@ namespace V3SClient.libs
             var token = (!string.IsNullOrWhiteSpace(profile.Token) ? profile.Token : (_vehicleStatsApiToken ?? _backendToken ?? string.Empty)).Trim();
             if (token.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)) token = token.Substring("Bearer ".Length).Trim();
             page = Math.Max(1, page); pageSize = Math.Max(1, Math.Min(100, pageSize));
-            var query = "?start_at=" + Uri.EscapeDataString(start.ToLocalTime().ToString("yyyy-MM-ddTHH:mm:ss", System.Globalization.CultureInfo.InvariantCulture)) + "&end_at=" + Uri.EscapeDataString(end.ToLocalTime().ToString("yyyy-MM-ddTHH:mm:ss", System.Globalization.CultureInfo.InvariantCulture)) + "&cam_ids=" + Uri.EscapeDataString(string.Join(",", cameraIds ?? Enumerable.Empty<string>())) + "&roi_ids=" + Uri.EscapeDataString(string.Join(",", roiIds ?? Enumerable.Empty<string>())) + "&bucket=" + Uri.EscapeDataString(string.IsNullOrWhiteSpace(bucket) ? "auto" : bucket) + "&threshold_seconds=" + thresholdSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture) + "&limit=" + pageSize + "&page=" + page + "&page_size=" + pageSize;
+            var query = "?start_at=" + Uri.EscapeDataString(start.ToLocalTime().ToString("yyyy-MM-ddTHH:mm:ss", System.Globalization.CultureInfo.InvariantCulture)) + "&end_at=" + Uri.EscapeDataString(end.ToLocalTime().ToString("yyyy-MM-ddTHH:mm:ss", System.Globalization.CultureInfo.InvariantCulture)) + "&cam_ids=" + Uri.EscapeDataString(string.Join(",", cameraIds ?? Enumerable.Empty<string>())) + "&roi_ids=" + Uri.EscapeDataString(string.Join(",", roiIds ?? Enumerable.Empty<string>())) + "&bucket=" + Uri.EscapeDataString(string.IsNullOrWhiteSpace(bucket) ? "auto" : bucket) + "&threshold_seconds=" + thresholdSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture) + "&minimum_samples=5&limit=" + pageSize + "&page=" + page + "&page_size=" + pageSize;
             foreach (var endpointBase in new[] { profile.PublicUrl, profile.InternalUrl }.Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value.TrimEnd('/')).Distinct(StringComparer.OrdinalIgnoreCase))
                 try { using (var request = new HttpRequestMessage(HttpMethod.Get, endpointBase + "/api/roi-monitoring/" + Uri.EscapeDataString(resource) + query)) { request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json")); if (!string.IsNullOrWhiteSpace(token)) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token); using (var response = await _deviceStatusHttpClient.SendAsync(request, cancellationToken)) { var json = await response.Content.ReadAsStringAsync(); if (response.IsSuccessStatusCode && !string.IsNullOrWhiteSpace(json)) return JObject.Parse(json); } } } catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return null; } catch (Exception ex) { LoggerManager.LogException(ex, "GetRoiMonitoringResourceAsync; trying next _aiEventReport endpoint"); }
             return null;

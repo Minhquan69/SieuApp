@@ -38,15 +38,15 @@
      </Button>
     </DataTemplate></ListBox.ItemTemplate>
    </ListBox>
-   <Border Grid.Row="2" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="0,1,0,0" Padding="10,8,10,10">
+   <Border Grid.Row="2" Margin="0,-14,0,0" BorderBrush="{StaticResource VmsBorderBrush_v3}" BorderThickness="0,1,0,0" Padding="10,0,10,4" Panel.ZIndex="20">
     <StackPanel>
      <StackPanel x:Name="ExpandedFooter">
-      <Grid Height="30">
+      <Grid Height="42" Margin="0,-2,0,0">
        <Grid.ColumnDefinitions><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
        <Icon:PackIconMaterial Grid.RowSpan="2" Kind="Pulse" Width="14" Height="14" VerticalAlignment="Center" Foreground="{Binding ConnectionStatusBrush}"/>
        <TextBlock Grid.Column="1" Text="Trạng thái hệ thống" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Bottom"/>
-       <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ConnectionStatusText}" Foreground="{Binding ConnectionStatusBrush}" FontSize="10" Margin="0,1,0,0"/>
+       <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ConnectionStatusText}" Foreground="{Binding ConnectionStatusBrush}" FontSize="12" Margin="0,1,0,0"/>
       </Grid>
       <StackPanel Orientation="Horizontal" Margin="0,8,0,0"><Icon:PackIconMaterial Kind="ClockOutline" Width="14" Height="14" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" Margin="0,0,6,0"/><TextBlock Text="{Binding ServerTime, StringFormat={}{0:dd/MM/yyyy, HH:mm:ss}}" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" FontSize="10"/></StackPanel>
       <TextBlock Text="Version — v2.5.0" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="9" Margin="0,7,0,8"/>
