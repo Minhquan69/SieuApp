@@ -90,7 +90,15 @@ namespace V3SClient
         {
             try
             {
+                // The shell is created before the selected client is loaded.
+                // Resolve a missing selection from the authorized list instead
+                // of allowing the header to remain on its default placeholder.
+                if (profile == null)
+                    profile = GlobalUserInfo.Instance.AuthorizedProfiles?.FirstOrDefault();
+                if (profile == null)
+                    throw new InvalidOperationException("Không xác định được client đã chọn sau khi đăng nhập.");
                 await new Services.ClientSessionService().SwitchClientAsync(profile, CancellationToken.None);
+                shell.RefreshSessionDisplay();
                 if (shell.IsVisible)
                     shell.CompleteInitialNavigation();
             }

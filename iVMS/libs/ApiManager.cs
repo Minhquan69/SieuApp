@@ -3506,6 +3506,82 @@ namespace V3SClient.libs
                 return null;
             }
         }
+
+        public sealed class CameraPtzMovement
+        {
+            public double duration { get; set; }
+            public double pan { get; set; }
+            public double tilt { get; set; }
+            public double zoom { get; set; }
+            public double pan_speed { get; set; }
+            public double tilt_speed { get; set; }
+            public double zoom_speed { get; set; }
+        }
+
+        public sealed class CameraPtzPreset
+        {
+            [JsonProperty("Token")] public string Token { get; set; }
+            [JsonProperty("Name")] public string Name { get; set; }
+        }
+
+        private async Task<HttpResponseMessage> SendPtzRequestAsync(HttpMethod method, string path, object body, CancellationToken cancellationToken)
+        {
+            var profile = GetEndpointProfile(_roiConfigEndpointKeyword);
+            if (profile == null || string.IsNullOrWhiteSpace(profile.PublicUrl) && string.IsNullOrWhiteSpace(profile.InternalUrl))
+            {
+                await DiscoverEndpointsAsync(cancellationToken).ConfigureAwait(false);
+                profile = GetEndpointProfile(_roiConfigEndpointKeyword);
+            }
+            var baseUrl = profile?.PublicUrl ?? profile?.InternalUrl ?? _roiConfigApiUrl;
+            if (string.IsNullOrWhiteSpace(baseUrl)) return null;
+            var request = new HttpRequestMessage(method, baseUrl.TrimEnd('/') + path);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            var token = profile?.Token ?? _roiConfigApiToken ?? _backendToken;
+            if (!string.IsNullOrWhiteSpace(token)) request.Headers.TryAddWithoutValidation("Authorization", token);
+            if (body != null) request.Content = new StringContent(JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json");
+            return await _deviceStatusHttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+
+        public async Task<bool> MoveCameraPtzAsync(string cameraId, CameraPtzMovement movement, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            if (string.IsNullOrWhiteSpace(cameraId) || movement == null) return false;
+            try
+            {
+                using (var response = await SendPtzRequestAsync(HttpMethod.Post, "/api/cameras/" + Uri.EscapeDataString(cameraId) + "/ptz/move", movement, cancellationToken).ConfigureAwait(false))
+                    return response != null && response.IsSuccessStatusCode;
+            }
+            catch (Exception ex) { LoggerManager.LogException(ex, "MoveCameraPtzAsync"); return false; }
+        }
+
+        public async Task<List<CameraPtzPreset>> GetCameraPtzPresetsAsync(string cameraId, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            try
+            {
+                using (var response = await SendPtzRequestAsync(HttpMethod.Get, "/api/cameras/" + Uri.EscapeDataString(cameraId) + "/ptz/presets", null, cancellationToken).ConfigureAwait(false))
+                {
+                    if (response == null || !response.IsSuccessStatusCode) return new List<CameraPtzPreset>();
+                    var root = JObject.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+                    var data = root["data"] as JArray ?? root["presets"] as JArray ?? new JArray();
+                    return data.OfType<JObject>().Select(item => new CameraPtzPreset
+                    {
+                        Token = (string)item["Token"] ?? (string)item["token"],
+                        Name = (string)item["Name"] ?? (string)item["name"]
+                    }).Where(item => !string.IsNullOrWhiteSpace(item.Token)).ToList();
+                }
+            }
+            catch (Exception ex) { LoggerManager.LogException(ex, "GetCameraPtzPresetsAsync"); return new List<CameraPtzPreset>(); }
+        }
+
+        public async Task<bool> GotoCameraPtzPresetAsync(string cameraId, string presetToken, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            if (string.IsNullOrWhiteSpace(cameraId) || string.IsNullOrWhiteSpace(presetToken)) return false;
+            try
+            {
+                using (var response = await SendPtzRequestAsync(HttpMethod.Post, "/api/cameras/" + Uri.EscapeDataString(cameraId) + "/ptz/presets/" + Uri.EscapeDataString(presetToken) + "/goto", new { }, cancellationToken).ConfigureAwait(false))
+                    return response != null && response.IsSuccessStatusCode;
+            }
+            catch (Exception ex) { LoggerManager.LogException(ex, "GotoCameraPtzPresetAsync"); return false; }
+        }
     }
 }
 

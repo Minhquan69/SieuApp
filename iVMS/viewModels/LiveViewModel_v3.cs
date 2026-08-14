@@ -422,14 +422,15 @@ namespace V3SClient.viewModels
                 string.Equals(camera.type, "ai_processed", StringComparison.OrdinalIgnoreCase) ||
                 (camera.Streams != null && camera.Streams.Any(stream => stream != null && stream.IsAiMode == true));
             if (isAiCamera)
-            {
-                // Bbox is transported in AI metadata/SEI. Some sub1 streams
-                // omit that metadata, so prefer the explicit AI stream and
-                // otherwise main for every AI camera displayed in the grid.
-                var aiStream = camera.Streams == null ? null : camera.Streams.FirstOrDefault(stream => stream != null && stream.IsAiMode == true);
-                return aiStream ?? SelectMainStream(camera);
-            }
-            var sub1 = camera.Streams == null ? null : camera.Streams.FirstOrDefault(stream => stream != null &&
+                return SelectMainStream(camera);
+
+            // The grid uses the highest available sub stream to reduce CPU,
+            // bandwidth and decoder load. Fullscreen uses SelectMainStream.
+            var streams = camera.Streams ?? Enumerable.Empty<CameraStreamInfo>();
+            var sub2 = streams.FirstOrDefault(stream => stream != null &&
+                string.Equals((stream.StreamType ?? string.Empty).Trim(), "sub2", StringComparison.OrdinalIgnoreCase));
+            if (sub2 != null) return sub2;
+            var sub1 = streams.FirstOrDefault(stream => stream != null &&
                 string.Equals((stream.StreamType ?? string.Empty).Trim(), "sub1", StringComparison.OrdinalIgnoreCase));
             return sub1 ?? SelectMainStream(camera);
         }

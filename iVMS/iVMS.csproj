@@ -436,6 +436,8 @@
     <Compile Include="UI\Views\LiveTile_v3.xaml.cs">
       <DependentUpon>LiveTile_v3.xaml</DependentUpon>
     </Compile>
+    <Compile Include="UI\Views\PtzControlWindow_v3.cs" />
+    <Compile Include="UI\Views\PtzControlPanel_v3.cs" />
     <Compile Include="UI\Views\PlaybackCameraList_v3.xaml.cs">
       <DependentUpon>PlaybackCameraList_v3.xaml</DependentUpon>
     </Compile>

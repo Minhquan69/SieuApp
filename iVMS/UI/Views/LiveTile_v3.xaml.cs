@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -294,6 +295,7 @@ namespace V3SClient.UI.Views
         public event EventHandler StateChanged;
         public event EventHandler AudioRequested;
         public event EventHandler AudioStateChanged;
+        public event EventHandler PtzRequested;
 
         public void Bind(LiveSlotViewModel_v3 slot)
         {
@@ -343,7 +345,8 @@ namespace V3SClient.UI.Views
             // renderer uses WindowsFormsHost. Collapsing or expanding a tile
             // alone does not close them, so do so explicitly.
             SafeCloseActionPopup();
-            HideCameraBadge(false);
+            // Keep the selected camera identity visible while fullscreen.
+            // The native video host owns the badge above the D3D surface.
         }
 
         /// <summary>Restores the ID only after the normal camera grid is back.</summary>
@@ -384,6 +387,14 @@ namespace V3SClient.UI.Views
             // it to repaint immediately so its speaker icon follows the tile.
             if (!_disposed && Slot != null && Slot.Camera != null)
                 RefreshVisuals();
+        }
+
+        public void EnsureFullscreenCameraBadge()
+        {
+            if (_disposed || Slot == null || Slot.Camera == null) return;
+            var text = Slot.DisplayName;
+            Player.SetCameraBadge(text, !_usingMainPresentation, Slot.State == LiveConnectionState_v3.Connected, Slot.HasError && Slot.State == LiveConnectionState_v3.Error);
+            MainPlayer.SetCameraBadge(text, _usingMainPresentation, Slot.State == LiveConnectionState_v3.Connected, Slot.HasError && Slot.State == LiveConnectionState_v3.Error);
         }
 
         public bool HasAudio => Player != null && Player.HasAudio;
@@ -593,6 +604,7 @@ namespace V3SClient.UI.Views
             MainPlayer.SetPresentationVisible(true);
             UpdateMetadataSubscription();
             RefreshVisuals();
+            EnsureFullscreenCameraBadge();
         }
 
         private static bool SameStream(CameraStreamInfo first, CameraStreamInfo second)
@@ -858,6 +870,15 @@ namespace V3SClient.UI.Views
             AudioStateChanged?.Invoke(this, EventArgs.Empty);
         }
 
+        public async Task ToggleConnectionAsync()
+        {
+            if (_disposed || Slot == null || Slot.Camera == null) return;
+            if (Slot.State == LiveConnectionState_v3.Connected || Slot.State == LiveConnectionState_v3.Connecting || Slot.State == LiveConnectionState_v3.Retrying)
+                await DisconnectInBackgroundAsync();
+            else
+                await ConnectAsync();
+        }
+
         private void MutePreview_Click(object sender, MouseButtonEventArgs e)
         {
             if (e.ChangedButton != MouseButton.Left) return;
@@ -880,7 +901,11 @@ namespace V3SClient.UI.Views
             Panel.SetZIndex(RemoveButton, 100);
         }
 
-        private void Ptz_Click(object sender, RoutedEventArgs e) { LoggerManager.LogInfo($"PTZ requested for camera {Slot?.Camera?.camID ?? "unknown"}."); }
+        private void Ptz_Click(object sender, RoutedEventArgs e)
+        {
+            LoggerManager.LogInfo($"PTZ requested for camera {Slot?.Camera?.camID ?? "unknown"}.");
+            PtzRequested?.Invoke(this, EventArgs.Empty);
+        }
         private void CameraControl_Click(object sender, RoutedEventArgs e)
         {
             var open = CameraControlPanel.Visibility != Visibility.Visible;
@@ -1358,8 +1383,14 @@ namespace V3SClient.UI.Views
                 ConnectButton.Visibility = Visibility.Collapsed;
                 MuteButton.Visibility = Visibility.Collapsed;
                 SnapshotButton.Visibility = Visibility.Collapsed;
-                PtzButton.Visibility = Visibility.Collapsed;
-                CameraControlPanel.Visibility = Visibility.Collapsed;
+                // PTZ is a primary compact-grid action when the camera
+                // advertises support. Do not collapse it here: RefreshVisuals
+                // runs during every stream/status update and used to make the
+                // button disappear before the click could be handled.
+                PtzButton.Visibility = !empty && Slot.Camera != null && Slot.Camera.ptz_available == true
+                    ? Visibility.Visible : Visibility.Collapsed;
+                CameraControlPanel.Visibility = PtzButton.Visibility == Visibility.Visible
+                    ? Visibility.Visible : Visibility.Collapsed;
                 DisconnectButton.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
                 FullscreenButton.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
                 RemoveButton.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;

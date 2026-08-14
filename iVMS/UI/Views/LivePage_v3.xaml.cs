@@ -124,6 +124,7 @@ namespace V3SClient.UI.Views
         private bool _aiEventFeedAutoRefresh = true;
         private bool _aiFeedCollapsed = true;
         private bool _aiFeedInitialized;
+        private Visibility _tileAiFeedVisibility = Visibility.Visible;
         private readonly Dictionary<string, ImageSource> _aiFeedCropCache = new Dictionary<string, ImageSource>(StringComparer.OrdinalIgnoreCase);
         private readonly Queue<string> _aiFeedCropCacheOrder = new Queue<string>();
         // Feed thumbnails are shown at 78px and at most 260px in the detail
@@ -637,6 +638,7 @@ namespace V3SClient.UI.Views
                     tile.SnapshotRequested += Tile_SnapshotRequested;
                     tile.AudioRequested += Tile_AudioRequested;
                     tile.AudioStateChanged += Tile_AudioStateChanged;
+                    tile.PtzRequested += Tile_PtzRequested;
                     tile.StateChanged += Tile_StateChanged;
                     tile.AllowDrop = true;
                     tile.PreviewMouseLeftButtonDown += Tile_PreviewMouseLeftButtonDown;
@@ -674,6 +676,7 @@ namespace V3SClient.UI.Views
                 stale.SnapshotRequested -= Tile_SnapshotRequested;
                 stale.AudioRequested -= Tile_AudioRequested;
                 stale.AudioStateChanged -= Tile_AudioStateChanged;
+                stale.PtzRequested -= Tile_PtzRequested;
                 stale.StateChanged -= Tile_StateChanged;
                 stale.PreviewMouseLeftButtonDown -= Tile_PreviewMouseLeftButtonDown;
                 stale.PreviewMouseMove -= Tile_PreviewMouseMove;
@@ -1383,6 +1386,7 @@ namespace V3SClient.UI.Views
                 tile.RemoveRequested -= Tile_RemoveRequested;
                 tile.FullscreenRequested -= Tile_FullscreenRequested;
                 tile.SnapshotRequested -= Tile_SnapshotRequested;
+                tile.PtzRequested -= Tile_PtzRequested;
                 tile.AudioRequested -= Tile_AudioRequested;
                 tile.AudioStateChanged -= Tile_AudioStateChanged;
                 tile.StateChanged -= Tile_StateChanged;
@@ -1490,7 +1494,8 @@ namespace V3SClient.UI.Views
                         var selected = ReferenceEquals(cameraTile, tile);
                         cameraTile.HideForFullscreen();
                         cameraTile.SetFullscreenMode(selected);
-                        cameraTile.HideTransientOverlays();
+                        if (!selected)
+                            cameraTile.HideTransientOverlays();
                         // A D3D sink retains its previous HWND rectangle for
                         // one render pass. Hide it during that pass so its old
                         // small grid-sized surface cannot flash in the centre
@@ -1517,6 +1522,7 @@ namespace V3SClient.UI.Views
                         CameraGrid.InvalidateArrange();
                         CameraGrid.UpdateLayout();
                         tile.SynchronizeNativeVideoSurfaces();
+                        tile.EnsureFullscreenCameraBadge();
                         // Start the heavier main stream only after the WPF
                         // window and the already-playing grid stream have
                         // reached their final fullscreen bounds.
@@ -1574,6 +1580,8 @@ namespace V3SClient.UI.Views
             SidebarColumn.MaxWidth = double.PositiveInfinity;
             SidebarColumn.Width = new GridLength(0);
             LivePageHeader.Visibility = Visibility.Collapsed;
+            _tileAiFeedVisibility = AiFeedPanel.Visibility;
+            AiFeedPanel.Visibility = Visibility.Collapsed;
             var shell = GetShellPage(window);
             if (shell != null) shell.SetChromeVisible(false);
             // A selected camera is easier to observe on one monitor. Keep the
@@ -1659,6 +1667,7 @@ namespace V3SClient.UI.Views
             SidebarColumn.MaxWidth = 320;
             SidebarColumn.Width = _tileSidebarWidth.Value > 0 ? _tileSidebarWidth : new GridLength(0.20, GridUnitType.Star);
             LivePageHeader.Visibility = Visibility.Visible;
+            AiFeedPanel.Visibility = _tileAiFeedVisibility;
             BuildGrid();
             foreach (var tile in _tiles.Values)
             {
@@ -2537,6 +2546,53 @@ namespace V3SClient.UI.Views
         {
             _viewModel.RefreshCameraIndicators();
             UpdateStatus();
+        }
+
+        private void Tile_PtzRequested(object sender, EventArgs e)
+        {
+            var tile = sender as LiveTile_v3;
+            var cameraId = tile?.Slot?.Camera?.camID;
+            if (string.IsNullOrWhiteSpace(cameraId)) return;
+            CameraSidebar.Visibility = Visibility.Collapsed;
+            var streams = tile?.Slot?.Camera?.Streams == null
+                ? new[] { "main", "sub1", "sub2" }
+                : tile.Slot.Camera.Streams.Select(stream => stream == null ? null : stream.StreamType)
+                    .Where(stream => !string.IsNullOrWhiteSpace(stream))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+            PtzDockContent.Content = new PtzControlPanel_v3(cameraId, streams);
+            var panel = PtzDockContent.Content as PtzControlPanel_v3;
+            panel.CloseRequested += ClosePtzDock;
+            panel.StreamChanged += async streamType =>
+            {
+                var selected = tile?.Slot?.Camera?.Streams?.FirstOrDefault(stream =>
+                    stream != null && string.Equals(stream.StreamType, streamType, StringComparison.OrdinalIgnoreCase));
+                if (selected != null) await tile.UseStreamAsync(selected);
+            };
+            panel.ConnectionChanged += async connected =>
+            {
+                if (tile == null) return;
+                if (connected) await tile.ConnectAsync();
+                else await tile.DisconnectInBackgroundAsync();
+            };
+            PtzDock.Visibility = Visibility.Visible;
+            SidebarColumn.MinWidth = 300;
+            SidebarColumn.MaxWidth = 360;
+            SidebarColumn.Width = new GridLength(0.24, GridUnitType.Star);
+            Grid.SetColumnSpan(CameraGridHost, 1);
+            UpdateCameraSidebarPlacement();
+        }
+
+        private void ClosePtzDock(object sender, EventArgs e)
+        {
+            if (sender is PtzControlPanel_v3 panel) panel.CloseRequested -= ClosePtzDock;
+            PtzDockContent.Content = null;
+            PtzDock.Visibility = Visibility.Collapsed;
+            CameraSidebar.Visibility = Visibility.Visible;
+            SidebarColumn.MinWidth = 210;
+            SidebarColumn.MaxWidth = 320;
+            SidebarColumn.Width = new GridLength(0.20, GridUnitType.Star);
+            UpdateCameraSidebarPlacement();
         }
 
         public void Dispose()
