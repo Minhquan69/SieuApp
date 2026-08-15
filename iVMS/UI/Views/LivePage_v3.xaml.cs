@@ -1468,6 +1468,8 @@ namespace V3SClient.UI.Views
         {
             var tile = sender as LiveTile_v3;
             if (tile == null || tile.Slot == null) return;
+            if (ReferenceEquals(_fullscreenTile, tile))
+                ExitTileFullscreen();
             var slot = tile.Slot;
             // The per-tile toolbar is hosted in a native Popup. Reusing this
             // tile after its player HWND has been torn down leaves that Popup
@@ -2525,7 +2527,9 @@ namespace V3SClient.UI.Views
             SidebarOpenButton.Visibility = Visibility.Collapsed;
             var canOpenSidebar = LivePageHeader.Visibility == Visibility.Visible &&
                 CameraSidebar.Visibility != Visibility.Visible;
-            SidebarOpenHeaderButton.Visibility = canOpenSidebar
+            // A collapsed sidebar already owns the compact camera-list tab.
+            // Do not show the second header opener at the same time.
+            SidebarOpenHeaderButton.Visibility = canOpenSidebar && !_cameraSidebarCollapsed
                 ? Visibility.Visible : Visibility.Collapsed;
         }
 
@@ -2571,6 +2575,8 @@ namespace V3SClient.UI.Views
             var tile = sender as LiveTile_v3;
             var cameraId = tile?.Slot?.Camera?.camID;
             if (string.IsNullOrWhiteSpace(cameraId)) return;
+            var sidebarWasCollapsed = _cameraSidebarCollapsed;
+            _cameraSidebarCollapsed = false;
             CameraSidebar.Visibility = Visibility.Collapsed;
             var streams = tile?.Slot?.Camera?.Streams == null
                 ? new[] { "main", "sub1", "sub2" }
@@ -2599,6 +2605,7 @@ namespace V3SClient.UI.Views
             SidebarColumn.Width = new GridLength(0.24, GridUnitType.Star);
             Grid.SetColumnSpan(CameraGridHost, 1);
             UpdateCameraSidebarPlacement();
+            PtzDock.Tag = sidebarWasCollapsed;
         }
 
         private void ClosePtzDock(object sender, EventArgs e)
@@ -2606,10 +2613,32 @@ namespace V3SClient.UI.Views
             if (sender is PtzControlPanel_v3 panel) panel.CloseRequested -= ClosePtzDock;
             PtzDockContent.Content = null;
             PtzDock.Visibility = Visibility.Collapsed;
+            if (_fullscreenTile != null)
+            {
+                CameraSidebar.Visibility = Visibility.Collapsed;
+                // Opening PTZ temporarily expands the sidebar column. When
+                // PTZ is closed while a tile is fullscreen, restore the
+                // fullscreen layout instead of leaving a blank right column
+                // beside the camera surface.
+                SidebarColumn.MinWidth = 0;
+                SidebarColumn.MaxWidth = double.PositiveInfinity;
+                SidebarColumn.Width = new GridLength(0);
+                Grid.SetColumnSpan(CameraGridHost, 2);
+                UpdateCameraSidebarPlacement();
+                UpdateSidebarOpenButtons();
+                return;
+            }
             CameraSidebar.Visibility = Visibility.Visible;
+            _cameraSidebarCollapsed = PtzDock.Tag is bool && (bool)PtzDock.Tag;
+            PtzDock.Tag = null;
             SidebarColumn.MinWidth = 210;
             SidebarColumn.MaxWidth = 320;
             SidebarColumn.Width = new GridLength(0.20, GridUnitType.Star);
+            CameraSidebarStats.Visibility = _cameraSidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
+            CameraSidebarSearch.Visibility = _cameraSidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
+            CameraSidebarFilters.Visibility = _cameraSidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
+            CameraSidebarListCaption.Visibility = _cameraSidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
+            CameraSidebarList.Visibility = _cameraSidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
             UpdateCameraSidebarPlacement();
         }
 

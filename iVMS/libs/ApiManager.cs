@@ -3526,18 +3526,30 @@ namespace V3SClient.libs
 
         private async Task<HttpResponseMessage> SendPtzRequestAsync(HttpMethod method, string path, object body, CancellationToken cancellationToken)
         {
-            var profile = GetEndpointProfile(_roiConfigEndpointKeyword);
-            if (profile == null || string.IsNullOrWhiteSpace(profile.PublicUrl) && string.IsNullOrWhiteSpace(profile.InternalUrl))
+            var useWebPtzProxy = path.StartsWith("/backend-api/", StringComparison.OrdinalIgnoreCase);
+            var profile = useWebPtzProxy ? null : GetEndpointProfile(_roiConfigEndpointKeyword);
+            if (!useWebPtzProxy && (profile == null || string.IsNullOrWhiteSpace(profile.PublicUrl) && string.IsNullOrWhiteSpace(profile.InternalUrl)))
             {
                 await DiscoverEndpointsAsync(cancellationToken).ConfigureAwait(false);
                 profile = GetEndpointProfile(_roiConfigEndpointKeyword);
             }
-            var baseUrl = profile?.PublicUrl ?? profile?.InternalUrl ?? _roiConfigApiUrl;
+            var baseUrl = useWebPtzProxy ? _baseUrl : (profile?.PublicUrl ?? profile?.InternalUrl ?? _roiConfigApiUrl);
             if (string.IsNullOrWhiteSpace(baseUrl)) return null;
             var request = new HttpRequestMessage(method, baseUrl.TrimEnd('/') + path);
+            LoggerManager.LogDebug($"PTZ endpoint ({_roiConfigEndpointKeyword}): {request.RequestUri}");
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            var token = profile?.Token ?? _roiConfigApiToken ?? _backendToken;
-            if (!string.IsNullOrWhiteSpace(token)) request.Headers.TryAddWithoutValidation("Authorization", token);
+            var token = useWebPtzProxy ? _backendToken : (profile?.Token ?? _roiConfigApiToken ?? _backendToken);
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                if (useWebPtzProxy)
+                {
+                    var bearerToken = token.Trim();
+                    if (bearerToken.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)) bearerToken = bearerToken.Substring(7).Trim();
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+                }
+                else
+                    request.Headers.TryAddWithoutValidation("Authorization", token);
+            }
             if (body != null) request.Content = new StringContent(JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json");
             return await _deviceStatusHttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         }
@@ -3548,9 +3560,28 @@ namespace V3SClient.libs
             try
             {
                 using (var response = await SendPtzRequestAsync(HttpMethod.Post, "/api/cameras/" + Uri.EscapeDataString(cameraId) + "/ptz/move", movement, cancellationToken).ConfigureAwait(false))
-                    return response != null && response.IsSuccessStatusCode;
+                {
+                    var success = response != null && response.IsSuccessStatusCode;
+                    LoggerManager.LogDebug($"PTZ API move camera={cameraId} duration={movement.duration} pan={movement.pan:0.###} tilt={movement.tilt:0.###} zoom={movement.zoom:0.###} status={(response == null ? "null" : ((int)response.StatusCode).ToString())} success={success}");
+                    return success;
+                }
             }
             catch (Exception ex) { LoggerManager.LogException(ex, "MoveCameraPtzAsync"); return false; }
+        }
+
+        public async Task<bool> StopCameraPtzAsync(string cameraId, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            if (string.IsNullOrWhiteSpace(cameraId)) return false;
+            try
+            {
+                using (var response = await SendPtzRequestAsync(HttpMethod.Post, "/api/cameras/" + Uri.EscapeDataString(cameraId) + "/ptz/stop", null, cancellationToken).ConfigureAwait(false))
+                {
+                    var success = response != null && response.IsSuccessStatusCode;
+                    LoggerManager.LogDebug($"PTZ API stop camera={cameraId} status={(response == null ? "null" : ((int)response.StatusCode).ToString())} success={success}");
+                    return success;
+                }
+            }
+            catch (Exception ex) { LoggerManager.LogException(ex, "StopCameraPtzAsync"); return false; }
         }
 
         public async Task<List<CameraPtzPreset>> GetCameraPtzPresetsAsync(string cameraId, CancellationToken cancellationToken = default(CancellationToken))

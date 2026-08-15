@@ -426,7 +426,7 @@
                     </ScrollViewer>
                 </Grid>
             </Border>
-            <Border x:Name="PtzDock" Grid.Column="1" Margin="0,-52,0,0" Panel.ZIndex="40" Background="#071724" BorderBrush="#245174" BorderThickness="1,0,0,0" Visibility="Collapsed">
+            <Border x:Name="PtzDock" Grid.Column="1" Margin="0,0,0,0" Panel.ZIndex="40" Background="#071724" BorderBrush="#245174" BorderThickness="1,0,0,0" Visibility="Collapsed">
                 <ContentControl x:Name="PtzDockContent" />
             </Border>
         </Grid>
