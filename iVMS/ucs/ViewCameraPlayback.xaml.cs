@@ -71,6 +71,9 @@ namespace V3SClient.ucs
         // camera opens, and the toolbar remains available to turn it off.
         private bool _aiOverlayEnabled = true;
         private bool _disposed;
+        // Only the latest seek is allowed to update the AI overlay. Older seek
+        // refreshes can finish their HTTP work later, especially on reverse seek.
+        private int _aiSeekGeneration;
         // This is a native-hosted card, deliberately kept inside this tile.  A
         // normal WPF overlay would be painted underneath GStreamer's HWND.
         private ElementHost _downloadProgressElementHost;
@@ -179,6 +182,13 @@ namespace V3SClient.ucs
         }
 
         public IntPtr _videoPanelHandle = IntPtr.Zero;
+        public bool IsZoomed { get { return _zoom > 1.001; } }
+        public void ResetZoom() { _zoom = 1.0; _zoomFocusX = 0.5; _zoomFocusY = 0.5; ApplyPlaybackZoom(); }
+        private readonly System.Windows.Forms.Panel _videoSurface = new System.Windows.Forms.Panel { Dock = System.Windows.Forms.DockStyle.Fill, BackColor = System.Drawing.Color.Black };
+        private readonly System.Windows.Forms.Label _zoomLabel = new System.Windows.Forms.Label { AutoSize = false, Width = 56, Height = 26, BackColor = System.Drawing.Color.FromArgb(235, 22, 54, 86), ForeColor = System.Drawing.Color.White, TextAlign = System.Drawing.ContentAlignment.MiddleCenter, Visible = false };
+        private double _zoom = 1.0, _zoomFocusX = 0.5, _zoomFocusY = 0.5;
+        private bool _panning;
+        private System.Drawing.Point _lastPan;
         public models.RtspPlayer Player { get; set; } = null;
 
         // Custom segment definition from m3u8
@@ -210,13 +220,20 @@ namespace V3SClient.ucs
             CameraStatusDot.Stroke = Camera.is_online == false
                 ? new SolidColorBrush(Color.FromRgb(100, 116, 139))
                 : new SolidColorBrush(Color.FromRgb(34, 197, 94));
-            _videoPanelHandle = VideoPanel.Handle;
+            VideoPanel.Controls.Add(_videoSurface);
+            VideoPanel.Controls.Add(_zoomLabel);
+            _videoPanelHandle = _videoSurface.Handle;
 
             // GStreamer renders into a native WinForms panel.  Listen to that panel as
             // well as the WPF tile so hover works over the actual picture, not only its edge.
             VideoPanel.MouseEnter += VideoPanel_MouseEnter;
             VideoPanel.MouseLeave += VideoPanel_MouseLeave;
             VideoPanel.MouseClick += VideoPanel_MouseClick;
+            VideoPanel.Resize += (s, e) => ApplyPlaybackZoom();
+            _videoSurface.MouseWheel += VideoSurface_MouseWheel;
+            _videoSurface.MouseDown += VideoSurface_MouseDown;
+            _videoSurface.MouseMove += VideoSurface_MouseMove;
+            _videoSurface.MouseUp += VideoSurface_MouseUp;
             _hideHoverActionsTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(220) };
             _hideHoverActionsTimer.Tick += HideHoverActionsTimer_Tick;
             _downloadProgressTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(160) };
@@ -225,6 +242,40 @@ namespace V3SClient.ucs
             _downloadProgressHideTimer.Tick += (s, e) => HideDownloadProgress();
 
             Loaded += ViewCameraPlayback_Loaded;
+        }
+
+        private void VideoSurface_MouseWheel(object sender, System.Windows.Forms.MouseEventArgs e)
+        {
+            if (e.Delta == 0 || VideoPanel.ClientSize.Width <= 0 || VideoPanel.ClientSize.Height <= 0) return;
+            var point = VideoPanel.PointToClient(_videoSurface.PointToScreen(e.Location));
+            var oldWidth = VideoPanel.ClientSize.Width * _zoom;
+            var oldHeight = VideoPanel.ClientSize.Height * _zoom;
+            var oldLeft = (VideoPanel.ClientSize.Width - oldWidth) * _zoomFocusX;
+            var oldTop = (VideoPanel.ClientSize.Height - oldHeight) * _zoomFocusY;
+            var contentX = (point.X - oldLeft) / oldWidth;
+            var contentY = (point.Y - oldTop) / oldHeight;
+            var next = Math.Max(1.0, Math.Min(4.0, _zoom * (e.Delta > 0 ? 1.08 : 1.0 / 1.08)));
+            _zoom = next;
+            var width = VideoPanel.ClientSize.Width * next;
+            var height = VideoPanel.ClientSize.Height * next;
+            _zoomFocusX = Align(point.X, contentX, width, VideoPanel.ClientSize.Width);
+            _zoomFocusY = Align(point.Y, contentY, height, VideoPanel.ClientSize.Height);
+            ApplyPlaybackZoom();
+        }
+
+        private void VideoSurface_MouseDown(object sender, System.Windows.Forms.MouseEventArgs e) { if (e.Button == System.Windows.Forms.MouseButtons.Left && _zoom > 1.001) { _panning = true; _lastPan = VideoPanel.PointToClient(_videoSurface.PointToScreen(e.Location)); } }
+        private void VideoSurface_MouseMove(object sender, System.Windows.Forms.MouseEventArgs e) { if (!_panning || e.Button != System.Windows.Forms.MouseButtons.Left) return; var p = VideoPanel.PointToClient(_videoSurface.PointToScreen(e.Location)); var w = VideoPanel.ClientSize.Width * _zoom; var h = VideoPanel.ClientSize.Height * _zoom; var left = (VideoPanel.ClientSize.Width - w) * _zoomFocusX + p.X - _lastPan.X; var top = (VideoPanel.ClientSize.Height - h) * _zoomFocusY + p.Y - _lastPan.Y; _zoomFocusX = Clamp(left / (VideoPanel.ClientSize.Width - w)); _zoomFocusY = Clamp(top / (VideoPanel.ClientSize.Height - h)); _lastPan = p; ApplyPlaybackZoom(); }
+        private void VideoSurface_MouseUp(object sender, System.Windows.Forms.MouseEventArgs e) { if (e.Button == System.Windows.Forms.MouseButtons.Left) _panning = false; }
+        private static double Clamp(double value) { return Math.Max(0, Math.Min(1, value)); }
+        private static double Align(double cursor, double content, double scaled, double viewport) { var available = viewport - scaled; return Math.Abs(available) < 0.001 ? 0.5 : Clamp((cursor - content * scaled) / available); }
+        private void ApplyPlaybackZoom()
+        {
+            var w = VideoPanel.ClientSize.Width * _zoom; var h = VideoPanel.ClientSize.Height * _zoom;
+            _videoSurface.Dock = System.Windows.Forms.DockStyle.None;
+            _videoSurface.Bounds = new System.Drawing.Rectangle((int)((VideoPanel.ClientSize.Width - w) * _zoomFocusX), (int)((VideoPanel.ClientSize.Height - h) * _zoomFocusY), Math.Max(1, (int)w), Math.Max(1, (int)h));
+            _zoomLabel.Text = string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:0}%", _zoom * 100);
+            _zoomLabel.Location = new System.Drawing.Point(Math.Max(0, VideoPanel.ClientSize.Width - 68), 12);
+            _zoomLabel.Visible = _zoom > 1.001; _zoomLabel.BringToFront();
         }
 
         public void ShowDownloadProgress(SmartDownloadManager.DownloadTask task)
@@ -1587,7 +1638,39 @@ namespace V3SClient.ucs
                     Player.SeekAbsolute((long)(gstTargetTime * Gst.Constants.SECOND));
                     Player.Playing();
                     _isPlaying = true;
+                    // A flushing seek clears the d3d overlay. Re-render the AI
+                    // frame for the selected playback position after the new
+                    // frame has had a chance to arrive, instead of requiring
+                    // the user to toggle AI off/on.
+                    var seekGeneration = System.Threading.Interlocked.Increment(ref _aiSeekGeneration);
+                    _ = RefreshAiAfterSeekAsync(gstTargetTime, seekGeneration);
                 }
+            }
+        }
+
+        private async System.Threading.Tasks.Task RefreshAiAfterSeekAsync(double videoPositionSeconds, int seekGeneration)
+        {
+            var hlsPlayer = Player as PlaybackHLS;
+            if (hlsPlayer == null) return;
+
+            // Fetch the target fragments directly. This is important for reverse
+            // seeks because the normal loader may still be following the old
+            // playback clock position.
+            await hlsPlayer.RefreshHlsAiMetadataForVideoPositionAsync(videoPositionSeconds)
+                .ConfigureAwait(true);
+
+            if (seekGeneration != System.Threading.Interlocked.CompareExchange(ref _aiSeekGeneration, 0, 0))
+                return;
+
+            // HLS fragment parsing and the decoder surface are asynchronous, so
+            // keep a couple of lightweight redraw attempts for the final frame.
+            foreach (var delay in new[] { 120, 350, 800 })
+            {
+                await System.Threading.Tasks.Task.Delay(delay).ConfigureAwait(true);
+                if (_disposed || !_aiOverlayEnabled || Player == null ||
+                    seekGeneration != System.Threading.Interlocked.CompareExchange(ref _aiSeekGeneration, 0, 0))
+                    return;
+                hlsPlayer.RenderHlsAiForVideoPosition(videoPositionSeconds);
             }
         }
 

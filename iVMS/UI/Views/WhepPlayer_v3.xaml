@@ -10,5 +10,11 @@
         <TextBlock x:Name="PipelineStateText" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" Text="Pipeline: NULL" FontSize="10" HorizontalAlignment="Center" Margin="0,6,0,0" />
       </StackPanel>
     </Border>
+    <Border x:Name="ZoomIndicator" Width="34" Margin="0,8,8,8" HorizontalAlignment="Right" Background="#B8142638" CornerRadius="4" Padding="5" Visibility="Collapsed">
+      <StackPanel>
+        <TextBlock x:Name="ZoomValueText" Text="100%" Foreground="White" FontSize="9" HorizontalAlignment="Center" Margin="0,0,0,5" />
+        <ProgressBar x:Name="ZoomProgress" Width="8" Height="100" Minimum="1" Maximum="4" Value="1" Orientation="Vertical" Foreground="#3A82FF" Background="#40566A" />
+      </StackPanel>
+    </Border>
   </Grid>
 </UserControl>

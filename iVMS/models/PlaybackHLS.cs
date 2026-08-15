@@ -38,6 +38,7 @@ namespace V3SClient.models
         private Func<double, System.DateTime> _playbackTimeResolver;
         private PlaybackHlsAiProxy _hlsAiProxy;
         private int _hlsAiParseScheduled;
+        private int _hlsAiSeekGeneration;
         private long _lastRenderedAiTimestampMs;
         private int _firstVideoFrameSignaled;
 
@@ -139,6 +140,14 @@ namespace V3SClient.models
         public void StopHlsAiMetadata()
         {
             StopHlsAiMetadataLoader();
+            ResetHlsAiMetadataCacheForSeek();
+        }
+
+        // A flushing seek invalidates the decoder's current overlay. Do not keep
+        // the old segment watermark here: after a reverse seek the same segment
+        // may be requested again while its parsed frames are no longer usable.
+        public void ResetHlsAiMetadataCacheForSeek()
+        {
             lock (_hlsAiSync)
             {
                 _hlsAiFrames.Clear();
@@ -320,6 +329,64 @@ namespace V3SClient.models
             }
         }
 
+        // A seek can move backwards faster than the background clock poll. Load
+        // the fragments around the requested position explicitly so the overlay
+        // does not depend on toggling AI to restart the loader.
+        public async System.Threading.Tasks.Task RefreshHlsAiMetadataForVideoPositionAsync(double videoPositionSeconds)
+        {
+            if (!AiOverlayEnabled || _playbackTimeResolver == null)
+                return;
+
+            var seekGeneration = System.Threading.Interlocked.Increment(ref _hlsAiSeekGeneration);
+            ResetHlsAiMetadataCacheForSeek();
+
+            var target = _playbackTimeResolver(videoPositionSeconds);
+            if (target == System.DateTime.MinValue)
+                return;
+
+            List<HlsAiSegment> candidates;
+            lock (_hlsAiSync)
+            {
+                candidates = _hlsAiSegments
+                    .Where(segment =>
+                        segment.StartTime.AddSeconds(segment.DurationSeconds) >= target.AddSeconds(-3) &&
+                        segment.StartTime <= target.AddSeconds(5))
+                    .OrderBy(segment => Math.Abs((segment.StartTime - target).TotalSeconds))
+                    .Take(6)
+                    .ToList();
+            }
+
+            foreach (var segment in candidates)
+            {
+                if (!AiOverlayEnabled || seekGeneration != System.Threading.Interlocked.CompareExchange(ref _hlsAiSeekGeneration, 0, 0)) return;
+
+                lock (_hlsAiSync)
+                {
+                    if (_loadedHlsAiSegments.Contains(segment.Url))
+                        continue;
+                    _loadedHlsAiSegments.Add(segment.Url);
+                }
+
+                try
+                {
+                    var bytes = await _hlsAiClient.GetByteArrayAsync(segment.Url).ConfigureAwait(false);
+                    if (seekGeneration != System.Threading.Interlocked.CompareExchange(ref _hlsAiSeekGeneration, 0, 0)) return;
+                    var frames = ParseHlsAiFrames(bytes, segment.StartTime, segment.Url);
+                    lock (_hlsAiSync)
+                    {
+                        AddHlsAiFramesLocked(frames, 2400);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    lock (_hlsAiSync) _loadedHlsAiSegments.Remove(segment.Url);
+                    LoggerManager.LogException(ex, "KhÃ´ng thá»ƒ nạp AI metadata sau khi tua playback");
+                }
+            }
+
+            RenderHlsAiForVideoPosition(videoPositionSeconds);
+        }
+
         // Legacy polling entry point retained for binary compatibility only.
         // ConfigureHlsAiMetadata no longer creates its timer.
         private void RenderHlsAiForCurrentPosition()
@@ -339,13 +406,15 @@ namespace V3SClient.models
                     if (current == System.DateTime.MinValue) return;
                     var targetMs = new DateTimeOffset(current).ToUnixTimeMilliseconds();
                     selected = _hlsAiFrames
-                        .Where(frame => frame.TimestampMs <= targetMs && targetMs - frame.TimestampMs <= 3000)
-                        .OrderByDescending(frame => frame.TimestampMs)
+                        .Where(frame => Math.Abs(frame.TimestampMs - targetMs) <= 5000)
+                        .OrderBy(frame => Math.Abs(frame.TimestampMs - targetMs))
                         .FirstOrDefault();
                 }
 
                 if (selected != null && selected.Results != null && selected.Results.Count > 0)
                     Send2Draw(selected.Results);
+                else
+                    ClearPendingAiDraws();
             }
             catch (Exception ex)
             {
@@ -353,7 +422,7 @@ namespace V3SClient.models
             }
         }
 
-        private void RenderHlsAiForVideoPosition(double videoPositionSeconds)
+        public void RenderHlsAiForVideoPosition(double videoPositionSeconds)
         {
             if (!AiOverlayEnabled)
                 return;
@@ -372,8 +441,8 @@ namespace V3SClient.models
 
                     var targetMs = new DateTimeOffset(current).ToUnixTimeMilliseconds();
                     selected = _hlsAiFrames
-                        .Where(frame => frame.TimestampMs <= targetMs && targetMs - frame.TimestampMs <= 3000)
-                        .OrderByDescending(frame => frame.TimestampMs)
+                        .Where(frame => Math.Abs(frame.TimestampMs - targetMs) <= 5000)
+                        .OrderBy(frame => Math.Abs(frame.TimestampMs - targetMs))
                         .FirstOrDefault();
                 }
 
@@ -383,6 +452,8 @@ namespace V3SClient.models
                     _lastRenderedAiTimestampMs = selected.TimestampMs;
                     Send2Draw(selected.Results);
                 }
+                else if (selected == null)
+                    ClearPendingAiDraws();
             }
             catch (Exception ex)
             {

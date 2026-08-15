@@ -202,13 +202,54 @@ namespace V3SClient.UI.Views
         // _videoPanel can then sit above that child and are still clipped by
         // the WindowsFormsHost bounds.  This avoids using a top-level WPF
         // Popup for the camera badge (which could leak over another app).
-        private readonly System.Windows.Forms.Panel _videoSurface = new System.Windows.Forms.Panel
+        private sealed class VideoSurfacePanel : System.Windows.Forms.Panel
+        {
+            private const int WmMouseWheel = 0x020A;
+
+            protected override void WndProc(ref System.Windows.Forms.Message m)
+            {
+                if (m.Msg == WmMouseWheel)
+                {
+                    var value = m.WParam.ToInt64();
+                    var delta = (short)((value >> 16) & 0xffff);
+                    var location = m.LParam.ToInt64();
+                    var screenX = (short)(location & 0xffff);
+                    var screenY = (short)((location >> 16) & 0xffff);
+                    var point = PointToClient(new System.Drawing.Point(screenX, screenY));
+                    OnMouseWheel(new System.Windows.Forms.MouseEventArgs(
+                        System.Windows.Forms.MouseButtons.None, 0, point.X, point.Y, delta));
+                    return;
+                }
+                base.WndProc(ref m);
+            }
+        }
+
+        private readonly VideoSurfacePanel _videoSurface = new VideoSurfacePanel
         {
             Dock = System.Windows.Forms.DockStyle.Fill,
             BackColor = System.Drawing.Color.Black
         };
         private readonly CameraIdBadgeControl_v3 _cameraBadge = new CameraIdBadgeControl_v3();
+        private readonly System.Windows.Forms.Label _zoomLabel = new System.Windows.Forms.Label
+        {
+            AutoSize = false,
+            Width = 56,
+            Height = 26,
+            BackColor = System.Drawing.Color.FromArgb(235, 22, 54, 86),
+            ForeColor = System.Drawing.Color.White,
+            Font = new System.Drawing.Font("Segoe UI Semibold", 9f, System.Drawing.FontStyle.Bold),
+            TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+            BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle,
+            Visible = false
+        };
         private bool _nativeBoundsSyncQueued;
+        private double _videoZoom = 1.0;
+        private double _videoZoomFocusX = 0.5;
+        private double _videoZoomFocusY = 0.5;
+        private bool _isPanning;
+        private System.Drawing.Point _lastPanPoint;
+        private readonly System.Windows.Forms.Timer _zoomRenderTimer = new System.Windows.Forms.Timer { Interval = 16 };
+        private bool _zoomRenderQueued;
         // Gst.Parse.Launch creates D3D11 decoder/sink resources in native
         // plugins. The per-player gate protects one tile, but does not make
         // concurrent creation across a camera wall safe. Serialize only this
@@ -324,6 +365,8 @@ namespace V3SClient.UI.Views
             _cameraBadge.TabStop = false;
             _videoPanel.Controls.Add(_cameraBadge);
             _cameraBadge.BringToFront();
+            _videoPanel.Controls.Add(_zoomLabel);
+            _zoomLabel.BringToFront();
             // The GStreamer sink is hosted by a native WinForms child HWND,
             // so WPF mouse routing cannot see hover inside the video area.
             _videoPanel.MouseEnter += (s, e) => VideoMouseEnter?.Invoke(this, EventArgs.Empty);
@@ -332,12 +375,144 @@ namespace V3SClient.UI.Views
             _videoSurface.MouseEnter += (s, e) => VideoMouseEnter?.Invoke(this, EventArgs.Empty);
             _videoSurface.MouseMove += (s, e) => VideoMouseMove?.Invoke(this, EventArgs.Empty);
             _videoSurface.MouseLeave += (s, e) => VideoMouseLeave?.Invoke(this, EventArgs.Empty);
+            _videoSurface.MouseWheel += VideoPanel_MouseWheel;
+            _videoSurface.MouseDown += VideoSurface_MouseDown;
+            _videoSurface.MouseMove += VideoSurface_MouseMove;
+            _videoSurface.MouseUp += VideoSurface_MouseUp;
+            _zoomRenderTimer.Tick += ZoomRenderTimer_Tick;
             // WindowsFormsHost may receive its final arrange after the parent grid
             // has already changed rows/columns. Queue the native child resize at
             // Render priority so d3d11videosink always renders inside this tile.
             VideoHost.SizeChanged += (s, e) => QueueNativeVideoHostSynchronization();
             SizeChanged += (s, e) => QueueNativeVideoHostSynchronization();
             Unloaded += (s, e) => Dispose();
+        }
+
+        private void VideoPanel_MouseWheel(object sender, System.Windows.Forms.MouseEventArgs e)
+        {
+            var panelWidth = _videoPanel.ClientSize.Width;
+            var panelHeight = _videoPanel.ClientSize.Height;
+            if (e.Delta == 0 || panelWidth <= 0 || panelHeight <= 0) return;
+            // Mouse coordinates are relative to the zoomed surface, not the
+            // viewport panel. Convert them back to viewport coordinates first.
+            var screenPoint = _videoSurface.PointToScreen(new System.Drawing.Point(e.X, e.Y));
+            var panelPoint = _videoPanel.PointToClient(screenPoint);
+            var oldZoom = _videoZoom;
+            var nextZoom = Math.Max(1.0, Math.Min(4.0, oldZoom * (e.Delta > 0 ? 1.08 : 1.0 / 1.08)));
+            if (Math.Abs(nextZoom - oldZoom) < 0.001) return;
+
+            var oldWidth = panelWidth * oldZoom;
+            var oldHeight = panelHeight * oldZoom;
+            var oldLeft = (panelWidth - oldWidth) * _videoZoomFocusX;
+            var oldTop = (panelHeight - oldHeight) * _videoZoomFocusY;
+            var contentX = (panelPoint.X - oldLeft) / oldWidth;
+            var contentY = (panelPoint.Y - oldTop) / oldHeight;
+            _videoZoom = nextZoom;
+            var newWidth = panelWidth * nextZoom;
+            var newHeight = panelHeight * nextZoom;
+            _videoZoomFocusX = AlignmentForCursor(panelPoint.X, contentX, newWidth, panelWidth);
+            _videoZoomFocusY = AlignmentForCursor(panelPoint.Y, contentY, newHeight, panelHeight);
+            ScheduleZoomRender();
+        }
+
+        private void ScheduleZoomRender()
+        {
+            if (_zoomRenderQueued || _videoPanel.IsDisposed) return;
+            _zoomRenderQueued = true;
+            if (!_zoomRenderTimer.Enabled) _zoomRenderTimer.Start();
+        }
+
+        private void ZoomRenderTimer_Tick(object sender, EventArgs e)
+        {
+            _zoomRenderTimer.Stop();
+            _zoomRenderQueued = false;
+            ApplyVideoZoom();
+        }
+
+        private void VideoSurface_MouseDown(object sender, System.Windows.Forms.MouseEventArgs e)
+        {
+            if (e.Button != System.Windows.Forms.MouseButtons.Left || _videoZoom <= 1.001) return;
+            _isPanning = true;
+            _lastPanPoint = SurfacePointToPanel(e.Location);
+            _videoSurface.Cursor = System.Windows.Forms.Cursors.Hand;
+        }
+
+        private void VideoSurface_MouseMove(object sender, System.Windows.Forms.MouseEventArgs e)
+        {
+            if (!_isPanning || e.Button != System.Windows.Forms.MouseButtons.Left) return;
+            var current = SurfacePointToPanel(e.Location);
+            var dx = current.X - _lastPanPoint.X;
+            var dy = current.Y - _lastPanPoint.Y;
+            if (dx == 0 && dy == 0) return;
+
+            var panelWidth = _videoPanel.ClientSize.Width;
+            var panelHeight = _videoPanel.ClientSize.Height;
+            var scaledWidth = panelWidth * _videoZoom;
+            var scaledHeight = panelHeight * _videoZoom;
+            var left = (panelWidth - scaledWidth) * _videoZoomFocusX + dx;
+            var top = (panelHeight - scaledHeight) * _videoZoomFocusY + dy;
+            _videoZoomFocusX = AlignmentForOffset(left, scaledWidth, panelWidth);
+            _videoZoomFocusY = AlignmentForOffset(top, scaledHeight, panelHeight);
+            _lastPanPoint = current;
+            ScheduleZoomRender();
+        }
+
+        private void VideoSurface_MouseUp(object sender, System.Windows.Forms.MouseEventArgs e)
+        {
+            if (e.Button != System.Windows.Forms.MouseButtons.Left) return;
+            _isPanning = false;
+            _videoSurface.Cursor = System.Windows.Forms.Cursors.Default;
+        }
+
+        private System.Drawing.Point SurfacePointToPanel(System.Drawing.Point point)
+        {
+            return _videoPanel.PointToClient(_videoSurface.PointToScreen(point));
+        }
+
+        private static double AlignmentForCursor(double cursor, double content, double scaledSize, double viewportSize)
+        {
+            var available = viewportSize - scaledSize;
+            if (Math.Abs(available) < 0.001) return 0.5;
+            return Math.Max(0.0, Math.Min(1.0, (cursor - (content * scaledSize)) / available));
+        }
+
+        private static double AlignmentForOffset(double offset, double scaledSize, double viewportSize)
+        {
+            var available = viewportSize - scaledSize;
+            if (Math.Abs(available) < 0.001) return 0.5;
+            return Math.Max(0.0, Math.Min(1.0, offset / available));
+        }
+
+        private void ApplyVideoZoom()
+        {
+            if (_videoPanel.IsDisposed || _videoSurface.IsDisposed) return;
+            var panelWidth = _videoPanel.ClientSize.Width;
+            var panelHeight = _videoPanel.ClientSize.Height;
+            var width = panelWidth * _videoZoom;
+            var height = panelHeight * _videoZoom;
+            var left = (panelWidth - width) * _videoZoomFocusX;
+            var top = (panelHeight - height) * _videoZoomFocusY;
+            var bounds = new System.Drawing.Rectangle(
+                (int)Math.Round(left), (int)Math.Round(top),
+                Math.Max(1, (int)Math.Round(width)), Math.Max(1, (int)Math.Round(height)));
+            if (_videoSurface.Bounds != bounds)
+            {
+                _videoSurface.Dock = System.Windows.Forms.DockStyle.None;
+                _videoSurface.Bounds = bounds;
+            }
+            _zoomLabel.Text = string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:0}%", _videoZoom * 100.0);
+            _zoomLabel.Location = new System.Drawing.Point(
+                Math.Max(0, _videoPanel.ClientSize.Width - _zoomLabel.Width - 12), 12);
+            _zoomLabel.Visible = _videoZoom > 1.001;
+            _zoomLabel.BringToFront();
+            var zoom = _videoZoom;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                ZoomProgress.Value = zoom;
+                ZoomValueText.Text = string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:0}%", zoom * 100.0);
+                ZoomIndicator.Visibility = zoom > 1.001 ? Visibility.Visible : Visibility.Collapsed;
+                ZoomIndicator.BringIntoView();
+            }), System.Windows.Threading.DispatcherPriority.Render);
         }
 
         private void QueueNativeVideoHostSynchronization()
@@ -418,6 +593,12 @@ namespace V3SClient.UI.Views
         public void SetVideoSurfaceVisible(bool visible)
         {
             VideoHost.Visibility = visible ? Visibility.Visible : Visibility.Hidden;
+            if (visible)
+            {
+                VideoHost.IsHitTestVisible = true;
+                _videoPanel.Enabled = true;
+                _videoSurface.Enabled = true;
+            }
             _videoPanel.Visible = visible;
             // Do not infer badge visibility from the video surface. During a
             // reconnect GStreamer briefly makes the surface visible before
@@ -455,9 +636,7 @@ namespace V3SClient.UI.Views
                 // monitor, or grid transition it can be one render pass behind
                 // WPF. Assigning the client rectangle explicitly prevents the
                 // native GStreamer child from retaining the previous tile size.
-                _videoSurface.Dock = System.Windows.Forms.DockStyle.None;
-                _videoSurface.Bounds = _videoPanel.ClientRectangle;
-                _videoSurface.Dock = System.Windows.Forms.DockStyle.Fill;
+                ApplyVideoZoom();
                 _videoPanel.PerformLayout();
                 _videoSurface.PerformLayout();
                 _cameraBadge.BringToFront();
@@ -488,11 +667,16 @@ namespace V3SClient.UI.Views
             if (visible)
             {
                 VideoHost.Visibility = Visibility.Visible;
+                VideoHost.IsHitTestVisible = true;
                 _videoPanel.Visible = true;
+                _videoPanel.Enabled = true;
+                _videoSurface.Enabled = true;
+                QueueNativeVideoHostSynchronization();
             }
             else
             {
                 VideoHost.Visibility = Visibility.Collapsed;
+                VideoHost.IsHitTestVisible = false;
                 _videoPanel.Visible = false;
                 _cameraBadge.Visible = false;
                 StatusPanel.Visibility = Visibility.Collapsed;
@@ -598,6 +782,16 @@ namespace V3SClient.UI.Views
         public void RequestDisconnect()
         {
             _cancellation?.Cancel();
+        }
+
+        public bool IsZoomed { get { return _videoZoom > 1.001; } }
+
+        public void ResetZoom()
+        {
+            _videoZoom = 1.0;
+            _videoZoomFocusX = 0.5;
+            _videoZoomFocusY = 0.5;
+            ScheduleZoomRender();
         }
 
         /// <summary>
@@ -1802,6 +1996,8 @@ namespace V3SClient.UI.Views
             if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
             byte ignored;
             ActivePlayers.TryRemove(this, out ignored);
+            _zoomRenderTimer.Stop();
+            _zoomRenderTimer.Dispose();
             _cancellation?.Cancel();
             _cancellation?.Dispose();
             _cancellation = null;

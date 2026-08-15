@@ -117,6 +117,7 @@ namespace V3SClient.UI.Views
         private readonly DispatcherTimer _liveTrafficDensityRefreshTimer;
         private readonly DispatcherTimer _aiEventFeedRefreshTimer;
         private readonly DispatcherTimer _liveToastTimer;
+        private readonly DispatcherTimer _zoomResetVisibilityTimer;
         private int _deviceStatusRefreshInProgress;
         private int _aiSummaryRefreshInProgress;
         private int _liveTrafficDensityRefreshInProgress;
@@ -168,6 +169,8 @@ namespace V3SClient.UI.Views
             _aiEventFeedRefreshTimer.Tick += AiEventFeedRefreshTimer_Tick;
             _liveToastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
             _liveToastTimer.Tick += LiveToastTimer_Tick;
+            _zoomResetVisibilityTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
+            _zoomResetVisibilityTimer.Tick += ZoomResetVisibilityTimer_Tick;
             // The action icons are centred against the complete header at all
             // window sizes, not against the space left between side controls.
             LivePageHeader.SizeChanged += LivePageHeader_SizeChanged;
@@ -204,6 +207,7 @@ namespace V3SClient.UI.Views
             // before non-critical AI dashboard requests.
             await RefreshDeviceStatusesAsync();
             if (!_disposed) _deviceStatusRefreshTimer.Start();
+            if (!_disposed) _zoomResetVisibilityTimer.Start();
 
             _ = RefreshAiSummaryAsync();
             if (!_disposed) _aiSummaryRefreshTimer.Start();
@@ -1870,6 +1874,20 @@ namespace V3SClient.UI.Views
                 ShowLiveToast("Chụp ảnh", "Không thể lấy frame gốc từ camera hiện tại.", LiveToastKind.Warning);
         }
 
+        private void ResetAllZoom_Click(object sender, RoutedEventArgs e)
+        {
+            foreach (var tile in _tiles.Values)
+                tile.ResetZoom();
+            ResetAllZoomButton.Visibility = Visibility.Collapsed;
+        }
+
+        private void ZoomResetVisibilityTimer_Tick(object sender, EventArgs e)
+        {
+            if (_disposed) return;
+            var hasZoomedTile = _tiles.Values.Any(tile => tile != null && tile.IsZoomed);
+            ResetAllZoomButton.Visibility = hasZoomedTile ? Visibility.Visible : Visibility.Collapsed;
+        }
+
         private async void SnapshotAll_Click(object sender, RoutedEventArgs e)
         {
             var saved = 0;
@@ -2612,6 +2630,8 @@ namespace V3SClient.UI.Views
             _aiSummaryRefreshTimer.Tick -= AiSummaryRefreshTimer_Tick;
             _liveTrafficDensityRefreshTimer.Stop();
             _liveTrafficDensityRefreshTimer.Tick -= LiveTrafficDensityRefreshTimer_Tick;
+            _zoomResetVisibilityTimer.Stop();
+            _zoomResetVisibilityTimer.Tick -= ZoomResetVisibilityTimer_Tick;
             _aiEventFeedRefreshTimer.Stop();
             _aiEventFeedRefreshTimer.Tick -= AiEventFeedRefreshTimer_Tick;
             _liveToastTimer.Stop();

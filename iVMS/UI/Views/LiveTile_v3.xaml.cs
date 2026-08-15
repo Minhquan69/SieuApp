@@ -398,6 +398,8 @@ namespace V3SClient.UI.Views
         }
 
         public bool HasAudio => Player != null && Player.HasAudio;
+        public bool IsZoomed => Player.IsZoomed || MainPlayer.IsZoomed;
+        public void ResetZoom() { Player.ResetZoom(); MainPlayer.ResetZoom(); }
         public bool IsMuted => _isMuted;
 
 
@@ -457,6 +459,11 @@ namespace V3SClient.UI.Views
                 MainPlayer.SetPresentationVisible(visible);
             else
                 Player.SetVideoSurfaceVisible(visible);
+
+            // Fullscreen transitions temporarily hide every tile surface while
+            // the grid is rearranged. Re-apply the badge after the surface is
+            // revealed; SetCameraBadge intentionally ignores hidden HWNDs.
+            EnsureFullscreenCameraBadge();
         }
 
         /// <summary>Synchronizes both possible native hosts to this tile's final bounds.</summary>

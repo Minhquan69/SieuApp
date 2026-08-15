@@ -798,6 +798,7 @@ namespace V3SClient.UI.Views
             commands.Children.Add(CreateNativeToolbarSeparator(border));
             commands.Children.Add(CreateNativeToolbarButton(PackIconMaterialKind.CameraOutline, "SnapshotAll", "Chụp ảnh tất cả", buttonBackground, buttonHover, foreground));
             _snapshotSelectedButton = CreateNativeToolbarButton(PackIconMaterialKind.Camera, "SnapshotSelected", "Chụp ảnh", buttonBackground, buttonHover, foreground, out _snapshotSelectedIcon);
+            commands.Children.Add(CreateNativeToolbarButton(PackIconMaterialKind.MagnifyMinusOutline, "ResetZoomAll", "Reset zoom", buttonBackground, buttonHover, foreground));
             commands.Children.Add(_snapshotSelectedButton);
             _downloadSelectedButton = CreateNativeToolbarButton(PackIconMaterialKind.DownloadOutline, "DownloadSelected", "Tải video camera hiện tại", buttonBackground, buttonHover, foreground, out _downloadSelectedIcon);
             commands.Children.Add(_downloadSelectedButton);
@@ -2876,6 +2877,9 @@ namespace V3SClient.UI.Views
                     break;
                 case "DownloadAll":
                     ShowPlaybackDownloadModeMenu(tiles.Where(tile => tile.Camera != null).Select(tile => tile.Camera).ToList(), NativePlaybackToolbarLayer);
+                    break;
+                case "ResetZoomAll":
+                    foreach (var tile in tiles) tile.ResetZoom();
                     break;
             }
         }

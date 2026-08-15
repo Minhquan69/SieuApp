@@ -38,7 +38,9 @@
             <local:WhepPlayer_v3 x:Name="Player" />
             <!-- The grid/sub pipeline remains alive while this second native
                  host prepares the main stream for fullscreen. -->
-            <local:WhepPlayer_v3 x:Name="MainPlayer" Background="Transparent" IsHitTestVisible="False" />
+            <!-- MainPlayer is the fullscreen/main-stream surface. Keep native
+                 mouse input enabled so zoom and pan work after promotion. -->
+            <local:WhepPlayer_v3 x:Name="MainPlayer" Background="Transparent" IsHitTestVisible="True" />
             <!-- WindowsFormsHost owns a native child window, so WPF
                  MouseEnter on TileBorder is only raised near its edge. This
                  transparent surface gives the whole tile a reliable hover
