@@ -1,3 +1,4 @@
+using System;
 using System.ComponentModel;
 using System.Linq;
 using System.Windows;
@@ -46,9 +47,9 @@ namespace V3SClient.UI.Views
             NavigateToSelectedModule();
         }
 
-        public void ShowInitialLoadFailure(string message)
+        public void ShowInitialLoadFailure(string message, Action retry = null)
         {
-            ShowModule(CreateStartupStatus(message, "Unable to load selected client"));
+            ShowModule(CreateStartupStatus(message, "Không thể tải dữ liệu client", retry));
         }
 
         private void CancelGlobalDownload_Click(object sender, RoutedEventArgs e)
@@ -257,7 +258,7 @@ namespace V3SClient.UI.Views
                 TrackInitialSynchronization(module);
         }
 
-        private static UIElement CreateStartupStatus(string message, string title)
+        private static UIElement CreateStartupStatus(string message, string title, Action retry = null)
         {
             var content = new StackPanel
             {
@@ -281,6 +282,37 @@ namespace V3SClient.UI.Views
                 TextWrapping = TextWrapping.Wrap,
                 HorizontalAlignment = HorizontalAlignment.Center
             });
+            if (retry != null)
+            {
+                var actions = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Margin = new Thickness(0, 22, 0, 0)
+                };
+                var retryButton = new Button
+                {
+                    Content = "Thử lại",
+                    MinWidth = 110,
+                    Padding = new Thickness(18, 8, 18, 8),
+                    Margin = new Thickness(0, 0, 8, 0)
+                };
+                retryButton.Click += (sender, args) =>
+                {
+                    retryButton.IsEnabled = false;
+                    retry();
+                };
+                actions.Children.Add(retryButton);
+                var exitButton = new Button
+                {
+                    Content = "Đóng ứng dụng",
+                    MinWidth = 130,
+                    Padding = new Thickness(18, 8, 18, 8)
+                };
+                exitButton.Click += (sender, args) => Application.Current.Shutdown();
+                actions.Children.Add(exitButton);
+                content.Children.Add(actions);
+            }
             return content;
         }
 

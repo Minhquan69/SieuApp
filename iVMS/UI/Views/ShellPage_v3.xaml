@@ -32,6 +32,15 @@
             <ContentControl x:Name="ContentFrame" Grid.Row="1"/>
         </Grid>
 
+        <!-- In-window host for Live AI event details. It covers the shell
+             header too, but never creates a separate Popup window. -->
+        <ContentControl x:Name="AiFeedDetailsHost"
+                        Grid.ColumnSpan="2"
+                        Visibility="Collapsed"
+                        Panel.ZIndex="1000"
+                        HorizontalContentAlignment="Stretch"
+                        VerticalContentAlignment="Stretch"/>
+
         <!-- A Popup creates its own HWND, so native GStreamer/WinForms video cannot cover this persistent progress. -->
         <Border x:Name="GlobalDownloadProgressAnchor_v3"
                 Grid.ColumnSpan="2"

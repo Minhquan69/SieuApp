@@ -12,6 +12,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using V3SClient.libs;
@@ -124,6 +125,9 @@ namespace V3SClient.UI.Views
         private int _aiEventFeedRefreshInProgress;
         private bool _aiEventFeedAutoRefresh = true;
         private bool _aiFeedCollapsed = true;
+        private bool _aiFeedWindowHooksAttached;
+        private bool _aiFeedHiddenByDeactivation;
+        private bool _aiFeedDocked;
         private bool _aiFeedInitialized;
         private Visibility _tileAiFeedVisibility = Visibility.Visible;
         private readonly Dictionary<string, ImageSource> _aiFeedCropCache = new Dictionary<string, ImageSource>(StringComparer.OrdinalIgnoreCase);
@@ -152,6 +156,18 @@ namespace V3SClient.UI.Views
         public LivePage_v3()
         {
             InitializeComponent();
+            Loaded += AiFeedOwner_Loaded;
+            SizeChanged += AiFeedLayout_SizeChanged;
+            CameraGridHost.SizeChanged += AiFeedLayout_SizeChanged;
+            CameraGridViewport.SizeChanged += AiFeedLayout_SizeChanged;
+            AiFeedPanel.SizeChanged += AiFeedLayout_SizeChanged;
+            AiFeedPanel.HorizontalAlignment = HorizontalAlignment.Left;
+            AiFeedPanel.VerticalAlignment = VerticalAlignment.Top;
+            AiFeedExpandedHeader.Visibility = Visibility.Collapsed;
+            AiFeedCollapsedHeader.Visibility = Visibility.Visible;
+            AiFeedScroller.Visibility = Visibility.Collapsed;
+            AiFeedCollapseButton.Visibility = Visibility.Collapsed;
+            UpdateAiFeedLayout();
             // Keep resize feedback responsive while still coalescing the many
             // SizeChanged events raised by WindowsFormsHost/D3D surfaces.
             _resizeSettledTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(85) };
@@ -2127,6 +2143,9 @@ namespace V3SClient.UI.Views
                     AiEventFeedItems.Add(item.ViewModel);
                 _aiFeedInitialized = true;
 
+                if (newItems.Count > 0 || updatedItems.Count > 0)
+                    FlashAiFeedCollapsedIndicator();
+
                 // Match the web: new and changed records are highlighted for 5s.
                 foreach (var item in newItems.Concat(updatedItems))
                     _ = ClearAiFeedStatusAsync(item.ViewModel);
@@ -2271,24 +2290,51 @@ namespace V3SClient.UI.Views
 
         private void AiFeedItem_Click(object sender, MouseButtonEventArgs e)
         {
+            e.Handled = true;
             var item = (sender as FrameworkElement)?.DataContext as LiveAiFeedItemViewModel_v3;
             if (item == null) return;
             AiFeedDetailsOverlay.DataContext = item;
-            AiFeedDetailsOverlay.Width = ActualWidth;
-            AiFeedDetailsOverlay.Height = ActualHeight;
-            AiFeedDetailsPopup.IsOpen = true;
+            var shellWindow = Window.GetWindow(this) as ShellWindow_v3;
+            var shellDetailsHost = shellWindow?.ShellPage?.FindName("AiFeedDetailsHost") as ContentControl;
+            if (shellDetailsHost != null)
+            {
+                var currentParent = AiFeedDetailsOverlay.Parent as Panel;
+                currentParent?.Children.Remove(AiFeedDetailsOverlay);
+                AiFeedDetailsOverlay.ClearValue(WidthProperty);
+                AiFeedDetailsOverlay.ClearValue(HeightProperty);
+                shellDetailsHost.Content = AiFeedDetailsOverlay;
+                AiFeedDetailsOverlay.Visibility = Visibility.Visible;
+                shellDetailsHost.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                AiFeedDetailsOverlay.Visibility = Visibility.Visible;
+            }
         }
 
         private void CloseAiFeedDetails_Click(object sender, RoutedEventArgs e)
         {
-            AiFeedDetailsPopup.IsOpen = false;
+            var shellWindow = Window.GetWindow(this) as ShellWindow_v3;
+            var shellDetailsHost = shellWindow?.ShellPage?.FindName("AiFeedDetailsHost") as ContentControl;
+            if (shellDetailsHost != null && ReferenceEquals(shellDetailsHost.Content, AiFeedDetailsOverlay))
+            {
+                AiFeedDetailsOverlay.Visibility = Visibility.Collapsed;
+                shellDetailsHost.Content = null;
+                shellDetailsHost.Visibility = Visibility.Collapsed;
+                if (!LivePageLayoutRoot.Children.Contains(AiFeedDetailsOverlay))
+                    LivePageLayoutRoot.Children.Add(AiFeedDetailsOverlay);
+            }
+            AiFeedDetailsOverlay.Visibility = Visibility.Collapsed;
             AiFeedDetailsOverlay.DataContext = null;
         }
 
         private void AiFeedDetailsOverlay_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            // Chỉ đóng khi bấm vào phần nền phủ; các thao tác bên trong panel vẫn được giữ nguyên.
-            if (e.OriginalSource == AiFeedDetailsOverlay)
+            e.Handled = true;
+            var source = e.OriginalSource as DependencyObject;
+            var clickedInsidePanel = source != null &&
+                (ReferenceEquals(source, AiFeedDetailsPanel) || AiFeedDetailsPanel.IsAncestorOf(source));
+            if (!clickedInsidePanel)
             {
                 CloseAiFeedDetails_Click(sender, e);
             }
@@ -2350,6 +2396,12 @@ namespace V3SClient.UI.Views
         private void ToggleAiFeedCollapsed_Click(object sender, RoutedEventArgs e)
         {
             _aiFeedCollapsed = !_aiFeedCollapsed;
+            AiFeedExpandedHeader.Visibility = _aiFeedCollapsed ? Visibility.Collapsed : Visibility.Visible;
+            AiFeedCollapsedHeader.Visibility = _aiFeedCollapsed ? Visibility.Visible : Visibility.Collapsed;
+            AiFeedCollapseButton.Visibility = _aiFeedCollapsed ? Visibility.Collapsed : Visibility.Visible;
+            AiFeedPanel.Height = _aiFeedCollapsed ? 44 : double.NaN;
+            AiFeedPanel.CornerRadius = _aiFeedCollapsed ? new CornerRadius(22) : new CornerRadius(0);
+            CameraGridViewport.Margin = new Thickness(0);
             AiFeedScroller.Visibility = _aiFeedCollapsed ? Visibility.Collapsed : Visibility.Visible;
             if (_aiFeedCollapsed)
                 AiFeedEmptyState.Visibility = Visibility.Collapsed;
@@ -2363,6 +2415,196 @@ namespace V3SClient.UI.Views
             AiFeedDetailButton.Visibility = controlsVisibility;
             AiFeedPauseButton.Visibility = controlsVisibility;
             AiFeedRefreshButton.Visibility = controlsVisibility;
+            SetAiFeedHost(!_aiFeedCollapsed);
+            Dispatcher.BeginInvoke(new Action(UpdateAiFeedLayout), DispatcherPriority.Loaded);
+        }
+
+        private void SetAiFeedHost(bool docked)
+        {
+            if (docked == _aiFeedDocked)
+                return;
+
+            if (docked)
+            {
+                AiFeedPopup.IsOpen = false;
+                if (ReferenceEquals(AiFeedPopup.Child, AiFeedPanel))
+                    AiFeedPopup.Child = null;
+
+                AiFeedPanel.HorizontalAlignment = HorizontalAlignment.Stretch;
+                AiFeedPanel.VerticalAlignment = VerticalAlignment.Top;
+                AiFeedDockHost.Content = AiFeedPanel;
+            }
+            else
+            {
+                if (ReferenceEquals(AiFeedDockHost.Content, AiFeedPanel))
+                    AiFeedDockHost.Content = null;
+
+                if (!ReferenceEquals(AiFeedPopup.Child, AiFeedPanel))
+                    AiFeedPopup.Child = AiFeedPanel;
+
+                AiFeedPanel.HorizontalAlignment = HorizontalAlignment.Left;
+                AiFeedPanel.VerticalAlignment = VerticalAlignment.Top;
+                if (!_aiFeedHiddenByDeactivation && IsVisible)
+                    AiFeedPopup.IsOpen = true;
+            }
+
+            _aiFeedDocked = docked;
+        }
+
+        private void AiFeedPanel_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (_aiFeedCollapsed)
+            {
+                ToggleAiFeedCollapsed_Click(sender, new RoutedEventArgs());
+                e.Handled = true;
+            }
+        }
+
+        private void AiFeedPanel_Loaded(object sender, RoutedEventArgs e)
+        {
+            if (!_aiFeedCollapsed) return;
+            AiFeedExpandedHeader.Visibility = Visibility.Collapsed;
+            AiFeedCollapsedHeader.Visibility = Visibility.Visible;
+            AiFeedCollapseButton.Visibility = Visibility.Collapsed;
+            AiFeedScroller.Visibility = Visibility.Collapsed;
+            AiFeedEmptyState.Visibility = Visibility.Collapsed;
+        }
+
+        private void AiFeedLayout_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            Dispatcher.BeginInvoke(new Action(UpdateAiFeedLayout), DispatcherPriority.Loaded);
+        }
+
+        private void AiFeedOwner_Loaded(object sender, RoutedEventArgs e)
+        {
+            if (_aiFeedWindowHooksAttached) return;
+            var ownerWindow = Application.Current?.MainWindow ?? Window.GetWindow(this);
+            if (ownerWindow == null) return;
+            ownerWindow.Deactivated += AiFeedOwnerWindow_Deactivated;
+            ownerWindow.Activated += AiFeedOwnerWindow_Activated;
+            _aiFeedWindowHooksAttached = true;
+        }
+
+        private void AiFeedOwnerWindow_Deactivated(object sender, EventArgs e)
+        {
+            _aiFeedHiddenByDeactivation = true;
+            SetAiFeedHost(false);
+            CameraGridViewport.Margin = new Thickness(0);
+            CameraGridViewport.InvalidateMeasure();
+            CameraGridHost.InvalidateMeasure();
+            CameraGridHost.InvalidateArrange();
+            CameraGridViewport.UpdateLayout();
+            if (AiFeedPopup != null)
+                AiFeedPopup.IsOpen = false;
+        }
+
+        private void AiFeedOwnerWindow_Activated(object sender, EventArgs e)
+        {
+            if (IsVisible)
+            {
+                _aiFeedHiddenByDeactivation = false;
+                SetAiFeedHost(!_aiFeedCollapsed);
+                if (_aiFeedCollapsed)
+                    AiFeedPopup.IsOpen = true;
+                UpdateAiFeedLayout();
+                RestoreCameraSurfacesAfterActivation();
+                Dispatcher.BeginInvoke(new Action(UpdateAiFeedLayout), DispatcherPriority.Loaded);
+            }
+        }
+
+        private void RestoreCameraSurfacesAfterActivation()
+        {
+            Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(() =>
+            {
+                if (_disposed || !IsVisible || _fullscreenTile != null)
+                    return;
+
+                CameraGrid.InvalidateMeasure();
+                CameraGrid.InvalidateArrange();
+                CameraGrid.UpdateLayout();
+
+                foreach (var tile in _tiles.Values)
+                {
+                    tile.SynchronizeNativeVideoSurfaces();
+                    var slot = tile.Slot;
+                    var hasCamera = slot != null && slot.Camera != null;
+                    var canShowSurface = hasCamera &&
+                        slot.State != LiveConnectionState_v3.Error &&
+                        slot.State != LiveConnectionState_v3.Offline &&
+                        slot.State != LiveConnectionState_v3.Empty;
+                    tile.SetVideoSurfaceVisible(canShowSurface);
+                }
+            }));
+        }
+
+        private void UpdateAiFeedLayout()
+        {
+            if (AiFeedPanel == null) return;
+            if (_aiFeedHiddenByDeactivation)
+            {
+                SetAiFeedHost(false);
+                CameraGridViewport.Margin = new Thickness(0);
+                return;
+            }
+            var width = CameraGridHost?.ActualWidth ?? 0;
+            if (width <= 0) return;
+            AiFeedPanel.Width = _aiFeedCollapsed ? 128 : width;
+            CameraGridViewport.Margin = new Thickness(0);
+            AiFeedPanel.Margin = new Thickness(0);
+            if (!_aiFeedCollapsed)
+            {
+                SetAiFeedHost(true);
+                return;
+            }
+
+            SetAiFeedHost(false);
+            AiFeedPopup.PlacementTarget = LivePageRoot;
+            AiFeedPopup.Placement = System.Windows.Controls.Primitives.PlacementMode.Relative;
+            var viewportOrigin = CameraGridViewport.TranslatePoint(new Point(0, 0), LivePageRoot);
+            AiFeedPopup.HorizontalOffset = viewportOrigin.X + (_aiFeedCollapsed
+                ? Math.Max(0, width - AiFeedPanel.ActualWidth - 4)
+                : 0);
+            AiFeedPopup.VerticalOffset = viewportOrigin.Y + (_aiFeedCollapsed
+                ? Math.Max(0, CameraGridViewport.ActualHeight - AiFeedPanel.ActualHeight - 8)
+                : 0);
+        }
+
+        private void FlashAiFeedCollapsedIndicator()
+        {
+            var borderBrush = AiFeedPanel?.BorderBrush as SolidColorBrush;
+            var textBrush = AiFeedCollapsedLabel?.Foreground as SolidColorBrush;
+            if (borderBrush == null || textBrush == null) return;
+            borderBrush.BeginAnimation(SolidColorBrush.ColorProperty, null);
+            textBrush.BeginAnimation(SolidColorBrush.ColorProperty, null);
+            var animation = new DoubleAnimation
+            {
+                From = 0,
+                To = 1,
+                Duration = TimeSpan.FromMilliseconds(240),
+                AutoReverse = true,
+                RepeatBehavior = new RepeatBehavior(TimeSpan.FromSeconds(3)),
+                FillBehavior = FillBehavior.Stop
+            };
+            var colorAnimation = new ColorAnimation
+            {
+                From = Color.FromRgb(29, 58, 80),
+                To = Color.FromRgb(56, 189, 248),
+                Duration = animation.Duration,
+                AutoReverse = true,
+                RepeatBehavior = animation.RepeatBehavior,
+                FillBehavior = FillBehavior.Stop
+            };
+            borderBrush.BeginAnimation(SolidColorBrush.ColorProperty, colorAnimation);
+            var textAnimation = new ColorAnimation
+            {
+                From = Color.FromRgb(248, 250, 252),
+                To = Color.FromRgb(96, 165, 250),
+                Duration = colorAnimation.Duration,
+                AutoReverse = true,
+                RepeatBehavior = colorAnimation.RepeatBehavior,
+                FillBehavior = FillBehavior.Stop
+            };
+            textBrush.BeginAnimation(SolidColorBrush.ColorProperty, textAnimation);
         }
 
         private async void RefreshAiEventFeed_Click(object sender, RoutedEventArgs e)

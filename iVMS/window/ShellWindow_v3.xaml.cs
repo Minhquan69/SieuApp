@@ -128,7 +128,7 @@ namespace V3SClient.window
         }
 
         public void CompleteInitialNavigation() { ShellView.CompleteInitialNavigation(); }
-        public void ShowInitialLoadFailure(string message) { ShellView.ShowInitialLoadFailure(message); }
+        public void ShowInitialLoadFailure(string message, Action retry = null) { ShellView.ShowInitialLoadFailure(message, retry); }
         public void RefreshSessionDisplay() { _viewModel.RefreshSessionDisplay(); }
 
         private void UpdateShellCornerClip()

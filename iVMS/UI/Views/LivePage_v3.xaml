@@ -93,7 +93,7 @@
             <Setter Property="Width" Value="Auto"/><Setter Property="Padding" Value="10,0"/><Setter Property="Foreground" Value="#CFE4F5"/>
         </Style>
     </UserControl.Resources>
-    <Grid>
+    <Grid x:Name="LivePageLayoutRoot">
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
 
         <Border x:Name="LivePageHeader" MouseLeftButtonDown="LivePageHeader_MouseLeftButtonDown" HorizontalAlignment="Stretch"
@@ -189,7 +189,7 @@
                 </Border>
                 <StackPanel x:Name="HeaderTopOverflowPanel" Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Visibility="Visible">
                     <Button x:Name="AiSummaryExpandButton" Click="ToggleAiSummary_Click" Visibility="Collapsed" Style="{StaticResource LiveHeaderMinimalButtonStyle_v3}" Padding="7,3" Margin="1" ToolTip="Mở bảng thông tin AI"><Icon:PackIconMaterial Kind="HeadCogOutline" Width="18" Height="18" Foreground="#54D8FF"/></Button>
-                    <Button x:Name="CollapsedCameraListHeaderButton" Click="ToggleSidebar_Click" Visibility="Collapsed" Style="{StaticResource CollapsedCameraListButtonStyle_v3}" Padding="8,3" Margin="5,1,1,1" ToolTip="Mở danh sách camera"><StackPanel Orientation="Horizontal"><Icon:PackIconMaterial Kind="VideoOutline" Width="16" Height="16" Foreground="{StaticResource VmsPrimaryBrush_v3}" Margin="0,0,7,0"/><TextBlock Text="Danh sách camera" FontWeight="SemiBold"/><Icon:PackIconMaterial x:Name="CollapsedCameraListHeaderIcon" Kind="ChevronDown" Width="15" Height="15" Margin="9,0,0,0"/></StackPanel></Button>
+                    <Button x:Name="CollapsedCameraListHeaderButton" Click="ToggleSidebar_Click" Visibility="Collapsed" Style="{StaticResource CollapsedCameraListButtonStyle_v3}" Padding="8,3" Margin="5,1,1,1" ToolTip="Mở danh sách camera"><StackPanel Orientation="Horizontal"><Icon:PackIconMaterial Kind="VideoOutline" Width="16" Height="16" Foreground="{StaticResource VmsPrimaryBrush_v3}" Margin="0,0,7,0"/><TextBlock Text="Danh sách camera" FontWeight="SemiBold"/><Icon:PackIconMaterial x:Name="CollapsedCameraListHeaderIcon" Kind="ChevronDown" Width="15" Height="15" Margin="9,0,0,0" Visibility="Collapsed"/></StackPanel></Button>
                     <Button x:Name="SidebarOpenHeaderButton" Click="ToggleSidebar_Click" Visibility="Collapsed" Style="{StaticResource LiveHeaderMinimalButtonStyle_v3}" Padding="9,5" Margin="5,1,2,1" ToolTip="Mở danh sách camera"><StackPanel Orientation="Horizontal"><Icon:PackIconMaterial Kind="VideoOutline" Width="16" Height="16" Foreground="{StaticResource VmsPrimaryBrush_v3}" Margin="0,0,7,0"/><TextBlock Text="Mở danh sách camera" FontWeight="SemiBold"/><Icon:PackIconMaterial Kind="ChevronLeft" Width="15" Height="15" Margin="8,0,0,0"/></StackPanel></Button>
                 </StackPanel>
                 <StackPanel x:Name="HeaderRightAiControls" Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,14,0">
@@ -203,7 +203,7 @@
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition x:Name="SidebarColumn" Width="0.20*" MinWidth="210" MaxWidth="320"/></Grid.ColumnDefinitions>
             <Grid x:Name="CameraHeaderWidthHost" Grid.Column="0" IsHitTestVisible="False"/>
             <Grid x:Name="CameraGridHost" Grid.Column="0">
-                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                 <Border Visibility="Collapsed" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8" Padding="4" Panel.ZIndex="20" Background="{StaticResource VmsElevatedBrush_v3}" BorderBrush="{StaticResource VmsBorderStrongBrush_v3}" BorderThickness="1" CornerRadius="4">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="Layout" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" VerticalAlignment="Center" Margin="2,0,5,0" FontSize="11"/>
@@ -219,6 +219,8 @@
                 <ScrollViewer x:Name="CameraGridViewport" Grid.Row="1" VerticalScrollBarVisibility="Disabled" HorizontalScrollBarVisibility="Disabled" Background="{StaticResource VmsBackgroundBrush_v3}" SizeChanged="CameraGridViewport_SizeChanged">
                     <Grid x:Name="CameraGrid" AllowDrop="True"/>
                 </ScrollViewer>
+                <!-- Expanded AI Feed is hosted here as a real Grid row. -->
+                <ContentControl x:Name="AiFeedDockHost" Grid.Row="2"/>
                 <Border x:Name="LiveCameraToolbar" Grid.Row="0" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,5" Padding="4" Panel.ZIndex="200" Background="{StaticResource VmsElevatedBrush_v3}" BorderBrush="{StaticResource VmsPrimaryBorderBrush_v3}" BorderThickness="1" CornerRadius="5">
                     <StackPanel Orientation="Horizontal">
                         <Button Click="DisconnectAll_Click" Style="{StaticResource LiveHeaderActionStyle_v3}" Padding="7,4" Margin="2" ToolTip="Ngắt kết nối tất cả"><Icon:PackIconMaterial Kind="PowerPlugOff" Width="14" Height="14"/></Button>
@@ -440,15 +442,20 @@
                 <Button Grid.Column="3" Click="CloseLiveToast_Click" Width="28" Height="28" Padding="0" Margin="0,7,6,0" VerticalAlignment="Top" Background="Transparent" BorderThickness="0" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" ToolTip="Đóng thông báo"><Icon:PackIconMaterial Kind="Close" Width="16" Height="16"/></Button>
             </Grid>
         </Border>
-        <Border x:Name="AiFeedPanel" Grid.Row="2" Background="#0B1A29" BorderBrush="#1D3A50" BorderThickness="0,1,0,0" Padding="12,8,12,7" MaxHeight="202" ClipToBounds="True">
+        <Popup x:Name="AiFeedPopup" PlacementTarget="{Binding ElementName=LivePageRoot}" Placement="Relative" IsOpen="True" StaysOpen="True" AllowsTransparency="True" Panel.ZIndex="10000">
+        <Border x:Name="AiFeedPanel" Width="128" Height="44" Background="#0B1A29" BorderBrush="#1D3A50" BorderThickness="1" CornerRadius="22" Padding="10,7" MaxHeight="202" ClipToBounds="True" Loaded="AiFeedPanel_Loaded" MouseLeftButtonUp="AiFeedPanel_MouseLeftButtonUp">
             <Grid>
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <StackPanel x:Name="AiFeedExpandedHeader" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Visible">
                     <Icon:PackIconMaterial Kind="RobotOutline" Width="18" Height="18" Foreground="#3B82F6" Margin="0,0,7,0"/>
                     <TextBlock Text="AI FEED" Foreground="#F8FAFC" FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
                     <Border Background="#153658" CornerRadius="10" Padding="8,2" Margin="10,0,0,0" VerticalAlignment="Center"><TextBlock Foreground="#60A5FA" FontSize="10" FontWeight="SemiBold"><Run Text="{Binding AiEventFeedItems.Count, ElementName=LivePageRoot, Mode=OneWay}"/><Run Text=" sự kiện"/></TextBlock></Border>
-                    <TextBlock Text="Sự kiện AI mới nhất" Foreground="#9FB3C8" FontSize="10" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel x:Name="AiFeedCollapsedHeader" Grid.RowSpan="2" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                    <Icon:PackIconMaterial Kind="Brain" Width="20" Height="20" Foreground="#3B82F6" Margin="0,0,7,0"/>
+                    <TextBlock x:Name="AiFeedCollapsedLabel" Text="AI Feed" Foreground="#F8FAFC" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center"/>
+                    <Border Background="#153658" CornerRadius="10" Padding="7,2" Margin="8,0,0,0" VerticalAlignment="Center"><TextBlock Foreground="#60A5FA" FontSize="10" FontWeight="SemiBold"><Run Text="{Binding AiEventFeedItems.Count, ElementName=LivePageRoot, Mode=OneWay}"/></TextBlock></Border>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBox x:Name="AiFeedRefreshText" Visibility="Collapsed" Text="5" Style="{StaticResource AiFeedRefreshInputStyle_v3}" VerticalAlignment="Center" Margin="0,0,4,0" ToolTip="Nhập số giây rồi bấm Enter" KeyDown="AiFeedRefreshSeconds_KeyDown"/>
@@ -510,9 +517,10 @@
                 </TextBlock>
             </Grid>
         </Border>
-        <Popup x:Name="AiFeedDetailsPopup" PlacementTarget="{Binding ElementName=LivePageRoot}" Placement="Center" StaysOpen="True" AllowsTransparency="True" PopupAnimation="Fade">
-        <Grid x:Name="AiFeedDetailsOverlay" Background="#C7000D18" MouseLeftButtonDown="AiFeedDetailsOverlay_MouseLeftButtonDown">
-            <Border Width="390" HorizontalAlignment="Right" Background="#0D2132" BorderBrush="#24445E" BorderThickness="1,0,0,0" Padding="18">
+        </Popup>
+        <Grid x:Name="AiFeedDetailsOverlay" Grid.RowSpan="3" Visibility="Collapsed" Background="Transparent" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Panel.ZIndex="20000" MouseLeftButtonDown="AiFeedDetailsOverlay_MouseLeftButtonDown">
+            <Border x:Name="AiFeedDetailsPanel" Width="390" HorizontalAlignment="Right" VerticalAlignment="Stretch" Background="#0D2132" BorderBrush="#38BDF8" BorderThickness="2,0,0,0" Padding="18">
+                <Border.Effect><DropShadowEffect Color="#38BDF8" BlurRadius="16" ShadowDepth="0" Opacity="0.34"/></Border.Effect>
                 <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel>
                     <Grid Margin="0,0,0,16"><StackPanel><TextBlock Text="AI EVENT" Foreground="#3B82F6" FontSize="10" FontWeight="SemiBold"/><TextBlock Text="{Binding Title}" Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,5,0,0"/></StackPanel><Button HorizontalAlignment="Right" Click="CloseAiFeedDetails_Click" Background="#1B354B" BorderBrush="#3B5B73" BorderThickness="1" Width="36" Height="36" Padding="8" ToolTip="Đóng"><Icon:PackIconMaterial Kind="Close" Width="16" Height="16"/></Button></Grid>
                     <Border Height="260" CornerRadius="12" Background="#172E42" ClipToBounds="True"><Grid><Image Source="{Binding CropImage}" Stretch="UniformToFill"/><Icon:PackIconMaterial Kind="CameraOutline" Width="38" Height="38" Foreground="#66839B" HorizontalAlignment="Center" VerticalAlignment="Center"><Icon:PackIconMaterial.Style><Style TargetType="Icon:PackIconMaterial"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding CropImage}" Value="{x:Null}"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Icon:PackIconMaterial.Style></Icon:PackIconMaterial></Grid></Border>
@@ -521,6 +529,5 @@
                 </StackPanel></ScrollViewer>
             </Border>
         </Grid>
-        </Popup>
     </Grid>
 </UserControl>

@@ -97,7 +97,11 @@ namespace V3SClient
                     profile = GlobalUserInfo.Instance.AuthorizedProfiles?.FirstOrDefault();
                 if (profile == null)
                     throw new InvalidOperationException("Không xác định được client đã chọn sau khi đăng nhập.");
-                await new Services.ClientSessionService().SwitchClientAsync(profile, CancellationToken.None);
+                using (var startupTimeout = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken.None))
+                {
+                    startupTimeout.CancelAfter(TimeSpan.FromSeconds(30));
+                    await new Services.ClientSessionService().SwitchClientAsync(profile, startupTimeout.Token);
+                }
                 shell.RefreshSessionDisplay();
                 if (shell.IsVisible)
                     shell.CompleteInitialNavigation();
@@ -106,7 +110,9 @@ namespace V3SClient
             {
                 LoggerManager.LogException(ex, "Unable to load selected client during shell startup.");
                 if (shell.IsVisible)
-                    shell.ShowInitialLoadFailure("Unable to load devices for the selected client. Please restart the application and try again.");
+                    shell.ShowInitialLoadFailure(
+                        "Không thể tải dữ liệu client trong 30 giây. Vui lòng kiểm tra kết nối API rồi thử lại.",
+                        () => _ = CompleteStartupAsync(shell, profile));
             }
         }
 

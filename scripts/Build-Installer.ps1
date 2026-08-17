@@ -62,6 +62,9 @@ Copy-Item (Join-Path $buildOutput '*') $appStage -Recurse -Force
 foreach ($runtimeFile in @('iVMS.exe', 'iVMS.exe.config', 'server_config.json')) {
     if (-not (Test-Path (Join-Path $appStage $runtimeFile))) { throw "Missing runtime file: $runtimeFile" }
 }
+foreach ($runtimeFile in @('NLog.config', 'Newtonsoft.Json.dll', 'gstreamer-sharp.dll')) {
+    if (-not (Test-Path (Join-Path $appStage $runtimeFile))) { throw "Missing application dependency: $runtimeFile" }
+}
 if ($LASTEXITCODE -ne 0) { throw "Build Release lỗi: $LASTEXITCODE" }
 
 Copy-Item (Join-Path $projectRoot 'icon.ico') $appStage -Force
@@ -70,9 +73,14 @@ Copy-Item (Join-Path $projectRoot 'icon.ico') $appStage -Force
 # more than 3 GB and must not be shipped to client machines.
 Write-Host 'Đóng gói GStreamer runtime x64...'
 Copy-Item (Join-Path $gstRoot 'bin') $gstStage -Recurse -Force
+$gstCore = Join-Path $gstStage 'bin\gstreamer-1.0-0.dll'
+if (-not (Test-Path $gstCore)) { throw "Missing GStreamer core runtime: $gstCore" }
 $pluginStage = Join-Path $gstStage 'lib\gstreamer-1.0'
 New-Item -ItemType Directory -Force $pluginStage | Out-Null
 Copy-Item (Join-Path $gstRoot 'lib\gstreamer-1.0\*.dll') $pluginStage -Force
+if (-not (Get-ChildItem $pluginStage -Filter '*.dll' -ErrorAction SilentlyContinue)) {
+    throw "No GStreamer plugins found in $pluginStage"
+}
 
 # Playback reads HLS playlists through souphttpsrc.  Its GIO modules provide
 # the HTTP proxy/TLS backends and are not located in bin or the plugin folder.
