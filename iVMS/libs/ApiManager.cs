@@ -3037,9 +3037,13 @@ namespace V3SClient.libs
             bool forceRefresh = false,
             CancellationToken cancellationToken = default(CancellationToken))
         {
-            // Resolve the service by _aiEventReport. The shared request helper
-            // always tries public_url first, then internal_url on failure.
-            try
+            // The Web app calculates this summary from vehicle-counts and
+            // live-frame-detection-counts. Only call a dedicated summary route
+            // when it is explicitly configured; otherwise avoid a guaranteed
+            // 404 before entering the compatible fallback below.
+            if (!string.IsNullOrWhiteSpace(_aiEventSummaryPath))
+            {
+                try
             {
                 var cameraIdsList = (cameraIds ?? Enumerable.Empty<string>())
                     .Where(id => !string.IsNullOrWhiteSpace(id)).Select(id => id.Trim())
@@ -3069,8 +3073,9 @@ namespace V3SClient.libs
                         return result;
                 }
             }
-            catch (OperationCanceledException) { return null; }
-            catch (Exception ex) { LoggerManager.LogException(ex, "GetAiEventSummaryAsync via dedicated endpoint"); }
+                catch (OperationCanceledException) { return null; }
+                catch (Exception ex) { LoggerManager.LogException(ex, "GetAiEventSummaryAsync via dedicated endpoint"); }
+            }
 
             // --- Fallback: tổng hợp thủ công từ vehicle-counts + frame-counts ---
             try
@@ -3083,13 +3088,8 @@ namespace V3SClient.libs
                 var cameraIdsParameter = string.Join(",", cameraIdsList);
 
                 // 1. Fetch camera-vehicle-counts
-                var startAt = referenceDate.Date;
-                var endAt = referenceDate.Date == System.DateTime.Today
-                    ? System.DateTime.Now
-                    : referenceDate.Date.AddDays(1).AddTicks(-1);
                 var vehicleRoute = "/api/camera-vehicle-counts" +
-                    $"?start_date={Uri.EscapeDataString(startAt.ToString("yyyy-MM-ddTHH:mm:ss"))}" +
-                    $"&end_date={Uri.EscapeDataString(endAt.ToString("yyyy-MM-ddTHH:mm:ss"))}";
+                    $"?date={Uri.EscapeDataString(referenceDate.ToString("yyyy-MM-dd"))}";
                 if (!string.IsNullOrWhiteSpace(cameraIdsParameter))
                     vehicleRoute += $"&cam_id={Uri.EscapeDataString(cameraIdsParameter)}";
 

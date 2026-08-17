@@ -23,7 +23,7 @@ namespace V3SClient.ucs
 
         private void ApplyCollapsedState(bool collapsed, bool animate)
         {
-            var target = collapsed ? 64d : 176d;
+            var target = collapsed ? 72d : 176d;
             // The live page contains native GStreamer surfaces.  Animating the
             // shell width emits dozens of HWND resize messages and makes video
             // move ahead of its WPF grid.  Notify the hosted Live View first,
