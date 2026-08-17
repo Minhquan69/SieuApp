@@ -461,6 +461,23 @@ namespace V3SClient.models
             }
         }
 
+        public bool HasHlsAiForVideoPosition(double videoPositionSeconds)
+        {
+            if (!AiOverlayEnabled || _playbackTimeResolver == null)
+                return false;
+
+            lock (_hlsAiSync)
+            {
+                var current = _playbackTimeResolver(videoPositionSeconds);
+                if (current == System.DateTime.MinValue)
+                    return false;
+
+                var targetMs = new DateTimeOffset(current).ToUnixTimeMilliseconds();
+                return _hlsAiFrames.Any(frame => Math.Abs(frame.TimestampMs - targetMs) <= 5000 &&
+                    frame.Results != null && frame.Results.Any(item => item != null && item.IsDisplay));
+            }
+        }
+
         // Keep a bounded frame cache without falsely marking evicted segments as
         // loaded. This is essential when the user seeks back several minutes.
         private void AddHlsAiFramesLocked(IEnumerable<HlsAiFrame> frames, int maxFrames)

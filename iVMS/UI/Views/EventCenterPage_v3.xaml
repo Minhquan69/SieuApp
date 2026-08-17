@@ -705,7 +705,7 @@
         <!-- ══════════════════════════════════════════════════════
              MAIN CONTENT
              ══════════════════════════════════════════════════════ -->
-        <Grid Grid.Row="2" Margin="20,12,20,14">
+        <Grid Grid.Row="2" Margin="20,12,20,14" ClipToBounds="True">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="12"/>
@@ -913,7 +913,9 @@
             <!-- ─── RIGHT: detail panel ─── -->
             <Border Grid.Column="0" Grid.ColumnSpan="3" Panel.ZIndex="20" x:Name="DetailPanel"
                     Style="{StaticResource PanelCard}"
-                    Visibility="Collapsed">
+                    Visibility="Collapsed"
+                    ClipToBounds="True"
+                    SizeChanged="DetailPanel_SizeChanged">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -921,7 +923,7 @@
                     </Grid.RowDefinitions>
 
                     <!-- Header -->
-                    <Border Padding="16,12"
+                    <Border Padding="16,7"
                             BorderBrush="{StaticResource VmsBorderSubtleBrush_v3}"
                             BorderThickness="0,0,0,1">
                         <Grid>
@@ -935,8 +937,8 @@
                                            FontSize="10" FontWeight="Bold"/>
                                 <TextBlock x:Name="DetailTitle" Text="—"
                                            Foreground="{StaticResource VmsTextPrimaryBrush_v3}"
-                                           FontSize="15" FontWeight="SemiBold"
-                                           TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
+                                           FontSize="14" FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis" Margin="0,1,0,0"/>
                             </StackPanel>
                             <Button Grid.Column="1" Style="{StaticResource CloseBtn}"
                                     Content="✕" Click="CloseDetail_Click"/>
@@ -946,11 +948,15 @@
                     <!-- Body -->
                     <Grid Grid.Row="1" Margin="16">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="360"/>
-                            <ColumnDefinition Width="14"/>
-                            <ColumnDefinition Width="*" MinWidth="620"/>
-                            <ColumnDefinition Width="14"/>
-                            <ColumnDefinition Width="284"/>
+                            <!-- Responsive detail layout: side panels flex with the window,
+                                 while the center column keeps the main playback area usable. -->
+                            <ColumnDefinition Width="1.2*" MinWidth="180" MaxWidth="360"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="2.45*" MinWidth="280"/>
+                            <ColumnDefinition Width="12"/>
+                            <!-- The 30px reduced from the center column is given to the
+                                 right information column instead of becoming empty space. -->
+                            <ColumnDefinition Width="1*" MinWidth="160" MaxWidth="344"/>
                         </Grid.ColumnDefinitions>
 
                         <Border Grid.Column="0" Background="{StaticResource VmsSurface2Brush_v3}" BorderBrush="{StaticResource VmsBorderSubtleBrush_v3}" BorderThickness="1" CornerRadius="7" Padding="8">
@@ -988,7 +994,8 @@
                             </Grid>
                         </Border>
 
-                        <StackPanel Grid.Column="2">
+                        <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel>
                             <!-- Image preview -->
                             <Border Background="{StaticResource VmsSurface2Brush_v3}" Visibility="Collapsed"
                                     CornerRadius="6" Height="180" ClipToBounds="True"
@@ -1011,7 +1018,7 @@
 
                             <Border x:Name="DetailPlaybackPanel" Background="{StaticResource VmsSurface2Brush_v3}"
                                     BorderBrush="{StaticResource VmsBorderSubtleBrush_v3}"
-                                    BorderThickness="1" CornerRadius="6" Height="465" ClipToBounds="True"
+                                    BorderThickness="1" CornerRadius="6" Height="240" HorizontalAlignment="Center" ClipToBounds="True"
                                     SizeChanged="DetailPlaybackPanel_SizeChanged">
                                 <Grid>
                                     <Frame x:Name="DetailPlaybackHost" NavigationUIVisibility="Hidden"/>
@@ -1019,7 +1026,75 @@
                                 </Grid>
                             </Border>
 
+                            <Border x:Name="EventTimelinePanel" Background="{StaticResource VmsSurface2Brush_v3}"
+                                    BorderBrush="{StaticResource VmsBorderSubtleBrush_v3}" BorderThickness="1" CornerRadius="6"
+                                    Padding="10" Margin="0,10,0,0"
+                                    Width="{Binding ActualWidth, ElementName=DetailPlaybackPanel}"
+                                    HorizontalAlignment="Center">
+                                <Grid>
+                                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="▤" Foreground="{StaticResource VmsPrimaryBrush_v3}" FontSize="14" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                        <TextBlock Text="Dòng thời gian sự kiện" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                        <Border Background="{StaticResource VmsPrimarySoftBrush_v3}" CornerRadius="8" Padding="6,2" Margin="7,0,0,0">
+                                            <TextBlock x:Name="EventTimelineCount" Text="0" Foreground="{StaticResource VmsPrimaryBrush_v3}" FontSize="10" FontWeight="SemiBold"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <ScrollViewer x:Name="EventTimelineScrollViewer" Grid.Row="1" HorizontalScrollBarVisibility="Visible" VerticalScrollBarVisibility="Disabled" CanContentScroll="False" PanningMode="HorizontalOnly" Margin="0,8,0,0"
+                                                  PreviewMouseLeftButtonDown="EventTimeline_MouseLeftButtonDown"
+                                                  PreviewMouseMove="EventTimeline_MouseMove"
+                                                  PreviewMouseLeftButtonUp="EventTimeline_MouseLeftButtonUp"
+                                                  PreviewMouseWheel="EventTimeline_MouseWheel">
+                                        <ItemsControl x:Name="EventTimelineItemsControl" ItemsSource="{Binding ElementName=EventCenterRoot, Path=EventTimelineItems}">
+                                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Button Tag="{Binding}" Click="EventTimelineItem_Click" Background="Transparent" BorderThickness="0" Padding="0" Margin="0,0,8,0" Cursor="Hand">
+                                                        <Button.Template>
+                                                            <ControlTemplate TargetType="Button">
+                                                                <Border x:Name="TimelineButtonBorder" Background="Transparent" CornerRadius="6" Padding="2">
+                                                                    <ContentPresenter/>
+                                                                </Border>
+                                                                <ControlTemplate.Triggers>
+                                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                                        <Setter TargetName="TimelineButtonBorder" Property="Background" Value="#263B78B8"/>
+                                                                        <Setter TargetName="TimelineButtonBorder" Property="BorderBrush" Value="#4AA8FF"/>
+                                                                        <Setter TargetName="TimelineButtonBorder" Property="BorderThickness" Value="1"/>
+                                                                    </Trigger>
+                                                                    <Trigger Property="IsPressed" Value="True">
+                                                                        <Setter TargetName="TimelineButtonBorder" Property="Background" Value="#3A2566A8"/>
+                                                                    </Trigger>
+                                                                </ControlTemplate.Triggers>
+                                                            </ControlTemplate>
+                                                        </Button.Template>
+                                                        <StackPanel Width="132">
+                                                            <Border Height="74" CornerRadius="5" ClipToBounds="True" Background="{StaticResource VmsSurface3Brush_v3}">
+                                                                <Border.Style>
+                                                                    <Style TargetType="Border">
+                                                                        <Setter Property="BorderBrush" Value="{StaticResource VmsBorderSubtleBrush_v3}"/>
+                                                                        <Setter Property="BorderThickness" Value="1"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                                <Setter Property="BorderBrush" Value="{StaticResource VmsPrimaryBrush_v3}"/>
+                                                                                <Setter Property="BorderThickness" Value="2"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </Border.Style>
+                                                                <Image Source="{Binding Thumbnail}" Stretch="UniformToFill"/>
+                                                            </Border>
+                                                            <TextBlock Text="{Binding TimeText}" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" FontSize="10" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                                                        </StackPanel>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </Grid>
+                            </Border>
+
                         </StackPanel>
+                        </ScrollViewer>
 
                         <ScrollViewer Grid.Column="4" VerticalScrollBarVisibility="Auto">
                             <StackPanel>

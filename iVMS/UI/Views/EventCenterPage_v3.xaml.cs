@@ -72,6 +72,25 @@ namespace V3SClient.UI.Views
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(n));
     }
 
+    public sealed class EventTimelineItem_v3 : INotifyPropertyChanged
+    {
+        public DateTime Timestamp { get; set; }
+        public string TimeText => Timestamp.ToString("HH:mm:ss");
+        private BitmapImage _thumbnail;
+        private bool _isSelected;
+        public BitmapImage Thumbnail
+        {
+            get => _thumbnail;
+            set { _thumbnail = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Thumbnail))); }
+        }
+        public bool IsSelected
+        {
+            get => _isSelected;
+            set { _isSelected = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsSelected))); }
+        }
+        public event PropertyChangedEventHandler PropertyChanged;
+    }
+
     // ─────────────────────────────────────────────────────────
     //  Page
     // ─────────────────────────────────────────────────────────
@@ -81,7 +100,11 @@ namespace V3SClient.UI.Views
         private readonly ObservableCollection<EventRow_v3> _allRows   = new ObservableCollection<EventRow_v3>();
         private readonly ObservableCollection<EventRow_v3> _pageRows  = new ObservableCollection<EventRow_v3>();
         private readonly ObservableCollection<CameraCheckItem> _cameraFilters = new ObservableCollection<CameraCheckItem>();
+        private readonly ObservableCollection<EventTimelineItem_v3> _eventTimelineItems = new ObservableCollection<EventTimelineItem_v3>();
+        public ObservableCollection<EventTimelineItem_v3> EventTimelineItems => _eventTimelineItems;
         private readonly Dictionary<string, string> _roiNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private EventRow_v3 _timelineRow;
+        private CancellationTokenSource _timelineThumbnailCts;
 
         // State
         private CancellationTokenSource _cts        = new CancellationTokenSource();
@@ -104,20 +127,130 @@ namespace V3SClient.UI.Views
         private VPlaybackHLS _detailPlayback;
         private EventRow_v3 _detailRow;
         private bool _isAdjustingDetailPlaybackHeight;
+        private bool _isTimelineDragging;
+        private bool _timelineDragMoved;
+        private Point _timelineDragPoint;
+        private double _timelineDragOffset;
+
+        private void EventTimeline_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (EventTimelineScrollViewer == null) return;
+            _isTimelineDragging = true;
+            _timelineDragMoved = false;
+            _timelineDragPoint = e.GetPosition(EventTimelineScrollViewer);
+            _timelineDragOffset = EventTimelineScrollViewer.HorizontalOffset;
+        }
+
+        private void EventTimeline_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (!_isTimelineDragging || EventTimelineScrollViewer == null || e.LeftButton != MouseButtonState.Pressed)
+                return;
+
+            var current = e.GetPosition(EventTimelineScrollViewer);
+            var delta = current.X - _timelineDragPoint.X;
+            if (!_timelineDragMoved && Math.Abs(delta) < SystemParameters.MinimumHorizontalDragDistance)
+                return;
+
+            if (!_timelineDragMoved)
+            {
+                _timelineDragMoved = true;
+                EventTimelineScrollViewer.CaptureMouse();
+                EventTimelineScrollViewer.Cursor = Cursors.SizeWE;
+            }
+            EventTimelineScrollViewer.ScrollToHorizontalOffset(_timelineDragOffset - delta);
+            e.Handled = true;
+        }
+
+        private void EventTimeline_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (!_isTimelineDragging || EventTimelineScrollViewer == null) return;
+            _isTimelineDragging = false;
+            if (_timelineDragMoved)
+            {
+                EventTimelineScrollViewer.ReleaseMouseCapture();
+                EventTimelineScrollViewer.Cursor = Cursors.Arrow;
+            }
+            _timelineDragMoved = false;
+        }
+
+        private void EventTimeline_MouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (EventTimelineScrollViewer == null || EventTimelineScrollViewer.ScrollableWidth <= 0)
+                return;
+
+            EventTimelineScrollViewer.ScrollToHorizontalOffset(
+                EventTimelineScrollViewer.HorizontalOffset - e.Delta);
+            e.Handled = true;
+        }
+
+        private void CenterEventTimelineItem(EventTimelineItem_v3 item)
+        {
+            if (item == null || EventTimelineScrollViewer == null || EventTimelineItemsControl == null)
+                return;
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                var container = EventTimelineItemsControl.ItemContainerGenerator
+                    .ContainerFromItem(item) as FrameworkElement;
+                if (container == null || EventTimelineScrollViewer.ViewportWidth <= 0)
+                    return;
+
+                try
+                {
+                    var position = container.TransformToAncestor(EventTimelineScrollViewer)
+                        .Transform(new Point(0, 0));
+                    var targetOffset = EventTimelineScrollViewer.HorizontalOffset +
+                        position.X + (container.ActualWidth / 2d) -
+                        (EventTimelineScrollViewer.ViewportWidth / 2d);
+                    EventTimelineScrollViewer.ScrollToHorizontalOffset(targetOffset);
+                }
+                catch (InvalidOperationException) { }
+            }), DispatcherPriority.Loaded);
+        }
 
         private void DetailPlaybackPanel_SizeChanged(object sender, SizeChangedEventArgs e)
         {
             if (_isAdjustingDetailPlaybackHeight || DetailPlaybackPanel == null || DetailPlaybackPanel.ActualWidth <= 0)
                 return;
 
-            var targetHeight = Math.Max(465d,
-                Math.Ceiling(Math.Max(0d, DetailPlaybackPanel.ActualWidth - 18d) * 9d / 16d) + 126d);
-            if (Math.Abs(DetailPlaybackPanel.Height - targetHeight) < 1d)
+            // Use the complete middle-column width. The timeline panel is
+            // bound to this width, so both sections always share one edge.
+            var availableWidth = GetDetailPlaybackAvailableWidth();
+            var targetWidth = Math.Floor(availableWidth);
+            var targetHeight = Math.Ceiling(targetWidth * 9d / 16d);
+
+            if (Math.Abs(DetailPlaybackPanel.Height - targetHeight) < 1d &&
+                Math.Abs(DetailPlaybackPanel.Width - targetWidth) < 1d)
                 return;
 
             _isAdjustingDetailPlaybackHeight = true;
-            try { DetailPlaybackPanel.Height = targetHeight; }
+            try
+            {
+                DetailPlaybackPanel.Width = targetWidth;
+                DetailPlaybackPanel.Height = targetHeight;
+            }
             finally { _isAdjustingDetailPlaybackHeight = false; }
+        }
+
+        private double GetDetailPlaybackAvailableWidth()
+        {
+            var current = DetailPlaybackPanel as DependencyObject;
+            while (current != null)
+            {
+                if (current is ScrollViewer viewport && viewport.ActualWidth > 0)
+                    // Do not keep the old desktop minimum on a small window.
+                    // The parent panel clips its content, so the playback must
+                    // always be sized from the actual middle-column viewport.
+                    return Math.Max(240d, viewport.ActualWidth - 8d);
+                current = VisualTreeHelper.GetParent(current);
+            }
+            return Math.Max(240d, DetailPlaybackPanel.ActualWidth);
+        }
+
+        private void DetailPanel_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (DetailPlaybackPanel != null && DetailPanel.Visibility == Visibility.Visible)
+                DetailPlaybackPanel_SizeChanged(DetailPlaybackPanel, e);
         }
 
         // ─────────────────────────────────────────────────────
@@ -230,6 +363,7 @@ namespace V3SClient.UI.Views
             // handles before another page occupies the same HWND host.
             if (_detailPlayback != null)
             {
+                _detailPlayback.PlaybackTimeChanged -= DetailPlayback_PlaybackTimeChanged;
                 DetailPlaybackHost.Content = null;
                 _detailPlayback = null;
             }
@@ -859,11 +993,14 @@ namespace V3SClient.UI.Views
             DDetId.Text      = row.DetectionId;
             DAssetId.Text    = row.AssetId;
 
+            BuildEventTimeline(row);
+
             PreviewImage.Source         = null;
             DetailImage.Source          = row.ThumbnailSource;
             PreviewImage.Visibility     = Visibility.Collapsed;
             PreviewPlaceholder.Visibility = Visibility.Visible;
             await OpenDetailPlaybackAsync(row);
+            _ = LoadEventTimelineThumbnailsAsync(row);
 
             if (row.AssetId != "—" && !string.IsNullOrWhiteSpace(row.AssetId))
             {
@@ -909,11 +1046,137 @@ namespace V3SClient.UI.Views
             }
         }
 
+    private void BuildEventTimeline(EventRow_v3 row)
+        {
+            _timelineRow = row;
+            _eventTimelineItems.Clear();
+
+            if (row == null || !TryParseEventTime(row.TimeIn, out var start))
+            {
+                if (EventTimelineCount != null) EventTimelineCount.Text = "0";
+                return;
+            }
+
+            DateTime end;
+            if (!TryParseEventTime(row.TimeOut, out end) || end <= start)
+                end = start.AddMinutes(1);
+
+            for (var timestamp = start.AddSeconds(-8); timestamp <= end.AddSeconds(8); timestamp = timestamp.AddSeconds(10))
+            {
+                _eventTimelineItems.Add(new EventTimelineItem_v3
+                {
+                    Timestamp = timestamp,
+                    Thumbnail = null
+                });
+            }
+
+            if (_eventTimelineItems.Count == 0)
+                _eventTimelineItems.Add(new EventTimelineItem_v3 { Timestamp = start });
+            if (EventTimelineCount != null) EventTimelineCount.Text = _eventTimelineItems.Count.ToString(CultureInfo.InvariantCulture);
+            UpdateEventTimelineSelection(start);
+        }
+
+        private async Task LoadEventTimelineThumbnailsAsync(EventRow_v3 row)
+        {
+            _timelineThumbnailCts?.Cancel();
+            _timelineThumbnailCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+            var token = _timelineThumbnailCts.Token;
+
+            try
+            {
+                // The HLS playlist is created asynchronously after the player is
+                // opened. Wait briefly for that existing player instead of
+                // reopening a short playback range for every thumbnail.
+                var timelineReady = false;
+                for (var attempt = 0; attempt < 20 && !token.IsCancellationRequested; attempt++)
+                {
+                    if (_detailPlayback != null && await _detailPlayback.WaitForTimelineReadyAsync(token))
+                    {
+                        timelineReady = true;
+                        break;
+                    }
+                    await Task.Delay(250, token);
+                }
+
+                if (_detailPlayback == null || !timelineReady || token.IsCancellationRequested) return;
+                foreach (var item in _eventTimelineItems.ToList())
+                {
+                    if (token.IsCancellationRequested || !ReferenceEquals(_timelineRow, row)) return;
+                    var thumbnail = await _detailPlayback.CreateTimelineThumbnailAsync(item.Timestamp, token);
+                    if (thumbnail == null) continue;
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        item.Thumbnail = thumbnail;
+                        LoggerManager.LogDebug("Event timeline thumbnail bound: " + item.Timestamp.ToString("O"));
+                    },
+                        DispatcherPriority.DataBind);
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { LoggerManager.LogException(ex, "EventCenter.EventTimeline.Thumbnails"); }
+        }
+
+        private void UpdateEventTimelineSelection(DateTime currentTime)
+        {
+            if (_eventTimelineItems.Count == 0) return;
+            var selected = _eventTimelineItems
+                .Where((item, index) => item.Timestamp <= currentTime &&
+                    (index == _eventTimelineItems.Count - 1 || currentTime < _eventTimelineItems[index + 1].Timestamp))
+                .FirstOrDefault()
+                ?? _eventTimelineItems.OrderBy(item => Math.Abs((item.Timestamp - currentTime).TotalSeconds)).FirstOrDefault();
+            var selectionChanged = false;
+            foreach (var item in _eventTimelineItems)
+            {
+                if (item.IsSelected != ReferenceEquals(item, selected))
+                    selectionChanged = true;
+                item.IsSelected = ReferenceEquals(item, selected);
+            }
+
+            if (selectionChanged && selected != null)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    CenterEventTimelineItem(selected);
+                }), DispatcherPriority.Loaded);
+            }
+        }
+
+        private void DetailPlayback_PlaybackTimeChanged(DateTime currentTime)
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(new Action(() => UpdateEventTimelineSelection(currentTime)));
+                return;
+            }
+            UpdateEventTimelineSelection(currentTime);
+        }
+
+        private void EventTimelineItem_Click(object sender, RoutedEventArgs e)
+        {
+            var item = (sender as FrameworkElement)?.Tag as EventTimelineItem_v3;
+            if (item == null || _timelineRow == null || _detailPlayback == null) return;
+
+            foreach (var timelineItem in _eventTimelineItems)
+                timelineItem.IsSelected = ReferenceEquals(timelineItem, item);
+
+            // Seek the already-running HLS player. Do not create a new short
+            // playback session: that caused the video to reload and loop.
+            _detailPlayback.SeekToRealTime(item.Timestamp);
+            CenterEventTimelineItem(item);
+        }
+
         private void CloseDetail()
         {
+            if (_detailPlayback != null)
+                _detailPlayback.PlaybackTimeChanged -= DetailPlayback_PlaybackTimeChanged;
             DetailPlaybackHost.Content = null;
             _detailPlayback = null;
             _detailRow = null;
+            _timelineRow = null;
+            _timelineThumbnailCts?.Cancel();
+            _timelineThumbnailCts = null;
+            _eventTimelineItems.Clear();
+            if (EventTimelineCount != null) EventTimelineCount.Text = "0";
             DetailCol.Width       = new GridLength(0);
             DetailPanel.Visibility = Visibility.Collapsed;
             CompletedGrid.UnselectAll();
@@ -1015,12 +1278,14 @@ namespace V3SClient.UI.Views
                 // selected record can decode/seek reliably.
                 if (_detailPlayback != null)
                 {
+                    _detailPlayback.PlaybackTimeChanged -= DetailPlayback_PlaybackTimeChanged;
                     DetailPlaybackHost.Content = null;
                     _detailPlayback = null;
                     await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
                 }
                 _detailPlayback = new VPlaybackHLS(GlobalSystem.Instance.CameraGroups.CamGroupList);
                 _detailPlayback.SetEmbeddedMode();
+                _detailPlayback.PlaybackTimeChanged += DetailPlayback_PlaybackTimeChanged;
                 DetailPlaybackHost.Navigate(_detailPlayback);
                 await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded);
                 _detailPlayback.OpenEventPlayback(row.Camera, start, end);

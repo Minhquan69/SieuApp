@@ -41,6 +41,7 @@ namespace V3SClient.UI.Views
     /// </summary>
     public partial class VPlaybackHLS : Page, INotifyPropertyChanged
     {
+        public event Action<System.DateTime> PlaybackTimeChanged;
         System.Timers.Timer _timerGPS;
 
         public event EventHandler<List<models.Camera>> ActiveCamerasChanged;
@@ -159,6 +160,9 @@ namespace V3SClient.UI.Views
         
         private System.DateTime? _searchStartTime;
         private System.DateTime? _searchEndTime;
+        private string _eventPlaybackCameraId;
+        private System.DateTime? _eventPlaybackStartTime;
+        private System.DateTime? _eventPlaybackEndTime;
         private System.DateTime? _renderedPlaybackStart;
         private System.DateTime? _renderedPlaybackEnd;
         private bool _isSearching = false;
@@ -318,11 +322,41 @@ namespace V3SClient.UI.Views
             }
 
             if (endTime <= startTime) endTime = startTime.AddMinutes(1);
+            _eventPlaybackCameraId = camera.camID;
+            _eventPlaybackStartTime = startTime;
+            _eventPlaybackEndTime = endTime;
             SelecedCameraList.Clear();
             SelecedCameraList.Add(camera);
             PlaybackCameraList.SetSelectedCameras(SelecedCameraList);
             Dispatcher.BeginInvoke(new Action(() => btnSearch_Click(this,
                 new List<System.DateTime?> { startTime, endTime })), DispatcherPriority.Loaded);
+        }
+
+        public void SeekToRealTime(System.DateTime targetTime)
+        {
+            if (targetTime == System.DateTime.MinValue) return;
+            _aggregateCurrentTime = targetTime;
+            _aggregatePendingSeekTime = targetTime;
+            _aggregateSeekHoldUntil = System.DateTime.Now.AddSeconds(8);
+            SeekAllPlaybackCamerasTo(targetTime, true);
+        }
+
+        public async System.Threading.Tasks.Task<bool> WaitForTimelineReadyAsync(CancellationToken token)
+        {
+            for (var attempt = 0; attempt < 40 && !token.IsCancellationRequested; attempt++)
+            {
+                if (GetPlaybackCameras().Any(camera => camera != null && camera.GetTimelineSegments().Any(segment => segment.HasVideo)))
+                    return true;
+                await System.Threading.Tasks.Task.Delay(250, token).ConfigureAwait(true);
+            }
+            return false;
+        }
+
+        public async System.Threading.Tasks.Task<BitmapImage> CreateTimelineThumbnailAsync(System.DateTime timestamp, CancellationToken token)
+        {
+            var camera = GetPlaybackCameras().FirstOrDefault(item => item != null &&
+                item.GetTimelineSegments().Any(segment => segment.HasVideo));
+            return camera == null ? null : await camera.CreateTimelineThumbnailAsync(timestamp, token).ConfigureAwait(true);
         }
 
         /// <summary>Shows only the player and aggregate timeline when embedded in event detail.</summary>
@@ -332,6 +366,8 @@ namespace V3SClient.UI.Views
             PlaybackSidebar.Visibility = Visibility.Collapsed;
             PlaybackSidebarColumn.Width = new GridLength(0);
             PlaybackSidebarOpenButton.Visibility = Visibility.Collapsed;
+            if (AggregateTimelineRowDefinition != null)
+                AggregateTimelineRowDefinition.Height = new GridLength(64);
         }
 
         private void Page_Loaded(object sender, RoutedEventArgs e)
@@ -1253,6 +1289,7 @@ namespace V3SClient.UI.Views
                         _aggregateCurrentTime = realTime;
                     }
                     UpdateAggregateTimelinePlayhead();
+                    PlaybackTimeChanged?.Invoke(realTime);
                 }
             }
 
@@ -1369,6 +1406,11 @@ namespace V3SClient.UI.Views
 
                 System.DateTime fromdate = (System.DateTime)e[0];
                 System.DateTime todate = (System.DateTime)e[1];
+                if (_eventPlaybackStartTime.HasValue && _eventPlaybackEndTime.HasValue)
+                {
+                    fromdate = _eventPlaybackStartTime.Value;
+                    todate = _eventPlaybackEndTime.Value;
+                }
 
                 LoggerManager.LogDebug($"Báº¯t Ä‘áº§u tÃ¬m kiáº¿m video tá»« {fromdate} Ä‘áº¿n {todate}");
 
@@ -1379,7 +1421,10 @@ namespace V3SClient.UI.Views
                     ShowPlaybackToast("Khoảng thời gian lớn", "Nên tìm kiếm trong khoảng thời gian không quá 7 ngày.", PlaybackToastKind.Warning);
                 }
 
-                var selectedForSearch = SelecedCameraList?.Where(cam => cam != null).ToList() ?? new List<models.Camera>();
+                var selectedForSearch = SelecedCameraList?.Where(cam => cam != null &&
+                    (string.IsNullOrWhiteSpace(_eventPlaybackCameraId) ||
+                     string.Equals(cam.camID, _eventPlaybackCameraId, StringComparison.OrdinalIgnoreCase)))
+                    .ToList() ?? new List<models.Camera>();
                 List<string> cameraIds = selectedForSearch.Select(cam => cam.camID).ToList();
                 if (cameraIds.Count == 0)
                 {
@@ -1457,6 +1502,9 @@ namespace V3SClient.UI.Views
                 {
                     LoggerManager.LogInfo($"Báº¯t Ä‘áº§u phÃ¡t láº¡i  cho {_camWithHlsUrls.Count} camera.");
                     PlaybackHLS();
+                    _eventPlaybackCameraId = null;
+                    _eventPlaybackStartTime = null;
+                    _eventPlaybackEndTime = null;
                 }
                 else
                 {

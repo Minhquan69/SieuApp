@@ -10,6 +10,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Reactive.Linq;
 using System.Security.Policy;
 using System.Text;
@@ -44,6 +45,12 @@ namespace V3SClient.ucs
 
         private List<string> _videoFiles;
         private List<PlaybackSegment> _segments = new List<PlaybackSegment>();
+        private string _hlsInitUrl;
+        private string _timelinePlaylistContent;
+        private static readonly HttpClient _timelineHttpClient = new HttpClient
+        {
+            Timeout = TimeSpan.FromSeconds(15)
+        };
         private List<PlaybackHLS.HlsAiSegment> _hlsAiSegments = new List<PlaybackHLS.HlsAiSegment>();
         private double _totalDurationSeconds = 0;
         private System.DateTime _searchStartTime;
@@ -1078,6 +1085,360 @@ namespace V3SClient.ucs
             }
         }
 
+        public async System.Threading.Tasks.Task<BitmapImage> CreateTimelineThumbnailAsync(System.DateTime targetTime, CancellationToken token)
+        {
+            LoggerManager.LogDebug("Timeline thumbnail start " + (Camera?.camID ?? string.Empty) +
+                ": target=" + targetTime.ToString("O") + ", segments=" + _segments.Count +
+                ", init=" + (!string.IsNullOrWhiteSpace(_hlsInitUrl)));
+            if (_disposed || string.IsNullOrWhiteSpace(HlsUrl) || _searchStartTime == System.DateTime.MinValue)
+                return null;
+
+            var ffmpeg = ResolveFfmpegExecutable();
+            if (string.IsNullOrWhiteSpace(ffmpeg)) return null;
+
+            string localPlaylistPath = null;
+            var playlistInput = HlsUrl;
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(_timelinePlaylistContent))
+                {
+                    localPlaylistPath = CreateLocalTimelinePlaylist();
+                    if (!string.IsNullOrWhiteSpace(localPlaylistPath))
+                        playlistInput = localPlaylistPath;
+                }
+            }
+            catch (Exception ex)
+            {
+                LoggerManager.LogDebug("Không tạo được playlist timeline cục bộ: " + ex.Message);
+            }
+
+            var targetSegment = _segments.FirstOrDefault(segment => segment.HasVideo &&
+                targetTime >= segment.RealStartTime &&
+                targetTime < segment.RealStartTime.AddSeconds(segment.Duration));
+            if (targetSegment == null)
+            {
+                targetSegment = _segments
+                    .Where(segment => segment.HasVideo && segment.RealStartTime != System.DateTime.MinValue)
+                    .OrderBy(segment => Math.Abs((segment.RealStartTime - targetTime).TotalSeconds))
+                    .FirstOrDefault();
+                if (targetSegment != null)
+                    LoggerManager.LogDebug("Timeline dùng segment gần nhất cho " +
+                        (Camera?.camID ?? string.Empty) + ": target=" + targetTime.ToString("O") +
+                        ", segment=" + targetSegment.RealStartTime.ToString("O"));
+            }
+            if (targetSegment == null)
+            {
+                LoggerManager.LogWarn("Timeline thumbnail không tìm thấy fMP4 segment cho " +
+                    (Camera?.camID ?? string.Empty) + ": target=" + targetTime.ToString("O"));
+            }
+            else if (!string.IsNullOrWhiteSpace(_hlsInitUrl))
+            {
+                var directThumbnail = await CreateFmp4SegmentThumbnailAsync(
+                    ffmpeg, targetSegment, targetTime, token, true).ConfigureAwait(true);
+                if (directThumbnail != null)
+                    return directThumbnail;
+
+                // If the requested timestamp has no AI result, look forward
+                // through nearby video segments and use the first frame that
+                // actually contains a displayable AI object.
+                var targetIndex = _segments.IndexOf(targetSegment);
+                if (targetIndex >= 0)
+                {
+                    foreach (var candidate in _segments.Skip(targetIndex + 1)
+                        .Where(segment => segment.HasVideo)
+                        .Take(8))
+                    {
+                        var aiThumbnail = await CreateFmp4SegmentThumbnailAsync(
+                            ffmpeg, candidate, candidate.RealStartTime, token, true)
+                            .ConfigureAwait(true);
+                        if (aiThumbnail != null)
+                        {
+                            LoggerManager.LogDebug("Timeline dùng frame AI gần nhất " +
+                                (Camera?.camID ?? string.Empty) + ": " +
+                                candidate.RealStartTime.ToString("O"));
+                            return aiThumbnail;
+                        }
+                    }
+                }
+
+                // Preserve the original frame when no nearby AI frame exists.
+                directThumbnail = await CreateFmp4SegmentThumbnailAsync(
+                    ffmpeg, targetSegment, targetTime, token, false).ConfigureAwait(true);
+                if (directThumbnail != null)
+                    return directThumbnail;
+            }
+
+            // The real-time mapping is only needed by the legacy playlist
+            // fallback.  It must not block the direct fMP4 segment path above:
+            // a small gap or a wall-clock rounding difference is valid for a
+            // thumbnail even when the contiguous playback position cannot be
+            // calculated.
+            var realTimeOffset = (targetTime - _searchStartTime).TotalSeconds;
+            double videoPosition;
+            if (!TryMapRealTimeOffsetToVideoPosition(realTimeOffset, out videoPosition))
+                videoPosition = targetSegment == null ? 0 : targetSegment.StartOffset;
+
+            var outputPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+                "ivms_timeline_" + Guid.NewGuid().ToString("N") + ".jpg");
+            try
+            {
+                var startInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = ffmpeg,
+                    Arguments = "-hide_banner -loglevel error -protocol_whitelist file,http,https,tcp,tls,crypto,data -y -i " + QuoteProcessArgument(playlistInput) +
+                        " -ss " + videoPosition.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture) +
+                        " -map 0:v:0 -frames:v 1 -an -vf scale=320:-2 -q:v 5 " + QuoteProcessArgument(outputPath),
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardError = true,
+                    RedirectStandardOutput = true
+                };
+
+                using (var process = System.Diagnostics.Process.Start(startInfo))
+                {
+                    if (process == null) return null;
+                    var errorRead = process.StandardError.ReadToEndAsync();
+                    var outputRead = process.StandardOutput.ReadToEndAsync();
+                    var exited = await System.Threading.Tasks.Task.Run(() => process.WaitForExit(15000));
+                    if (!exited || token.IsCancellationRequested)
+                    {
+                        try { if (!process.HasExited) process.Kill(); } catch { }
+                        return null;
+                    }
+                    await System.Threading.Tasks.Task.WhenAll(errorRead, outputRead);
+                    if (process.ExitCode != 0 || !File.Exists(outputPath))
+                    {
+                        LoggerManager.LogWarn("FFmpeg fallback thumbnail lỗi cho " + (Camera?.camID ?? string.Empty) +
+                            ": exit=" + process.ExitCode + ", error=" + errorRead.Result);
+                        return null;
+                    }
+                }
+
+                var hlsPlayback = Player as models.PlaybackHLS;
+                if (hlsPlayback != null && hlsPlayback.AiOverlayEnabled)
+                {
+                    try
+                    {
+                        await hlsPlayback.RefreshHlsAiMetadataForVideoPositionAsync(videoPosition)
+                            .ConfigureAwait(true);
+                        hlsPlayback.RenderHlsAiForVideoPosition(videoPosition);
+                        hlsPlayback.TryDrawAiOnSnapshotFile(outputPath);
+                    }
+                    catch (Exception ex)
+                    {
+                        LoggerManager.LogDebug("Không thể vẽ AI lên thumbnail timeline: " + ex.Message);
+                    }
+                }
+
+                var bitmap = new BitmapImage();
+                using (var stream = File.OpenRead(outputPath))
+                {
+                    bitmap.BeginInit();
+                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                    bitmap.StreamSource = stream;
+                    bitmap.EndInit();
+                    bitmap.Freeze();
+                }
+                return bitmap;
+            }
+            catch (OperationCanceledException) { return null; }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Không thể tạo thumbnail timeline " + (Camera?.camID ?? string.Empty));
+                return null;
+            }
+            finally
+            {
+                try { if (File.Exists(outputPath)) File.Delete(outputPath); } catch { }
+                try { if (localPlaylistPath != null && File.Exists(localPlaylistPath)) File.Delete(localPlaylistPath); } catch { }
+            }
+        }
+
+        private string CreateLocalTimelinePlaylist()
+        {
+            if (string.IsNullOrWhiteSpace(_timelinePlaylistContent) || string.IsNullOrWhiteSpace(HlsUrl)) return null;
+            var lines = _timelinePlaylistContent.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            var normalized = new List<string>(lines.Length);
+            foreach (var rawLine in lines)
+            {
+                var line = rawLine.Trim();
+                if (line.StartsWith("#EXT-X-MAP:", StringComparison.OrdinalIgnoreCase))
+                {
+                    line = System.Text.RegularExpressions.Regex.Replace(line, "URI=\\\"([^\\\"]+)\\\"", match =>
+                        "URI=\"" + ResolvePlaylistUri(match.Groups[1].Value, HlsUrl) + "\"",
+                        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                }
+                else if (!line.StartsWith("#", StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(line))
+                {
+                    line = ResolvePlaylistUri(line, HlsUrl);
+                }
+                normalized.Add(line);
+            }
+
+            var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+                "ivms_timeline_" + Guid.NewGuid().ToString("N") + ".m3u8");
+            File.WriteAllLines(path, normalized, new UTF8Encoding(false));
+            return path;
+        }
+
+        private async System.Threading.Tasks.Task<BitmapImage> CreateFmp4SegmentThumbnailAsync(
+            string ffmpeg, PlaybackSegment segment, System.DateTime targetTime,
+            CancellationToken token, bool requireAi = false)
+        {
+            LoggerManager.LogDebug("Timeline fMP4 segment decode " + (Camera?.camID ?? string.Empty) +
+                ": segment=" + segment.RealStartTime.ToString("O"));
+            string mediaPath = null;
+            string outputPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+                "ivms_timeline_" + Guid.NewGuid().ToString("N") + ".jpg");
+            try
+            {
+                var initUri = ResolvePlaylistUri(_hlsInitUrl, HlsUrl);
+                var mediaUri = ResolvePlaylistUri(segment.Url, HlsUrl);
+                if (string.IsNullOrWhiteSpace(initUri) || string.IsNullOrWhiteSpace(mediaUri)) return null;
+
+                using (var initResponse = await GetTimelineSegmentAsync(initUri, token).ConfigureAwait(false))
+                using (var mediaResponse = await GetTimelineSegmentAsync(mediaUri, token).ConfigureAwait(false))
+                {
+                    if (!initResponse.IsSuccessStatusCode || !mediaResponse.IsSuccessStatusCode)
+                    {
+                        LoggerManager.LogWarn("Timeline segment không tải được " +
+                            (Camera?.camID ?? string.Empty) + ": init=" + (int)initResponse.StatusCode +
+                            ", media=" + (int)mediaResponse.StatusCode);
+                        return null;
+                    }
+                    var initBytes = await initResponse.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+                    var mediaBytes = await mediaResponse.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+                    if (initBytes.Length == 0 || mediaBytes.Length == 0) return null;
+
+                    mediaPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+                        "ivms_timeline_" + Guid.NewGuid().ToString("N") + ".mp4");
+                    using (var stream = File.Create(mediaPath))
+                    {
+                        await stream.WriteAsync(initBytes, 0, initBytes.Length, token).ConfigureAwait(false);
+                        await stream.WriteAsync(mediaBytes, 0, mediaBytes.Length, token).ConfigureAwait(false);
+                    }
+                }
+
+                var startInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = ffmpeg,
+                    Arguments = "-hide_banner -loglevel error -y -ss 0.050 -i " + QuoteProcessArgument(mediaPath) +
+                        " -map 0:v:0 -frames:v 1 -an -vf scale=320:-2 -q:v 5 " + QuoteProcessArgument(outputPath),
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardError = true,
+                    RedirectStandardOutput = true
+                };
+                using (var process = System.Diagnostics.Process.Start(startInfo))
+                {
+                    if (process == null) return null;
+                    var errorRead = process.StandardError.ReadToEndAsync();
+                    var outputRead = process.StandardOutput.ReadToEndAsync();
+                    var exited = await System.Threading.Tasks.Task.Run(() => process.WaitForExit(15000), token).ConfigureAwait(false);
+                    if (!exited || token.IsCancellationRequested)
+                    {
+                        LoggerManager.LogWarn("FFmpeg fMP4 thumbnail timeout/cancel cho " + (Camera?.camID ?? string.Empty));
+                        return null;
+                    }
+                    await System.Threading.Tasks.Task.WhenAll(errorRead, outputRead).ConfigureAwait(false);
+                    if (process.ExitCode != 0 || !File.Exists(outputPath) || new System.IO.FileInfo(outputPath).Length == 0)
+                    {
+                        LoggerManager.LogWarn("FFmpeg fMP4 thumbnail lỗi cho " + (Camera?.camID ?? string.Empty) +
+                            ": exit=" + process.ExitCode + ", error=" + errorRead.Result);
+                        return null;
+                    }
+                }
+
+                var bitmap = new BitmapImage();
+                using (var stream = File.OpenRead(outputPath))
+                {
+                    bitmap.BeginInit();
+                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                    bitmap.StreamSource = stream;
+                    bitmap.EndInit();
+                    bitmap.Freeze();
+                }
+                var hlsPlayback = Player as models.PlaybackHLS;
+                if (hlsPlayback != null && hlsPlayback.AiOverlayEnabled)
+                {
+                    try
+                    {
+                        var realTimeOffset = (targetTime - _searchStartTime).TotalSeconds;
+                        double videoPosition;
+                        if (!TryMapRealTimeOffsetToVideoPosition(realTimeOffset, out videoPosition))
+                            videoPosition = segment.StartOffset;
+
+                        await hlsPlayback.RefreshHlsAiMetadataForVideoPositionAsync(videoPosition)
+                            .ConfigureAwait(true);
+                        if (requireAi && !hlsPlayback.HasHlsAiForVideoPosition(videoPosition))
+                            return null;
+                        hlsPlayback.RenderHlsAiForVideoPosition(videoPosition);
+                        hlsPlayback.TryDrawAiOnSnapshotFile(outputPath);
+
+                        // Reload after drawing so the returned frozen bitmap contains
+                        // the AI boxes, not the clean frame loaded above.
+                        var aiBitmap = new BitmapImage();
+                        using (var aiStream = File.OpenRead(outputPath))
+                        {
+                            aiBitmap.BeginInit();
+                            aiBitmap.CacheOption = BitmapCacheOption.OnLoad;
+                            aiBitmap.StreamSource = aiStream;
+                            aiBitmap.EndInit();
+                            aiBitmap.Freeze();
+                        }
+                        bitmap = aiBitmap;
+                        LoggerManager.LogDebug("Timeline AI overlay applied " +
+                            (Camera?.camID ?? string.Empty) + " at " +
+                            videoPosition.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture));
+                    }
+                    catch (Exception ex)
+                    {
+                        LoggerManager.LogDebug("KhÃ´ng thÃª̉ vẽ AI lÃªn thumbnail fMP4: " + ex.Message);
+                    }
+                }
+                LoggerManager.LogDebug("Timeline fMP4 thumbnail created " + (Camera?.camID ?? string.Empty));
+                return bitmap;
+            }
+            catch (OperationCanceledException) { return null; }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Không thể tạo thumbnail từ fMP4 segment " + (Camera?.camID ?? string.Empty));
+                return null;
+            }
+            finally
+            {
+                try { if (mediaPath != null && File.Exists(mediaPath)) File.Delete(mediaPath); } catch { }
+                try { if (File.Exists(outputPath)) File.Delete(outputPath); } catch { }
+            }
+        }
+
+        private async System.Threading.Tasks.Task<HttpResponseMessage> GetTimelineSegmentAsync(
+            string segmentUri, CancellationToken token)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, segmentUri);
+            var playbackToken = ExtractQueryValue(HlsUrl, "token");
+            if (!string.IsNullOrWhiteSpace(playbackToken))
+                request.Headers.TryAddWithoutValidation("X-Playback-Token", playbackToken);
+            return await _timelineHttpClient.SendAsync(request, token).ConfigureAwait(false);
+        }
+
+        private static string ExtractQueryValue(string url, string key)
+        {
+            if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(key)) return null;
+            var match = System.Text.RegularExpressions.Regex.Match(
+                url, "(?:[?&])" + System.Text.RegularExpressions.Regex.Escape(key) + "=([^&]*)",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            return match.Success ? System.Uri.UnescapeDataString(match.Groups[1].Value) : null;
+        }
+
+        private static string ResolvePlaylistUri(string uri, string playlistUrl)
+        {
+            if (string.IsNullOrWhiteSpace(uri)) return null;
+            if (System.Uri.TryCreate(uri, System.UriKind.Absolute, out var absolute)) return absolute.ToString();
+            if (!System.Uri.TryCreate(playlistUrl, System.UriKind.Absolute, out var baseUri)) return uri;
+            return new System.Uri(baseUri, uri).ToString();
+        }
+
         private string CreateSnapshotOutputPath()
         {
             try
@@ -1411,6 +1772,8 @@ namespace V3SClient.ucs
         public void ParseM3U8AndRenderTimeline(string m3u8Content, System.DateTime searchStart, System.DateTime searchEnd)
         {
             _segments.Clear();
+            _hlsInitUrl = null;
+            _timelinePlaylistContent = m3u8Content;
             _totalDurationSeconds = 0;
             _searchStartTime = searchStart;
             _searchEndTime = searchEnd;
@@ -1441,6 +1804,12 @@ namespace V3SClient.ucs
             for (int i = 0; i < lines.Length; i++)
             {
                 string line = lines[i].Trim();
+                if (line.StartsWith("#EXT-X-MAP:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var mapMatch = System.Text.RegularExpressions.Regex.Match(line, "URI=\\\"([^\\\"]+)\\\"", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                    if (mapMatch.Success) _hlsInitUrl = mapMatch.Groups[1].Value;
+                    continue;
+                }
                 if (line.StartsWith("#EXTINF:"))
                 {
                     string durStr = line.Substring(8).TrimEnd(',');
