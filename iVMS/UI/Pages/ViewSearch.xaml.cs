@@ -43,6 +43,7 @@ namespace V3SClient.UI.Pages
         {
             return new List<DateTime?> { datetimeFrom.Value, datetimeTo.Value };
         }
+
         public ViewSearch( string txtBnt1_Text= "Tìm kiếm", string txtBnt2_Text = "Export", bool btn1Visible = true,bool btn2Visible=false)
         {
             InitializeComponent();

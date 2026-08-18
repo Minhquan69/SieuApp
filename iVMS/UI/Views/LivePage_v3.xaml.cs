@@ -514,7 +514,8 @@ namespace V3SClient.UI.Views
                         foreach (var tile in _tiles.Values)
                         {
                             tile.SynchronizeNativeVideoSurfaces();
-                            tile.SetVideoSurfaceVisible(tile.Slot == null ||
+                            tile.SetVideoSurfaceVisible(tile.Slot != null &&
+                                tile.Slot.Camera != null &&
                                 tile.Slot.State != LiveConnectionState_v3.Error);
                             tile.ResumePopupPlacementAfterResize();
                         }
@@ -1548,7 +1549,8 @@ namespace V3SClient.UI.Views
                         // Start the heavier main stream only after the WPF
                         // window and the already-playing grid stream have
                         // reached their final fullscreen bounds.
-                        tile.SetVideoSurfaceVisible(tile.Slot == null ||
+                        tile.SetVideoSurfaceVisible(tile.Slot != null &&
+                            tile.Slot.Camera != null &&
                             tile.Slot.State != LiveConnectionState_v3.Error);
                         if (tile.Slot != null && tile.Slot.Camera != null)
                             _ = tile.PrepareFullscreenMainStreamAsync(
@@ -1717,7 +1719,8 @@ namespace V3SClient.UI.Views
                 foreach (var tile in _tiles.Values)
                 {
                     tile.SynchronizeNativeVideoSurfaces();
-                    tile.SetVideoSurfaceVisible(tile.Slot == null ||
+                    tile.SetVideoSurfaceVisible(tile.Slot != null &&
+                        tile.Slot.Camera != null &&
                         tile.Slot.State != LiveConnectionState_v3.Error);
                     tile.Opacity = 1;
                     tile.RefreshPopupPlacement();
@@ -2421,9 +2424,6 @@ namespace V3SClient.UI.Views
 
         private void SetAiFeedHost(bool docked)
         {
-            if (docked == _aiFeedDocked)
-                return;
-
             if (docked)
             {
                 AiFeedPopup.IsOpen = false;
@@ -2432,6 +2432,8 @@ namespace V3SClient.UI.Views
 
                 AiFeedPanel.HorizontalAlignment = HorizontalAlignment.Stretch;
                 AiFeedPanel.VerticalAlignment = VerticalAlignment.Top;
+                Grid.SetRow(AiFeedDockHost, 2);
+                Grid.SetRowSpan(AiFeedDockHost, 1);
                 AiFeedDockHost.Content = AiFeedPanel;
             }
             else
@@ -2442,8 +2444,12 @@ namespace V3SClient.UI.Views
                 if (!ReferenceEquals(AiFeedPopup.Child, AiFeedPanel))
                     AiFeedPopup.Child = AiFeedPanel;
 
-                AiFeedPanel.HorizontalAlignment = HorizontalAlignment.Left;
-                AiFeedPanel.VerticalAlignment = VerticalAlignment.Top;
+                AiFeedPanel.HorizontalAlignment = HorizontalAlignment.Right;
+                AiFeedPanel.VerticalAlignment = VerticalAlignment.Bottom;
+                AiFeedPopup.PlacementTarget = AiFeedPopupAnchor;
+                AiFeedPopup.Placement = System.Windows.Controls.Primitives.PlacementMode.Top;
+                AiFeedPopup.HorizontalOffset = -Math.Max(0, AiFeedPanel.Width);
+                AiFeedPopup.VerticalOffset = -8;
                 if (!_aiFeedHiddenByDeactivation && IsVisible)
                     AiFeedPopup.IsOpen = true;
             }
@@ -2482,7 +2488,24 @@ namespace V3SClient.UI.Views
             if (ownerWindow == null) return;
             ownerWindow.Deactivated += AiFeedOwnerWindow_Deactivated;
             ownerWindow.Activated += AiFeedOwnerWindow_Activated;
+            ownerWindow.LocationChanged += AiFeedOwnerWindow_LocationChanged;
             _aiFeedWindowHooksAttached = true;
+        }
+
+        private void AiFeedOwnerWindow_LocationChanged(object sender, EventArgs e)
+        {
+            if (_disposed || _aiFeedHiddenByDeactivation || !_aiFeedCollapsed || AiFeedPopup == null)
+                return;
+
+            // Popup is a separate native HWND. Reopen it after the shell moves
+            // so WPF rebinds the popup to the new visual coordinates.
+            AiFeedPopup.IsOpen = false;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (_disposed || _aiFeedHiddenByDeactivation || !_aiFeedCollapsed) return;
+                UpdateAiFeedLayout();
+                AiFeedPopup.IsOpen = true;
+            }), DispatcherPriority.Render);
         }
 
         private void AiFeedOwnerWindow_Deactivated(object sender, EventArgs e)
@@ -2558,15 +2581,31 @@ namespace V3SClient.UI.Views
             }
 
             SetAiFeedHost(false);
-            AiFeedPopup.PlacementTarget = LivePageRoot;
-            AiFeedPopup.Placement = System.Windows.Controls.Primitives.PlacementMode.Relative;
-            var viewportOrigin = CameraGridViewport.TranslatePoint(new Point(0, 0), LivePageRoot);
-            AiFeedPopup.HorizontalOffset = viewportOrigin.X + (_aiFeedCollapsed
-                ? Math.Max(0, width - AiFeedPanel.ActualWidth - 4)
-                : 0);
-            AiFeedPopup.VerticalOffset = viewportOrigin.Y + (_aiFeedCollapsed
-                ? Math.Max(0, CameraGridViewport.ActualHeight - AiFeedPanel.ActualHeight - 8)
-                : 0);
+            if (_aiFeedCollapsed)
+            {
+                AiFeedPopup.PlacementTarget = AiFeedPopupAnchor;
+                AiFeedPopup.HorizontalOffset = -Math.Max(0, AiFeedPanel.Width);
+                AiFeedPopup.VerticalOffset = CalculateAiFeedPopupVerticalOffset();
+            }
+        }
+
+        private double CalculateAiFeedPopupVerticalOffset()
+        {
+            const double safeMargin = 8d;
+            if (AiFeedPopupAnchor == null || AiFeedPanel == null || AiFeedPanel.ActualHeight <= 0)
+                return -safeMargin;
+
+            try
+            {
+                var anchorScreen = AiFeedPopupAnchor.PointToScreen(new Point(0, 0));
+                var popupBaseTop = anchorScreen.Y - AiFeedPanel.ActualHeight;
+                var allowedBottom = SystemParameters.WorkArea.Bottom - safeMargin;
+                return Math.Min(-safeMargin, allowedBottom - popupBaseTop - AiFeedPanel.ActualHeight);
+            }
+            catch (InvalidOperationException)
+            {
+                return -safeMargin;
+            }
         }
 
         private void FlashAiFeedCollapsedIndicator()
@@ -2670,6 +2709,7 @@ namespace V3SClient.UI.Views
                 RunGridGeometryTransition(new Action(() =>
                 {
                     CameraSidebar.Visibility = showSidebar ? Visibility.Visible : Visibility.Collapsed;
+                    CameraSidebar.IsHitTestVisible = showSidebar;
                     SidebarColumn.MinWidth = showSidebar ? 210 : 0;
                     SidebarColumn.MaxWidth = showSidebar ? 320 : double.PositiveInfinity;
                     SidebarColumn.Width = showSidebar ? new GridLength(0.20, GridUnitType.Star) : new GridLength(0);
@@ -2677,6 +2717,7 @@ namespace V3SClient.UI.Views
                     UpdateCameraSidebarPlacement();
                     UpdateSidebarOpenButtons();
                 }), suspendVideoSurfaces: false);
+                Dispatcher.BeginInvoke(new Action(UpdateAiFeedLayout), DispatcherPriority.Render);
                 return;
             }
 
@@ -2695,6 +2736,7 @@ namespace V3SClient.UI.Views
                 CameraSidebarFilters.Visibility = collapse ? Visibility.Collapsed : Visibility.Visible;
                 CameraSidebarListCaption.Visibility = collapse ? Visibility.Collapsed : Visibility.Visible;
                 CameraSidebarList.Visibility = collapse ? Visibility.Collapsed : Visibility.Visible;
+                CameraSidebar.IsHitTestVisible = !collapse;
                 // Keep the sidebar header in exactly the same place. Only the
                 // list content folds vertically; the transparent area beneath
                 // lets the camera grid use the released space.
@@ -2721,6 +2763,7 @@ namespace V3SClient.UI.Views
                 UpdateCameraSidebarPlacement();
                 UpdateSidebarOpenButtons();
             }), suspendVideoSurfaces: false);
+            Dispatcher.BeginInvoke(new Action(UpdateAiFeedLayout), DispatcherPriority.Render);
         }
 
         private void UpdateCameraSidebarPlacement()
@@ -2870,7 +2913,8 @@ namespace V3SClient.UI.Views
                 UpdateSidebarOpenButtons();
                 return;
             }
-            CameraSidebar.Visibility = Visibility.Visible;
+                CameraSidebar.Visibility = Visibility.Visible;
+            CameraSidebar.IsHitTestVisible = true;
             _cameraSidebarCollapsed = PtzDock.Tag is bool && (bool)PtzDock.Tag;
             PtzDock.Tag = null;
             SidebarColumn.MinWidth = 210;

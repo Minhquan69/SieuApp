@@ -3162,6 +3162,19 @@ namespace V3SClient.UI.Views
                 _camWithHlsUrls.Remove(selected.camID);
                 RemovePlaybackTile(selected.camID);
                 PublishActivePlaybackCameras();
+
+                // Once the last camera is removed, the old playback interval
+                // must not remain the active search context for the next camera.
+                if (SelecedCameraList.Count == 0)
+                {
+                    _camWithHlsUrls.Clear();
+                    _camWithPlaylistContent.Clear();
+                    _searchStartTime = null;
+                    _searchEndTime = null;
+                    _renderedPlaybackStart = null;
+                    _renderedPlaybackEnd = null;
+                    ResetAggregateTimeline();
+                }
             }
             else
             {

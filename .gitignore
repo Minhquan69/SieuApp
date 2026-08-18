@@ -438,3 +438,4 @@ FodyWeavers.xsd
 # Local installer payloads and generated staging files.
 /installer/prerequisites/
 /installer/stage/
+/iVMS/installer/
