@@ -107,13 +107,22 @@
                     <Border BorderBrush="#35526F" BorderThickness="0,1,0,0" Margin="0,26,0,0" Padding="0,16,0,0"><StackPanel Orientation="Horizontal" HorizontalAlignment="Center"><Ellipse Width="8" Height="8" Style="{StaticResource ServerPulse}" Margin="0,0,7,0" VerticalAlignment="Center"/><TextBlock Text="Máy chủ: Đã kết nối" Foreground="#BFE9CF" FontSize="16"/></StackPanel></Border>
                 </StackPanel>
             </Border>
-            <Border Grid.Row="1" Grid.ColumnSpan="2" HorizontalAlignment="Center" Margin="0,8,0,0" Padding="30,10" BorderBrush="#224A79B8" BorderThickness="0,1,0,1">
+            <Border x:Name="LoginTaglineBanner" Grid.Row="1" Grid.ColumnSpan="2" HorizontalAlignment="Center" Margin="0,8,0,0" Padding="30,10" BorderBrush="#224A79B8" BorderThickness="0,1,0,1" Opacity="0">
+                <Border.Triggers>
+                    <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:1"/>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </EventTrigger>
+                </Border.Triggers>
                 <Border.Background>
                     <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,0.5">
                         <GradientStop Color="#00152B4A" Offset="0"/>
-                        <GradientStop Color="#B31A3970" Offset="0.28"/>
-                        <GradientStop Color="#D9254D88" Offset="0.5"/>
-                        <GradientStop Color="#B31A3970" Offset="0.72"/>
+                        <GradientStop Color="#501A3970" Offset="0.28"/>
+                        <GradientStop Color="#65254D88" Offset="0.5"/>
+                        <GradientStop Color="#501A3970" Offset="0.72"/>
                         <GradientStop Color="#00152B4A" Offset="1"/>
                     </LinearGradientBrush>
                 </Border.Background>
