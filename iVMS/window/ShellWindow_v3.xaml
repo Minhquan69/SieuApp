@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:V3SClient.UI.Views"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
-        Title="iVista VMS - Migrated _v3"
+        Title="iVista VMS"
         Width="1280" Height="760" MinWidth="320" MinHeight="200"
         ResizeMode="CanResize" WindowStyle="None" WindowStartupLocation="CenterScreen"
         Background="{StaticResource VmsBackgroundBrush_v3}">

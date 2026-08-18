@@ -269,7 +269,7 @@
                         </StackPanel>
                     </Border>
                 </Popup>
-                <Popup x:Name="DisplayPopup" Placement="Bottom" PlacementTarget="{Binding ElementName=HeaderDisplayButton}" StaysOpen="False" AllowsTransparency="True">
+                <Popup x:Name="DisplayPopup" Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
                     <Border Background="{StaticResource VmsSidebarBrush_v3}" BorderBrush="{StaticResource VmsFocusBrush_v3}" BorderThickness="1" CornerRadius="8" Padding="8" Width="276" SnapsToDevicePixels="True">
                         <StackPanel>
                             <DockPanel Margin="2,0,2,7"><Icon:PackIconMaterial Kind="Monitor" Width="16" Height="16" Foreground="{StaticResource VmsPrimaryBrush_v3}" Margin="0,0,6,0"/><StackPanel><TextBlock Text="Chế độ nhiều màn hình" Foreground="{StaticResource VmsTextPrimaryBrush_v3}" FontWeight="SemiBold" FontSize="12"/><TextBlock Text="Áp dụng như tổ hợp phím Win + P" Foreground="{StaticResource VmsTextSecondaryBrush_v3}" FontSize="10" Margin="0,1,0,0"/></StackPanel></DockPanel>
@@ -520,7 +520,7 @@
                 </TextBlock>
             </Grid>
         </Border>
-        <Grid x:Name="AiFeedDetailsOverlay" Grid.RowSpan="3" Visibility="Collapsed" Background="Transparent" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Panel.ZIndex="20000" MouseLeftButtonDown="AiFeedDetailsOverlay_MouseLeftButtonDown">
+        <Grid x:Name="AiFeedDetailsOverlay" Grid.RowSpan="3" DataContext="{x:Null}" Visibility="Collapsed" Background="Transparent" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Panel.ZIndex="20000" MouseLeftButtonDown="AiFeedDetailsOverlay_MouseLeftButtonDown">
             <Border x:Name="AiFeedDetailsPanel" Width="390" HorizontalAlignment="Right" VerticalAlignment="Stretch" Background="#0D2132" BorderBrush="#38BDF8" BorderThickness="2,0,0,0" Padding="18">
                 <Border.Effect><DropShadowEffect Color="#38BDF8" BlurRadius="16" ShadowDepth="0" Opacity="0.34"/></Border.Effect>
                 <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel>

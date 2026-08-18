@@ -159,6 +159,7 @@ namespace V3SClient.UI.Views
         public LivePage_v3()
         {
             InitializeComponent();
+            DisplayPopup.PlacementTarget = HeaderTopOverflowPanel;
             Loaded += AiFeedOwner_Loaded;
             SizeChanged += AiFeedLayout_SizeChanged;
             CameraGridHost.SizeChanged += AiFeedLayout_SizeChanged;
