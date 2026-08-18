@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -163,12 +164,13 @@ namespace V3SClient.UI.Views
             CameraGridHost.SizeChanged += AiFeedLayout_SizeChanged;
             CameraGridViewport.SizeChanged += AiFeedLayout_SizeChanged;
             AiFeedPanel.SizeChanged += AiFeedLayout_SizeChanged;
-            AiFeedPanel.HorizontalAlignment = HorizontalAlignment.Left;
-            AiFeedPanel.VerticalAlignment = VerticalAlignment.Top;
+            AiFeedPanel.HorizontalAlignment = HorizontalAlignment.Right;
+            AiFeedPanel.VerticalAlignment = VerticalAlignment.Bottom;
             AiFeedExpandedHeader.Visibility = Visibility.Collapsed;
             AiFeedCollapsedHeader.Visibility = Visibility.Visible;
             AiFeedScroller.Visibility = Visibility.Collapsed;
             AiFeedCollapseButton.Visibility = Visibility.Collapsed;
+            AiFeedHeaderButton.Visibility = Visibility.Collapsed;
             UpdateAiFeedLayout();
             // Keep resize feedback responsive while still coalescing the many
             // SizeChanged events raised by WindowsFormsHost/D3D surfaces.
@@ -1102,7 +1104,8 @@ namespace V3SClient.UI.Views
 
         private void DisplayMenuButton_Click(object sender, RoutedEventArgs e)
         {
-            var shellWindow = Window.GetWindow(this) as ShellWindow_v3;
+            var ownerWindow = Window.GetWindow(this);
+            var shellWindow = ownerWindow as ShellWindow_v3;
             if (shellWindow != null)
             {
                 shellWindow.ToggleVirtualDesktopMode();
@@ -2303,13 +2306,20 @@ namespace V3SClient.UI.Views
             var shellDetailsHost = shellWindow?.ShellPage?.FindName("AiFeedDetailsHost") as ContentControl;
             if (shellDetailsHost != null)
             {
+                shellDetailsHost.Content = null;
+                shellDetailsHost.Visibility = Visibility.Collapsed;
                 var currentParent = AiFeedDetailsOverlay.Parent as Panel;
                 currentParent?.Children.Remove(AiFeedDetailsOverlay);
                 AiFeedDetailsOverlay.ClearValue(WidthProperty);
                 AiFeedDetailsOverlay.ClearValue(HeightProperty);
-                shellDetailsHost.Content = AiFeedDetailsOverlay;
+                AiFeedDetailsOverlay.Width = 390;
+                AiFeedDetailsOverlay.Height = LivePageLayoutRoot.ActualHeight;
+                var detailsPopup = GetAiFeedDetailsPopup();
+                detailsPopup.Child = AiFeedDetailsOverlay;
+                detailsPopup.HorizontalOffset = Math.Max(0, LivePageLayoutRoot.ActualWidth - 390);
+                detailsPopup.VerticalOffset = 0;
+                detailsPopup.IsOpen = true;
                 AiFeedDetailsOverlay.Visibility = Visibility.Visible;
-                shellDetailsHost.Visibility = Visibility.Visible;
             }
             else
             {
@@ -2329,8 +2339,22 @@ namespace V3SClient.UI.Views
                 if (!LivePageLayoutRoot.Children.Contains(AiFeedDetailsOverlay))
                     LivePageLayoutRoot.Children.Add(AiFeedDetailsOverlay);
             }
+            var detailsPopup = GetAiFeedDetailsPopup();
+            if (ReferenceEquals(detailsPopup.Child, AiFeedDetailsOverlay))
+            {
+                AiFeedDetailsOverlay.Visibility = Visibility.Collapsed;
+                detailsPopup.IsOpen = false;
+                detailsPopup.Child = null;
+                if (!LivePageLayoutRoot.Children.Contains(AiFeedDetailsOverlay))
+                    LivePageLayoutRoot.Children.Add(AiFeedDetailsOverlay);
+            }
             AiFeedDetailsOverlay.Visibility = Visibility.Collapsed;
             AiFeedDetailsOverlay.DataContext = null;
+        }
+
+        private Popup GetAiFeedDetailsPopup()
+        {
+            return (Popup)FindName("AiFeedDetailsPopup");
         }
 
         private void AiFeedDetailsOverlay_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -2404,6 +2428,7 @@ namespace V3SClient.UI.Views
             AiFeedExpandedHeader.Visibility = _aiFeedCollapsed ? Visibility.Collapsed : Visibility.Visible;
             AiFeedCollapsedHeader.Visibility = _aiFeedCollapsed ? Visibility.Visible : Visibility.Collapsed;
             AiFeedCollapseButton.Visibility = _aiFeedCollapsed ? Visibility.Collapsed : Visibility.Visible;
+            UpdateAiFeedHeaderButton();
             AiFeedPanel.Height = _aiFeedCollapsed ? 44 : double.NaN;
             AiFeedPanel.CornerRadius = _aiFeedCollapsed ? new CornerRadius(22) : new CornerRadius(0);
             CameraGridViewport.Margin = new Thickness(0);
@@ -2426,36 +2451,30 @@ namespace V3SClient.UI.Views
 
         private void SetAiFeedHost(bool docked)
         {
+            AiFeedPopup.IsOpen = false;
             if (docked)
             {
-                AiFeedPopup.IsOpen = false;
-                if (ReferenceEquals(AiFeedPopup.Child, AiFeedPanel))
-                    AiFeedPopup.Child = null;
-
+                if (LivePageLayoutRoot.Children.Contains(AiFeedPanel))
+                    LivePageLayoutRoot.Children.Remove(AiFeedPanel);
+                AiFeedDockHost.Content = AiFeedPanel;
+                Grid.SetRow(AiFeedPanel, 2);
+                Grid.SetRowSpan(AiFeedPanel, 1);
                 AiFeedPanel.HorizontalAlignment = HorizontalAlignment.Stretch;
                 AiFeedPanel.VerticalAlignment = VerticalAlignment.Top;
-                Grid.SetRow(AiFeedDockHost, 2);
-                Grid.SetRowSpan(AiFeedDockHost, 1);
-                AiFeedDockHost.Content = AiFeedPanel;
+                AiFeedPanel.Margin = new Thickness(0);
             }
             else
             {
                 if (ReferenceEquals(AiFeedDockHost.Content, AiFeedPanel))
                     AiFeedDockHost.Content = null;
-
-                if (!ReferenceEquals(AiFeedPopup.Child, AiFeedPanel))
-                    AiFeedPopup.Child = AiFeedPanel;
-
+                if (!LivePageLayoutRoot.Children.Contains(AiFeedPanel))
+                    LivePageLayoutRoot.Children.Add(AiFeedPanel);
+                Grid.SetRow(AiFeedPanel, 0);
+                Grid.SetRowSpan(AiFeedPanel, 3);
                 AiFeedPanel.HorizontalAlignment = HorizontalAlignment.Right;
                 AiFeedPanel.VerticalAlignment = VerticalAlignment.Bottom;
-                AiFeedPopup.PlacementTarget = LivePageLayoutRoot;
-                AiFeedPopup.Placement = System.Windows.Controls.Primitives.PlacementMode.Relative;
-                AiFeedPopup.HorizontalOffset = Math.Max(0, LivePageLayoutRoot.ActualWidth - AiFeedPanel.Width - 8);
-                AiFeedPopup.VerticalOffset = GetAiFeedBottomOffset();
-                if (!_aiFeedHiddenByDeactivation && IsVisible)
-                    AiFeedPopup.IsOpen = true;
+                AiFeedPanel.Margin = new Thickness(0, 0, 12, 12);
             }
-
             _aiFeedDocked = docked;
         }
 
@@ -2499,9 +2518,8 @@ namespace V3SClient.UI.Views
             if (_disposed || _aiFeedHiddenByDeactivation || !_aiFeedCollapsed || AiFeedPopup == null)
                 return;
 
-            // Popup is a separate native HWND. Hide it while the shell is being
-            // moved so it cannot remain over the taskbar or at stale coordinates.
-            AiFeedPopup.IsOpen = false;
+            // AI Feed stays visible while the shell is being moved because it
+            // is hosted in the WPF visual tree, not in a separate popup.
             if (_aiFeedMoveRestoreTimer == null)
             {
                 _aiFeedMoveRestoreTimer = new DispatcherTimer(DispatcherPriority.Background)
@@ -2513,7 +2531,6 @@ namespace V3SClient.UI.Views
                     _aiFeedMoveRestoreTimer.Stop();
                     if (_disposed || _aiFeedHiddenByDeactivation || !_aiFeedCollapsed || AiFeedPopup == null || !IsAiFeedWindowVisibleOnScreen()) return;
                     UpdateAiFeedLayout();
-                    AiFeedPopup.IsOpen = true;
                 };
             }
             _aiFeedMoveRestoreTimer.Stop();
@@ -2570,12 +2587,12 @@ namespace V3SClient.UI.Views
         private void AiFeedOwnerWindow_Deactivated(object sender, EventArgs e)
         {
             _aiFeedHiddenByDeactivation = true;
-            SetAiFeedHost(false);
-            CameraGridViewport.Margin = new Thickness(0);
-            CameraGridViewport.InvalidateMeasure();
-            CameraGridHost.InvalidateMeasure();
-            CameraGridHost.InvalidateArrange();
-            CameraGridViewport.UpdateLayout();
+            if (AiFeedDetailsOverlay.Visibility == Visibility.Visible ||
+                (Window.GetWindow(this) as ShellWindow_v3)?.ShellPage?.FindName("AiFeedDetailsHost") is ContentControl detailsHost &&
+                detailsHost.Visibility == Visibility.Visible)
+            {
+                CloseAiFeedDetails_Click(sender, new RoutedEventArgs());
+            }
             if (AiFeedPopup != null)
                 AiFeedPopup.IsOpen = false;
         }
@@ -2585,6 +2602,7 @@ namespace V3SClient.UI.Views
             if (IsVisible)
             {
                 _aiFeedHiddenByDeactivation = false;
+                AiFeedPanel.Visibility = Visibility.Visible;
                 SetAiFeedHost(!_aiFeedCollapsed);
                 if (_aiFeedCollapsed)
                     AiFeedPopup.IsOpen = true;
@@ -2632,7 +2650,6 @@ namespace V3SClient.UI.Views
             if (width <= 0) return;
             AiFeedPanel.Width = _aiFeedCollapsed ? 128 : width;
             CameraGridViewport.Margin = new Thickness(0);
-            AiFeedPanel.Margin = new Thickness(0);
             if (!_aiFeedCollapsed)
             {
                 SetAiFeedHost(true);
@@ -2640,13 +2657,6 @@ namespace V3SClient.UI.Views
             }
 
             SetAiFeedHost(false);
-            if (_aiFeedCollapsed)
-            {
-                AiFeedPopup.PlacementTarget = LivePageLayoutRoot;
-                AiFeedPopup.Placement = System.Windows.Controls.Primitives.PlacementMode.Relative;
-                AiFeedPopup.HorizontalOffset = Math.Max(0, LivePageLayoutRoot.ActualWidth - AiFeedPanel.Width - 8);
-                    AiFeedPopup.VerticalOffset = GetAiFeedBottomOffset();
-            }
         }
 
         private double CalculateAiFeedPopupVerticalOffset()
@@ -2866,6 +2876,7 @@ namespace V3SClient.UI.Views
 
         private void UpdateSidebarOpenButtons()
         {
+            UpdateAiFeedHeaderButton();
             // Keep a single camera-list tab.  The old in-grid opener and the
             // header opener were both made visible after switching fullscreen,
             // producing the duplicated chevrons shown in the UI.
@@ -2876,6 +2887,27 @@ namespace V3SClient.UI.Views
             // Do not show the second header opener at the same time.
             SidebarOpenHeaderButton.Visibility = canOpenSidebar && !_cameraSidebarCollapsed
                 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void UpdateAiFeedHeaderButton()
+        {
+            if (AiFeedHeaderButton == null) return;
+            var sidebarClosed = _cameraSidebarCollapsed;
+            AiFeedHeaderButton.Visibility = sidebarClosed && _aiFeedCollapsed
+                ? Visibility.Visible : Visibility.Collapsed;
+            if (AiFeedPanel != null && !_aiFeedHiddenByDeactivation)
+                AiFeedPanel.Visibility = sidebarClosed && _aiFeedCollapsed
+                    ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        private void RevealAiFeedFromHeader_Click(object sender, RoutedEventArgs e)
+        {
+            if (_aiFeedCollapsed)
+                ToggleAiFeedCollapsed_Click(sender, e);
+
+            AiFeedPanel.Visibility = Visibility.Visible;
+            SetAiFeedHost(true);
+            Dispatcher.BeginInvoke(new Action(UpdateAiFeedLayout), DispatcherPriority.Loaded);
         }
 
         private void UpdateStatus()

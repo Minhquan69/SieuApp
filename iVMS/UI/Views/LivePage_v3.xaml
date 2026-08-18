@@ -188,6 +188,7 @@
                     </Grid>
                 </Border>
                 <StackPanel x:Name="HeaderTopOverflowPanel" Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Visibility="Visible">
+                    <Button x:Name="AiFeedHeaderButton" Click="RevealAiFeedFromHeader_Click" Style="{StaticResource LiveHeaderMinimalButtonStyle_v3}" Padding="8,5" Margin="2" ToolTip="Mở AI Feed" Visibility="Collapsed"><Icon:PackIconMaterial Kind="Brain" Width="16" Height="16" Foreground="#3B82F6"/></Button>
                     <Button x:Name="AiSummaryExpandButton" Click="ToggleAiSummary_Click" Visibility="Collapsed" Style="{StaticResource LiveHeaderMinimalButtonStyle_v3}" Padding="7,3" Margin="1" ToolTip="Mở bảng thông tin AI"><Icon:PackIconMaterial Kind="HeadCogOutline" Width="18" Height="18" Foreground="#54D8FF"/></Button>
                     <Button x:Name="CollapsedCameraListHeaderButton" Click="ToggleSidebar_Click" Visibility="Collapsed" Style="{StaticResource CollapsedCameraListButtonStyle_v3}" Padding="8,3" Margin="5,1,1,1" ToolTip="Mở danh sách camera"><StackPanel Orientation="Horizontal"><Icon:PackIconMaterial Kind="VideoOutline" Width="16" Height="16" Foreground="{StaticResource VmsPrimaryBrush_v3}" Margin="0,0,7,0"/><TextBlock Text="Danh sách camera" FontWeight="SemiBold"/><Icon:PackIconMaterial x:Name="CollapsedCameraListHeaderIcon" Kind="ChevronDown" Width="15" Height="15" Margin="9,0,0,0" Visibility="Collapsed"/></StackPanel></Button>
                     <Button x:Name="SidebarOpenHeaderButton" Click="ToggleSidebar_Click" Visibility="Collapsed" Style="{StaticResource LiveHeaderMinimalButtonStyle_v3}" Padding="9,5" Margin="5,1,2,1" ToolTip="Mở danh sách camera"><StackPanel Orientation="Horizontal"><Icon:PackIconMaterial Kind="VideoOutline" Width="16" Height="16" Foreground="{StaticResource VmsPrimaryBrush_v3}" Margin="0,0,7,0"/><TextBlock Text="Mở danh sách camera" FontWeight="SemiBold"/><Icon:PackIconMaterial Kind="ChevronLeft" Width="15" Height="15" Margin="8,0,0,0"/></StackPanel></Button>
@@ -443,8 +444,9 @@
             </Grid>
         </Border>
         <Border x:Name="AiFeedPopupAnchor" Grid.Row="0" Grid.RowSpan="3" HorizontalAlignment="Right" VerticalAlignment="Bottom" Width="1" Height="1" IsHitTestVisible="False" Panel.ZIndex="9999"/>
-        <Popup x:Name="AiFeedPopup" PlacementTarget="{Binding ElementName=LivePageLayoutRoot}" Placement="Relative" IsOpen="False" StaysOpen="True" AllowsTransparency="True" Panel.ZIndex="10000">
-        <Border x:Name="AiFeedPanel" Width="128" Height="44" Background="#0B1A29" BorderBrush="#1D3A50" BorderThickness="1" CornerRadius="22" Padding="10,7" MaxHeight="202" ClipToBounds="True" Loaded="AiFeedPanel_Loaded" MouseLeftButtonUp="AiFeedPanel_MouseLeftButtonUp">
+        <Popup x:Name="AiFeedPopup" IsOpen="False" />
+        <Popup x:Name="AiFeedDetailsPopup" IsOpen="False" StaysOpen="True" AllowsTransparency="True" Placement="Relative" PlacementTarget="{Binding ElementName=LivePageLayoutRoot}" />
+        <Border x:Name="AiFeedPanel" Grid.Row="0" Grid.RowSpan="3" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,12,12" Width="128" Height="44" Background="#0B1A29" BorderBrush="#1D3A50" BorderThickness="1" CornerRadius="22" Padding="10,7" MaxHeight="202" ClipToBounds="True" Panel.ZIndex="10000" Loaded="AiFeedPanel_Loaded" MouseLeftButtonUp="AiFeedPanel_MouseLeftButtonUp">
             <Grid>
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -518,7 +520,6 @@
                 </TextBlock>
             </Grid>
         </Border>
-        </Popup>
         <Grid x:Name="AiFeedDetailsOverlay" Grid.RowSpan="3" Visibility="Collapsed" Background="Transparent" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Panel.ZIndex="20000" MouseLeftButtonDown="AiFeedDetailsOverlay_MouseLeftButtonDown">
             <Border x:Name="AiFeedDetailsPanel" Width="390" HorizontalAlignment="Right" VerticalAlignment="Stretch" Background="#0D2132" BorderBrush="#38BDF8" BorderThickness="2,0,0,0" Padding="18">
                 <Border.Effect><DropShadowEffect Color="#38BDF8" BlurRadius="16" ShadowDepth="0" Opacity="0.34"/></Border.Effect>
