@@ -21,6 +21,9 @@ namespace V3SClient.Services
         public async Task SwitchClientAsync(ApiManager.ClientProfile profile, CancellationToken cancellationToken)
         {
             if (profile == null) throw new ArgumentNullException(nameof(profile));
+            // Camera/group/config responses are scoped to the active client.
+            // Never reuse a previous client's fast API cache after switching.
+            OfflineResponseCacheHandler_v3.Clear();
             var cameras = await ApiManager.Instance.GetCamInfoAsync(cancellationToken, profile.Id.ToString());
             if (cameras == null || cameras.Count == 0)
                 throw new InvalidOperationException("Client không có cấu hình thiết bị.");
