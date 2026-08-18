@@ -15,6 +15,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using System.Windows.Interop;
 using V3SClient.libs;
 using V3SClient.models;
 using V3SClient.ucs;
@@ -127,6 +128,7 @@ namespace V3SClient.UI.Views
         private bool _aiFeedCollapsed = true;
         private bool _aiFeedWindowHooksAttached;
         private bool _aiFeedHiddenByDeactivation;
+        private DispatcherTimer _aiFeedMoveRestoreTimer;
         private bool _aiFeedDocked;
         private bool _aiFeedInitialized;
         private Visibility _tileAiFeedVisibility = Visibility.Visible;
@@ -2446,10 +2448,10 @@ namespace V3SClient.UI.Views
 
                 AiFeedPanel.HorizontalAlignment = HorizontalAlignment.Right;
                 AiFeedPanel.VerticalAlignment = VerticalAlignment.Bottom;
-                AiFeedPopup.PlacementTarget = AiFeedPopupAnchor;
-                AiFeedPopup.Placement = System.Windows.Controls.Primitives.PlacementMode.Top;
-                AiFeedPopup.HorizontalOffset = -Math.Max(0, AiFeedPanel.Width);
-                AiFeedPopup.VerticalOffset = -8;
+                AiFeedPopup.PlacementTarget = LivePageLayoutRoot;
+                AiFeedPopup.Placement = System.Windows.Controls.Primitives.PlacementMode.Relative;
+                AiFeedPopup.HorizontalOffset = Math.Max(0, LivePageLayoutRoot.ActualWidth - AiFeedPanel.Width - 8);
+                AiFeedPopup.VerticalOffset = GetAiFeedBottomOffset();
                 if (!_aiFeedHiddenByDeactivation && IsVisible)
                     AiFeedPopup.IsOpen = true;
             }
@@ -2497,15 +2499,72 @@ namespace V3SClient.UI.Views
             if (_disposed || _aiFeedHiddenByDeactivation || !_aiFeedCollapsed || AiFeedPopup == null)
                 return;
 
-            // Popup is a separate native HWND. Reopen it after the shell moves
-            // so WPF rebinds the popup to the new visual coordinates.
+            // Popup is a separate native HWND. Hide it while the shell is being
+            // moved so it cannot remain over the taskbar or at stale coordinates.
             AiFeedPopup.IsOpen = false;
-            Dispatcher.BeginInvoke(new Action(() =>
+            if (_aiFeedMoveRestoreTimer == null)
             {
-                if (_disposed || _aiFeedHiddenByDeactivation || !_aiFeedCollapsed) return;
-                UpdateAiFeedLayout();
-                AiFeedPopup.IsOpen = true;
-            }), DispatcherPriority.Render);
+                _aiFeedMoveRestoreTimer = new DispatcherTimer(DispatcherPriority.Background)
+                {
+                    Interval = TimeSpan.FromMilliseconds(250)
+                };
+                _aiFeedMoveRestoreTimer.Tick += (s, args) =>
+                {
+                    _aiFeedMoveRestoreTimer.Stop();
+                    if (_disposed || _aiFeedHiddenByDeactivation || !_aiFeedCollapsed || AiFeedPopup == null || !IsAiFeedWindowVisibleOnScreen()) return;
+                    UpdateAiFeedLayout();
+                    AiFeedPopup.IsOpen = true;
+                };
+            }
+            _aiFeedMoveRestoreTimer.Stop();
+            _aiFeedMoveRestoreTimer.Start();
+        }
+
+        private bool IsAiFeedWindowVisibleOnScreen()
+        {
+            var ownerWindow = Window.GetWindow(this);
+            if (ownerWindow == null || ownerWindow.ActualWidth <= 0 || ownerWindow.ActualHeight <= 0)
+                return false;
+
+            var right = ownerWindow.Left + ownerWindow.ActualWidth;
+            var bottom = ownerWindow.Top + ownerWindow.ActualHeight;
+            const double tolerance = 32d;
+            foreach (var screen in FormsScreen.AllScreens)
+            {
+                var bounds = screen.Bounds;
+                var intersects = right > bounds.Left - tolerance
+                    && ownerWindow.Left < bounds.Right + tolerance
+                    && bottom > bounds.Top - tolerance
+                    && ownerWindow.Top < bounds.Bottom + tolerance;
+                if (intersects) return true;
+            }
+            return false;
+        }
+
+        private double GetAiFeedBottomOffset()
+        {
+            var rootOffset = Math.Max(0, LivePageLayoutRoot.ActualHeight - AiFeedPanel.Height - 8);
+            var ownerWindow = Window.GetWindow(this);
+            if (ownerWindow == null) return rootOffset;
+
+            var workArea = GetCurrentScreenWorkArea(ownerWindow);
+            var availableBottom = workArea.Bottom - ownerWindow.Top - AiFeedPanel.Height - 8;
+            return Math.Max(0, Math.Min(rootOffset, availableBottom));
+        }
+
+        private Rect GetCurrentScreenWorkArea(Window ownerWindow)
+        {
+            try
+            {
+                var handle = new WindowInteropHelper(ownerWindow).Handle;
+                var screen = FormsScreen.FromHandle(handle);
+                return new Rect(screen.WorkingArea.Left, screen.WorkingArea.Top,
+                    screen.WorkingArea.Width, screen.WorkingArea.Height);
+            }
+            catch (InvalidOperationException)
+            {
+                return SystemParameters.WorkArea;
+            }
         }
 
         private void AiFeedOwnerWindow_Deactivated(object sender, EventArgs e)
@@ -2583,9 +2642,10 @@ namespace V3SClient.UI.Views
             SetAiFeedHost(false);
             if (_aiFeedCollapsed)
             {
-                AiFeedPopup.PlacementTarget = AiFeedPopupAnchor;
-                AiFeedPopup.HorizontalOffset = -Math.Max(0, AiFeedPanel.Width);
-                AiFeedPopup.VerticalOffset = CalculateAiFeedPopupVerticalOffset();
+                AiFeedPopup.PlacementTarget = LivePageLayoutRoot;
+                AiFeedPopup.Placement = System.Windows.Controls.Primitives.PlacementMode.Relative;
+                AiFeedPopup.HorizontalOffset = Math.Max(0, LivePageLayoutRoot.ActualWidth - AiFeedPanel.Width - 8);
+                    AiFeedPopup.VerticalOffset = GetAiFeedBottomOffset();
             }
         }
 
@@ -2931,6 +2991,7 @@ namespace V3SClient.UI.Views
         public void Dispose()
         {
             if (_disposed) return;
+            _aiFeedMoveRestoreTimer?.Stop();
             if (_fullscreenTile != null) ExitTileFullscreen();
             _disposed = true;
             _cameraOperation.Cancel();

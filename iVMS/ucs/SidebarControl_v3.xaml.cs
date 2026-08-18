@@ -41,6 +41,7 @@ namespace V3SClient.ucs
             ToggleText.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
             ToggleIcon.Kind = collapsed ? PackIconMaterialKind.ChevronRight : PackIconMaterialKind.ChevronLeft;
             ToggleButton.Width = collapsed ? 34 : double.NaN;
+            ToggleButton.Padding = collapsed ? new Thickness(0) : new Thickness(10, 6, 10, 6);
             ToggleButton.ToolTip = collapsed ? "Mở rộng" : "Thu gọn";
         }
     }

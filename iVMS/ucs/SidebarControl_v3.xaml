@@ -56,7 +56,9 @@
       <Icon:PackIconMaterial Kind="ClockOutline" Width="14" Height="14" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" HorizontalAlignment="Center" Margin="0,0,0,7"/>
       <TextBlock Text="v2.4.1" Foreground="{StaticResource VmsTextTertiaryBrush_v3}" FontSize="8" HorizontalAlignment="Center"/>
      </StackPanel>
-     <Button x:Name="ToggleButton" Click="ToggleButton_Click" Cursor="Hand" FocusVisualStyle="{x:Null}" Style="{StaticResource SecondaryButtonStyle_v3}" Height="30" Padding="0" MinWidth="0" HorizontalContentAlignment="Center"><StackPanel Orientation="Horizontal"><Icon:PackIconMaterial x:Name="ToggleIcon" Kind="ChevronLeft" Width="14" Height="14"/><TextBlock x:Name="ToggleText" Text="Thu gọn" Margin="6,0,0,0"/></StackPanel></Button>
+     <Button x:Name="ToggleButton" Click="ToggleButton_Click" Cursor="Hand" FocusVisualStyle="{x:Null}" Style="{StaticResource SecondaryButtonStyle_v3}" Height="34" Padding="10,6" MinWidth="34" Background="#102A43" BorderBrush="#24496B" BorderThickness="1" Foreground="#D7E9F8" FontWeight="SemiBold" HorizontalContentAlignment="Center" ToolTip="Thu gọn">
+      <StackPanel Orientation="Horizontal"><Icon:PackIconMaterial x:Name="ToggleIcon" Kind="ChevronLeft" Width="18" Height="18"/><TextBlock x:Name="ToggleText" Text="Thu gọn" Margin="7,0,0,0" VerticalAlignment="Center"/></StackPanel>
+     </Button>
     </StackPanel>
    </Border>
   </Grid>
