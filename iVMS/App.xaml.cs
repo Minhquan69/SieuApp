@@ -48,7 +48,6 @@ namespace V3SClient
                         // the all-monitor fullscreen mode from login.
                         var loginBounds = loginWindow.WindowBoundsForNextShell;
                         var loginWasVirtualDesktop = loginWindow.IsVirtualDesktopMode;
-                        MetaAIResultStorage.Instance.ToString();
                         var selectedProfile = loginWindow.SelectedProfile;
                         // Đăng nhập thành công, mở MainWindow
                         // Keep the migrated shell as the only startup shell for this copy.
@@ -90,6 +89,13 @@ namespace V3SClient
         {
             try
             {
+                // Paint the waiting state before starting network or native work.
+                await Task.Yield();
+                shell.ShellPage.ShowInitialLoading("Đang tải cấu hình client và danh sách camera...", "Đang vào hệ thống");
+                // Metadata migration and cleanup can be slow on machines with
+                // many local AI files. Warm it up off the UI thread while the
+                // client request is in flight.
+                var metadataWarmupTask = Task.Run(() => { var storage = MetaAIResultStorage.Instance; });
                 // The shell is created before the selected client is loaded.
                 // Resolve a missing selection from the authorized list instead
                 // of allowing the header to remain on its default placeholder.
@@ -100,8 +106,15 @@ namespace V3SClient
                 using (var startupTimeout = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken.None))
                 {
                     startupTimeout.CancelAfter(TimeSpan.FromSeconds(30));
-                    await new Services.ClientSessionService().SwitchClientAsync(profile, startupTimeout.Token);
+                    var clientLoadTask = new Services.ClientSessionService().SwitchClientAsync(profile, startupTimeout.Token, prepareForStartup: true);
+                    await Task.WhenAll(clientLoadTask, metadataWarmupTask);
                 }
+                shell.ShellPage.ShowInitialLoading("Đang chuẩn bị bộ phát video. Lần đầu trên máy này có thể mất vài giây...", "Đang vào hệ thống");
+                var mediaRuntimeTask = ShellWindow_v3.EnsureGStreamerInitializedAsync();
+                if (await Task.WhenAny(mediaRuntimeTask, Task.Delay(TimeSpan.FromSeconds(25))) != mediaRuntimeTask)
+                    throw new TimeoutException("Khởi tạo bộ phát video mất quá lâu.");
+                if (!await mediaRuntimeTask)
+                    throw new InvalidOperationException("Không tìm thấy bộ phát video cần thiết.");
                 shell.RefreshSessionDisplay();
                 if (shell.IsVisible)
                     shell.CompleteInitialNavigation();
@@ -111,7 +124,7 @@ namespace V3SClient
                 LoggerManager.LogException(ex, "Unable to load selected client during shell startup.");
                 if (shell.IsVisible)
                     shell.ShowInitialLoadFailure(
-                        "Không thể tải dữ liệu client trong 30 giây. Vui lòng kiểm tra kết nối API rồi thử lại.",
+                        "Không thể hoàn tất khởi động. Vui lòng kiểm tra kết nối API hoặc bộ phát video rồi thử lại.",
                         () => _ = CompleteStartupAsync(shell, profile));
             }
         }

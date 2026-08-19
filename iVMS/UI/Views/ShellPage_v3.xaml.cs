@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using V3SClient.viewModels;
 using V3SClient.Services;
 using V3SClient.ucs;
@@ -50,6 +51,11 @@ namespace V3SClient.UI.Views
         public void ShowInitialLoadFailure(string message, Action retry = null)
         {
             ShowModule(CreateStartupStatus(message, "Không thể tải dữ liệu client", retry));
+        }
+
+        public void ShowInitialLoading(string message, string title = "Đang vào hệ thống")
+        {
+            ShowModule(CreateStartupStatus(message, title));
         }
 
         private void CancelGlobalDownload_Click(object sender, RoutedEventArgs e)
@@ -269,6 +275,7 @@ namespace V3SClient.UI.Views
             content.Children.Add(new TextBlock
             {
                 Text = title,
+                Foreground = new SolidColorBrush(Color.FromRgb(232, 242, 252)),
                 FontSize = 22,
                 FontWeight = FontWeights.SemiBold,
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -277,11 +284,33 @@ namespace V3SClient.UI.Views
             content.Children.Add(new TextBlock
             {
                 Text = message,
+                Foreground = new SolidColorBrush(Color.FromRgb(174, 198, 218)),
                 FontSize = 14,
                 TextAlignment = TextAlignment.Center,
                 TextWrapping = TextWrapping.Wrap,
                 HorizontalAlignment = HorizontalAlignment.Center
             });
+            if (retry == null)
+            {
+                content.Children.Add(new ProgressBar
+                {
+                    Width = 220,
+                    Height = 5,
+                    IsIndeterminate = true,
+                    Foreground = new SolidColorBrush(Color.FromRgb(59, 130, 246)),
+                    Background = new SolidColorBrush(Color.FromRgb(28, 56, 82)),
+                    BorderThickness = new Thickness(0),
+                    Margin = new Thickness(0, 22, 0, 0)
+                });
+                content.Children.Add(new TextBlock
+                {
+                    Text = "Vui lòng không đóng ứng dụng trong khi đang chuẩn bị.",
+                    Foreground = new SolidColorBrush(Color.FromRgb(132, 161, 187)),
+                    FontSize = 11,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Margin = new Thickness(0, 10, 0, 0)
+                });
+            }
             if (retry != null)
             {
                 var actions = new StackPanel

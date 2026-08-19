@@ -23,6 +23,8 @@ namespace V3SClient.window
         public ShellPage_v3 ShellPage { get { return ShellView; } }
         private readonly ShellViewModel_v3 _viewModel;
         private static bool _gstreamerInitialized;
+        private static readonly object _gstreamerInitializationGate = new object();
+        private static Task<bool> _gstreamerInitializationTask;
         private bool _logoutRequested;
         private const uint SwpNoZOrder = 0x0004;
         private const uint SwpNoActivate = 0x0010;
@@ -119,7 +121,9 @@ namespace V3SClient.window
             Loaded += (s, e) =>
             {
                 UpdateShellCornerClip();
-                Dispatcher.BeginInvoke(new Action(InitializeGStreamer_v3), System.Windows.Threading.DispatcherPriority.ContextIdle);
+                // Native plugin discovery can take several seconds on a new or
+                // slow machine. Keep WPF responsive while the startup screen is shown.
+                _ = EnsureGStreamerInitializedAsync();
             };
             SizeChanged += (s, e) => UpdateShellCornerClip();
             Closed += (s, e) =>
@@ -216,23 +220,46 @@ namespace V3SClient.window
         {
             try
             {
+                await Task.Yield();
+                shell.ShellPage.ShowInitialLoading("Đang tải cấu hình client và danh sách camera...", "Đang vào hệ thống");
                 if (profile == null)
                     profile = GlobalUserInfo.Instance.AuthorizedProfiles?.FirstOrDefault();
                 if (profile == null) throw new InvalidOperationException("KhÃ´ng xÃ¡c Ä‘á»‹nh Ä‘Æ°á»£c profile Ä‘Ã£ chá»n.");
-                await new Services.ClientSessionService().SwitchClientAsync(profile, CancellationToken.None);
+                using (var startupTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(30)))
+                    await new Services.ClientSessionService().SwitchClientAsync(profile, startupTimeout.Token, prepareForStartup: true);
+                shell.ShellPage.ShowInitialLoading("Đang chuẩn bị bộ phát video. Lần đầu trên máy này có thể mất vài giây...", "Đang vào hệ thống");
+                var mediaRuntimeTask = EnsureGStreamerInitializedAsync();
+                if (await Task.WhenAny(mediaRuntimeTask, Task.Delay(TimeSpan.FromSeconds(25))) != mediaRuntimeTask)
+                    throw new TimeoutException("Khởi tạo bộ phát video mất quá lâu.");
+                if (!await mediaRuntimeTask)
+                    throw new InvalidOperationException("Không tìm thấy bộ phát video cần thiết.");
                 shell.RefreshSessionDisplay();
                 shell.CompleteInitialNavigation();
             }
             catch (Exception ex)
             {
                 LoggerManager.LogException(ex, "Unable to load selected client after logout login.");
+                if (shell.IsVisible)
+                    shell.ShowInitialLoadFailure(
+                        "Không thể hoàn tất khởi động. Vui lòng kiểm tra kết nối API hoặc bộ phát video rồi thử lại.",
+                        () => _ = CompleteLoginStartupAsync(shell, profile));
             }
         }
 
-        private static void InitializeGStreamer_v3()
+        public static Task<bool> EnsureGStreamerInitializedAsync()
+        {
+            lock (_gstreamerInitializationGate)
+            {
+                if (_gstreamerInitializationTask == null)
+                    _gstreamerInitializationTask = Task.Run(() => InitializeGStreamer_v3());
+                return _gstreamerInitializationTask;
+            }
+        }
+
+        private static bool InitializeGStreamer_v3()
         {
             if (_gstreamerInitialized)
-                return;
+                return true;
 
             var bundledRuntimeRoot = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "x64");
             var configuredRuntimeRoot = ConfigurationManager.AppSettings["GStreamerRoot_v3"];
@@ -256,7 +283,7 @@ namespace V3SClient.window
             {
                 libs.LoggerManager.LogError(
                     "GStreamer runtime is incomplete: the RTSP plugin (gstrtsp.dll) was not found.", null);
-                return;
+                return false;
             }
             var runtimeBin = Path.Combine(runtimeRoot, "bin");
             var pluginPath = Path.Combine(runtimeRoot, "lib", "gstreamer-1.0");
@@ -288,6 +315,7 @@ namespace V3SClient.window
             libs.LoggerManager.LogInfo("Live View _v3 GStreamer runtime: " + runtimeRoot);
             libs.LoggerManager.LogInfo("GStreamer diagnostics: " + gstreamerLogPath);
             _gstreamerInitialized = true;
+            return true;
         }
         private void ShellWindow_SourceInitialized(object sender, EventArgs e)
         {

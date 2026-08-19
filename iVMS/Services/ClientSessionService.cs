@@ -18,7 +18,7 @@ namespace V3SClient.Services
             return GlobalUserInfo.Instance.AuthorizedProfiles;
         }
 
-        public async Task SwitchClientAsync(ApiManager.ClientProfile profile, CancellationToken cancellationToken)
+        public async Task SwitchClientAsync(ApiManager.ClientProfile profile, CancellationToken cancellationToken, bool prepareForStartup = false)
         {
             if (profile == null) throw new ArgumentNullException(nameof(profile));
             // Camera/group/config responses are scoped to the active client.
@@ -36,15 +36,30 @@ namespace V3SClient.Services
             var commanders = cameras.Where(c => c.Device_Role != null && c.Device_Role != "client_device" && c.CamInfo_Type == "body_cam").ToList();
             info.Commanders = new System.Collections.ObjectModel.ObservableCollection<CamInfo>(commanders);
             info.ActiveCommanderID = commanders.FirstOrDefault()?.CamInfo_CamId;
-            info.BuildTreeViewWithOrganization();
+            // Building the camera tree can be expensive for large profiles.
+            // At application startup no page is bound to these collections yet,
+            // so perform the CPU-heavy preparation off the WPF dispatcher.
+            if (prepareForStartup)
+            {
+                await Task.Run(() =>
+                {
+                    info.BuildTreeViewWithOrganization();
+                    info.CamInfoUpdate = true;
+                    GlobalSystem.Instance.ReloadConfig();
+                }, cancellationToken);
+            }
+            else
+            {
+                info.BuildTreeViewWithOrganization();
 
-            // V3 pages read their camera source from GlobalSystem.CameraGroups,
-            // while the session cache above is stored in GlobalUserInfo. Keep
-            // both stores synchronized after every profile switch; otherwise
-            // a newly created Live/Playback page would still display the
-            // previous client's cameras.
-            info.CamInfoUpdate = true;
-            GlobalSystem.Instance.ReloadConfig();
+                // V3 pages read their camera source from GlobalSystem.CameraGroups,
+                // while the session cache above is stored in GlobalUserInfo. Keep
+                // both stores synchronized after every profile switch; otherwise
+                // a newly created Live/Playback page would still display the
+                // previous client's cameras.
+                info.CamInfoUpdate = true;
+                GlobalSystem.Instance.ReloadConfig();
+            }
         }
 
         public void ClearSession()
