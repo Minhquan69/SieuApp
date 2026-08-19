@@ -2,6 +2,9 @@ using System;
 using System.Configuration;
 using System.IO;
 using System.ComponentModel;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
@@ -198,13 +201,32 @@ namespace V3SClient.window
                 {
                     var loginBounds = login.WindowBoundsForNextShell;
                     var loginWasVirtualDesktop = login.IsVirtualDesktopMode;
+                    var selectedProfile = login.SelectedProfile;
                     var next = new ShellWindow_v3();
                     next.ApplyStartupWindowPlacement(loginBounds, loginWasVirtualDesktop);
                     Application.Current.MainWindow = next;
                     next.Show();
+                    _ = CompleteLoginStartupAsync(next, selectedProfile);
                 }
                 else Application.Current.Shutdown();
             }), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+        }
+
+        private async Task CompleteLoginStartupAsync(ShellWindow_v3 shell, ApiManager.ClientProfile profile)
+        {
+            try
+            {
+                if (profile == null)
+                    profile = GlobalUserInfo.Instance.AuthorizedProfiles?.FirstOrDefault();
+                if (profile == null) throw new InvalidOperationException("KhÃ´ng xÃ¡c Ä‘á»‹nh Ä‘Æ°á»£c profile Ä‘Ã£ chá»n.");
+                await new Services.ClientSessionService().SwitchClientAsync(profile, CancellationToken.None);
+                shell.RefreshSessionDisplay();
+                shell.CompleteInitialNavigation();
+            }
+            catch (Exception ex)
+            {
+                LoggerManager.LogException(ex, "Unable to load selected client after logout login.");
+            }
         }
 
         private static void InitializeGStreamer_v3()

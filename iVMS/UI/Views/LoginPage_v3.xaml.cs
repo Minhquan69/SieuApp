@@ -5,10 +5,14 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
+using System.Windows.Media.Imaging;
 using System.ComponentModel;
+using System.Collections.Generic;
 using System.Windows.Threading;
 using System.Windows.Controls.Primitives;
 using System.Windows.Shapes;
+using System.IO;
+using IOPath = System.IO.Path;
 using V3SClient.viewModels;
 
 namespace V3SClient.UI.Views
@@ -18,8 +22,14 @@ namespace V3SClient.UI.Views
         private TextBox _visiblePassword;
         private Button _passwordToggle;
         private bool _isPasswordVisible;
+        private bool _isLightLoginTheme;
+        private bool _profileThemeHooked;
+        private Border _visiblePasswordChrome;
+        private readonly Dictionary<DependencyObject, Brush> _originalForegrounds = new Dictionary<DependencyObject, Brush>();
+        private readonly Dictionary<DependencyObject, Brush> _originalBackgrounds = new Dictionary<DependencyObject, Brush>();
         public LoginPage_v3()
         {
+            _isLightLoginTheme = LoadLoginThemePreference();
             InitializeComponent();
             Loaded += LoginPage_v3_Loaded;
             SizeChanged += (s, e) => { ScheduleProfileLayout(); UpdateResponsiveLoginLayout(); };
@@ -33,6 +43,7 @@ namespace V3SClient.UI.Views
             UpdatePlatformCaption(this);
             UpdateApplicationMarketingText(this);
             UpdateLoginTitle(this);
+            ApplyLoginThemeAssets();
             var cachedLogin = DataContext as LoginViewModel_v3;
             if (cachedLogin != null && string.IsNullOrEmpty(PasswordInput.Password) && !string.IsNullOrEmpty(cachedLogin.Password))
                 PasswordInput.Password = cachedLogin.Password;
@@ -54,8 +65,13 @@ namespace V3SClient.UI.Views
             if (parent == null || _visiblePassword != null) return;
             var index = parent.Children.IndexOf(PasswordInput);
             var host = new Grid { Height = 56, Margin = PasswordInput.Margin };
+            _visiblePasswordChrome = new Border { CornerRadius = new CornerRadius(9), Background = PasswordInput.Background, BorderBrush = PasswordInput.BorderBrush, BorderThickness = PasswordInput.BorderThickness };
+            host.Children.Add(_visiblePasswordChrome);
             PasswordInput.Margin = new Thickness(0); PasswordInput.Padding = new Thickness(0); PasswordInput.VerticalContentAlignment = VerticalAlignment.Center;
-            _visiblePassword = new TextBox { Visibility = Visibility.Collapsed, Height = 56, Padding = new Thickness(48, 0, 42, 0), VerticalContentAlignment = VerticalAlignment.Center, FontSize = 20, Background = PasswordInput.Background, BorderBrush = PasswordInput.BorderBrush, BorderThickness = PasswordInput.BorderThickness, Foreground = PasswordInput.Foreground };
+            _visiblePassword = new TextBox { Visibility = Visibility.Collapsed, Height = 56, Margin = new Thickness(48, 0, 42, 0), Padding = new Thickness(0), VerticalContentAlignment = VerticalAlignment.Center, FontSize = 20, Background = PasswordInput.Background, BorderBrush = PasswordInput.BorderBrush, BorderThickness = new Thickness(0), Foreground = PasswordInput.Foreground };
+            _visiblePassword.Background = Brushes.Transparent;
+            _visiblePassword.BorderBrush = Brushes.Transparent;
+            _visiblePassword.BorderThickness = new Thickness(0);
             var passwordHint = new TextBlock { Text = "Nhập mật khẩu", Foreground = new SolidColorBrush(Color.FromRgb(130, 149, 170)), FontSize = 18, FontStyle = FontStyles.Italic, Margin = new Thickness(48, 0, 42, 0), VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false };
             passwordHint.Visibility = string.IsNullOrEmpty(PasswordInput.Password) ? Visibility.Visible : Visibility.Collapsed;
             PasswordInput.PasswordChanged += (s, a) => passwordHint.Visibility = string.IsNullOrEmpty(PasswordInput.Password) && !_isPasswordVisible ? Visibility.Visible : Visibility.Collapsed;
@@ -78,6 +94,10 @@ namespace V3SClient.UI.Views
             remember.Checked += (s, a) => { if (DataContext is LoginViewModel_v3 vm) vm.IsRememberMe = true; };
             remember.Unchecked += (s, a) => { if (DataContext is LoginViewModel_v3 vm) vm.IsRememberMe = false; };
             parent.Children.Insert(index + 1, remember);
+            ApplyLoginThemeColors(LoginCard, _isLightLoginTheme);
+            ApplyVisiblePasswordTheme();
+            ApplyUsernameTheme();
+            ApplyProfileTheme(LoginCard);
         }
 
         private void UpdateResponsiveLoginLayout()
@@ -96,6 +116,218 @@ namespace V3SClient.UI.Views
         {
             AnimateGlow(LoginCard, 0.36, 0.78, 2.2);
             AnimateGlow(LoginSubmitButton, 0.48, 0.9, 1.35);
+        }
+
+        private void LoginLogo_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            _isLightLoginTheme = !_isLightLoginTheme;
+            SaveLoginThemePreference(_isLightLoginTheme);
+            LoginBackgroundImage.Source = new BitmapImage(new Uri(
+                _isLightLoginTheme
+                    ? "pack://application:,,,/Assets/Images/login_background_light.png"
+                    : "pack://application:,,,/Assets/Images/ivms-login-background-3d-1920x1080.png",
+                UriKind.Absolute));
+            LoginLogo.Source = new BitmapImage(new Uri(
+                _isLightLoginTheme
+                    ? "pack://application:,,,/images/logo/ivista_logo.png"
+                    : "pack://application:,,,/images/logo/logo_1.png",
+                UriKind.Absolute));
+            LoginCard.BorderBrush = new SolidColorBrush(_isLightLoginTheme
+                ? Color.FromRgb(255, 159, 67)
+                : Color.FromArgb(185, 80, 216, 255));
+            var cardGlow = LoginCard.Effect as DropShadowEffect;
+            if (cardGlow != null)
+            {
+                if (cardGlow.IsFrozen) cardGlow = cardGlow.Clone();
+                cardGlow.Color = _isLightLoginTheme
+                    ? Color.FromRgb(255, 159, 67)
+                    : Color.FromRgb(18, 156, 255);
+                LoginCard.Effect = cardGlow;
+            }
+            ApplyLoginThemeColors(LoginCard, _isLightLoginTheme);
+            ApplyVisiblePasswordTheme();
+            ApplyUsernameTheme();
+            ApplyProfileTheme(LoginCard);
+            e.Handled = true;
+        }
+
+        private void ApplyLoginThemeAssets()
+        {
+            LoginBackgroundImage.Source = new BitmapImage(new Uri(
+                _isLightLoginTheme
+                    ? "pack://application:,,,/Assets/Images/login_background_light.png"
+                    : "pack://application:,,,/Assets/Images/ivms-login-background-3d-1920x1080.png",
+                UriKind.Absolute));
+            LoginLogo.Source = new BitmapImage(new Uri(
+                _isLightLoginTheme
+                    ? "pack://application:,,,/images/logo/ivista_logo.png"
+                    : "pack://application:,,,/images/logo/logo_1.png",
+                UriKind.Absolute));
+            LoginCard.BorderBrush = new SolidColorBrush(_isLightLoginTheme
+                ? Color.FromRgb(255, 159, 67)
+                : Color.FromArgb(185, 80, 216, 255));
+            if (LoginCard.Effect is DropShadowEffect glow)
+            {
+                if (glow.IsFrozen) glow = glow.Clone();
+                glow.Color = _isLightLoginTheme ? Color.FromRgb(255, 159, 67) : Color.FromRgb(18, 156, 255);
+                LoginCard.Effect = glow;
+            }
+        }
+
+        private static string GetLoginThemePreferencePath()
+        {
+            var directory = IOPath.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "iVista VMS");
+            Directory.CreateDirectory(directory);
+            return IOPath.Combine(directory, "login-theme.tmp");
+        }
+        private static bool LoadLoginThemePreference()
+        {
+            try { return File.Exists(GetLoginThemePreferencePath()) && File.ReadAllText(GetLoginThemePreferencePath()) == "light"; }
+            catch { return false; }
+        }
+        private static void SaveLoginThemePreference(bool light)
+        {
+            try { File.WriteAllText(GetLoginThemePreferencePath(), light ? "light" : "dark"); }
+            catch { }
+        }
+
+        private void ApplyProfileTheme(DependencyObject root)
+        {
+            if (root == null) return;
+            if (root is ComboBox combo)
+            {
+                combo.Background = _isLightLoginTheme ? Brushes.White : new SolidColorBrush(Color.FromArgb(179, 17, 38, 61));
+                combo.BorderBrush = _isLightLoginTheme ? new SolidColorBrush(Color.FromRgb(216, 222, 232)) : new SolidColorBrush(Color.FromRgb(73, 110, 151));
+                combo.Foreground = _isLightLoginTheme ? Brushes.Black : new SolidColorBrush(Color.FromRgb(234, 242, 255));
+                foreach (var item in combo.Items)
+                {
+                    if (combo.ItemContainerGenerator.ContainerFromItem(item) is ComboBoxItem comboItem)
+                    {
+                        comboItem.Foreground = item == combo.SelectedItem
+                            ? Brushes.White
+                            : (_isLightLoginTheme ? Brushes.Black : new SolidColorBrush(Color.FromRgb(234, 242, 255)));
+                        comboItem.Background = _isLightLoginTheme ? Brushes.Transparent : Brushes.Transparent;
+                    }
+                }
+                if (!_profileThemeHooked)
+                {
+                    _profileThemeHooked = true;
+                    combo.DropDownOpened += (s, e) => Dispatcher.BeginInvoke(new Action(() => ApplyProfileTheme(combo)), DispatcherPriority.Loaded);
+                }
+                if (combo.Template.FindName("PART_Popup", combo) is Popup popup && popup.Child is Border popupBorder)
+                {
+                    popupBorder.Background = _isLightLoginTheme ? Brushes.White : new SolidColorBrush(Color.FromRgb(15, 38, 61));
+                    popupBorder.BorderBrush = _isLightLoginTheme ? new SolidColorBrush(Color.FromRgb(216, 222, 232)) : new SolidColorBrush(Color.FromRgb(79, 127, 168));
+                }
+            }
+            if (root is Border comboBorder && FindVisualAncestor<ComboBox>(comboBorder) != null)
+            {
+                comboBorder.Background = _isLightLoginTheme ? Brushes.White : new SolidColorBrush(Color.FromArgb(179, 17, 38, 61));
+                comboBorder.BorderBrush = _isLightLoginTheme ? new SolidColorBrush(Color.FromRgb(216, 222, 232)) : new SolidColorBrush(Color.FromRgb(73, 110, 151));
+            }
+            if (root is Button button && (button.Content as string)?.Contains("QUAY") == true)
+            {
+                button.Background = _isLightLoginTheme ? Brushes.White : new SolidColorBrush(Color.FromArgb(38, 255, 255, 255));
+                button.BorderBrush = _isLightLoginTheme ? new SolidColorBrush(Color.FromRgb(216, 222, 232)) : new SolidColorBrush(Color.FromArgb(100, 127, 164, 194));
+                button.Foreground = _isLightLoginTheme ? Brushes.Black : new SolidColorBrush(Color.FromRgb(234, 242, 255));
+            }
+            var count = VisualTreeHelper.GetChildrenCount(root);
+            for (var i = 0; i < count; i++) ApplyProfileTheme(VisualTreeHelper.GetChild(root, i));
+        }
+
+        private static T FindVisualAncestor<T>(DependencyObject element) where T : DependencyObject
+        {
+            var parent = VisualTreeHelper.GetParent(element);
+            while (parent != null)
+            {
+                if (parent is T match) return match;
+                parent = VisualTreeHelper.GetParent(parent);
+            }
+            return null;
+        }
+
+        private void ApplyUsernameTheme()
+        {
+            if (UsernameInputFrame == null) return;
+            UsernameInputFrame.Background = _isLightLoginTheme
+                ? Brushes.White
+                : new SolidColorBrush(Color.FromArgb(167, 6, 19, 36));
+            UsernameInputFrame.BorderBrush = _isLightLoginTheme
+                ? new SolidColorBrush(Color.FromRgb(216, 222, 232))
+                : new SolidColorBrush(Color.FromArgb(74, 82, 102, 125));
+        }
+
+        private void ApplyVisiblePasswordTheme()
+        {
+            if (_visiblePassword == null) return;
+            var passwordBackground = _isLightLoginTheme
+                ? Brushes.White
+                : new SolidColorBrush(Color.FromArgb(167, 6, 19, 36));
+            var passwordBorder = _isLightLoginTheme
+                ? new SolidColorBrush(Color.FromRgb(216, 222, 232))
+                : new SolidColorBrush(Color.FromArgb(74, 82, 102, 125));
+            PasswordInput.Background = passwordBackground;
+            PasswordInput.BorderBrush = passwordBorder;
+            PasswordInput.Foreground = _isLightLoginTheme ? Brushes.Black : new SolidColorBrush(Color.FromRgb(217, 229, 241));
+            _visiblePassword.Background = Brushes.Transparent;
+            _visiblePassword.BorderBrush = Brushes.Transparent;
+            _visiblePassword.Foreground = _isLightLoginTheme ? Brushes.Black : PasswordInput.Foreground;
+            if (_visiblePasswordChrome != null)
+            {
+                _visiblePasswordChrome.Background = passwordBackground;
+                _visiblePasswordChrome.BorderBrush = passwordBorder;
+            }
+        }
+
+        private void ApplyLoginThemeColors(DependencyObject root, bool light)
+        {
+            if (root == null) return;
+            // These controls have their own theme pass. Excluding them here prevents
+            // the recursive color pass from restoring a stale brush on later toggles.
+            if (root == PasswordInput || root == _visiblePassword || root == _visiblePasswordChrome)
+                return;
+            if (root == LoginCard)
+            {
+                if (!_originalBackgrounds.ContainsKey(root)) _originalBackgrounds[root] = LoginCard.Background;
+                LoginCard.Background = light ? new SolidColorBrush(Color.FromRgb(247, 249, 252)) : _originalBackgrounds[root];
+            }
+            if (root is TextBlock text && !IsInsideButton(text))
+            {
+                if (!_originalForegrounds.ContainsKey(text)) _originalForegrounds[text] = text.Foreground;
+                text.Foreground = text.Text == "\uE72E"
+                    ? new SolidColorBrush(Color.FromRgb(96, 202, 255))
+                    : (light ? Brushes.Black : _originalForegrounds[text]);
+            }
+            if (root is TextBox textBox)
+            {
+                if (!_originalForegrounds.ContainsKey(textBox)) _originalForegrounds[textBox] = textBox.Foreground;
+                textBox.Foreground = light ? Brushes.Black : _originalForegrounds[textBox];
+            }
+            if (root is PasswordBox passwordBox)
+            {
+                if (!_originalForegrounds.ContainsKey(passwordBox)) _originalForegrounds[passwordBox] = passwordBox.Foreground;
+                if (!_originalBackgrounds.ContainsKey(passwordBox)) _originalBackgrounds[passwordBox] = passwordBox.Background;
+                passwordBox.Foreground = light ? Brushes.Black : _originalForegrounds[passwordBox];
+                passwordBox.Background = light ? Brushes.White : _originalBackgrounds[passwordBox];
+            }
+            if (root is Border border && border != LoginCard && border.Background is SolidColorBrush background && background.Color.B < 90)
+            {
+                if (!_originalBackgrounds.ContainsKey(border)) _originalBackgrounds[border] = border.Background;
+                border.Background = light ? Brushes.White : _originalBackgrounds[border];
+            }
+            var count = VisualTreeHelper.GetChildrenCount(root);
+            for (var i = 0; i < count; i++) ApplyLoginThemeColors(VisualTreeHelper.GetChild(root, i), light);
+        }
+
+        private static bool IsInsideButton(DependencyObject element)
+        {
+            var parent = VisualTreeHelper.GetParent(element);
+            while (parent != null)
+            {
+                if (parent is Button) return true;
+                parent = VisualTreeHelper.GetParent(parent);
+            }
+            return false;
         }
 
         private static void AnimateGlow(UIElement element, double from, double to, double durationSeconds)
@@ -192,7 +424,17 @@ namespace V3SClient.UI.Views
         }
         private void ViewModel_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == "IsProfileSelectionVisible") ScheduleProfileLayout();
+            if (e.PropertyName == "IsProfileSelectionVisible")
+            {
+                ScheduleProfileLayout();
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    ApplyLoginThemeColors(LoginCard, _isLightLoginTheme);
+                    ApplyVisiblePasswordTheme();
+                    ApplyUsernameTheme();
+                    ApplyProfileTheme(LoginCard);
+                }), DispatcherPriority.Loaded);
+            }
             if (e.PropertyName == "IsBusy") UpdateLoginBusyVisuals();
             if (e.PropertyName == "HasError" && DataContext is LoginViewModel_v3 viewModel && viewModel.HasError)
                 PlayLoginErrorAnimation();
@@ -211,14 +453,14 @@ namespace V3SClient.UI.Views
         {
             Dispatcher.BeginInvoke(new Action(() => StyleProfileHeader(this)), DispatcherPriority.Loaded);
         }
-        private static void StyleProfileHeader(DependencyObject root)
+        private void StyleProfileHeader(DependencyObject root)
         {
             var count = VisualTreeHelper.GetChildrenCount(root);
             for (var i = 0; i < count; i++)
             {
                 var child = VisualTreeHelper.GetChild(root, i);
                 var profilePanel = child as Border;
-                if (profilePanel != null && (profilePanel.Width == 720 || profilePanel.Width == 480))
+                if (profilePanel != null && !ReferenceEquals(profilePanel, LoginCard) && (profilePanel.Width == 720 || profilePanel.Width == 480))
                 {
                     Grid.SetColumn(profilePanel, 1);
                     Grid.SetColumnSpan(profilePanel, 1);
@@ -284,6 +526,7 @@ namespace V3SClient.UI.Views
             _isPasswordVisible = !_isPasswordVisible;
             if (_isPasswordVisible) { _visiblePassword.Text = PasswordInput.Password; PasswordInput.Visibility = Visibility.Collapsed; _visiblePassword.Visibility = Visibility.Visible; _passwordToggle.Content = CreateEyeIcon(true); _passwordToggle.ToolTip = "Ẩn mật khẩu"; }
             else { PasswordInput.Password = _visiblePassword.Text; _visiblePassword.Visibility = Visibility.Collapsed; PasswordInput.Visibility = Visibility.Visible; _passwordToggle.Content = CreateEyeIcon(false); _passwordToggle.ToolTip = "Hiển thị mật khẩu"; }
+            ApplyVisiblePasswordTheme();
         }
         private static UIElement CreateEyeIcon(bool crossedOut)
         {

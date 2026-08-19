@@ -61,7 +61,7 @@
             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
 
             <StackPanel x:Name="MarketingPanel" VerticalAlignment="Top" MaxWidth="680" Margin="18,10,78,0" Opacity="0" RenderTransformOrigin="0.5,0.5"><StackPanel.Resources><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/></Style></StackPanel.Resources><StackPanel.RenderTransform><TranslateTransform x:Name="MarketingTranslate" Y="14"/></StackPanel.RenderTransform>
-                <Image Source="/images/logo/logo_1.png" Width="246" Height="82" Stretch="Uniform" HorizontalAlignment="Left"/>
+                <Image x:Name="LoginLogo" Source="/images/logo/logo_1.png" Width="246" Height="82" Stretch="Uniform" HorizontalAlignment="Left" Cursor="Hand" MouseLeftButtonUp="LoginLogo_MouseLeftButtonUp" ToolTip="Đổi giao diện đăng nhập"/>
                 <TextBlock Text="iVMS" Foreground="White" FontSize="42" FontWeight="ExtraBold" Margin="0,8,0,0"/>
                 <TextBlock Text="NỀN TẢNG QUẢN LÝ VIDEO THÔNG MINH" Foreground="White" FontSize="20" FontWeight="ExtraBold" Margin="0,20,0,0"/>
                 <TextBlock FontSize="18" FontWeight="SemiBold" Margin="0,10,0,0" Foreground="#E8F0FA">
@@ -69,7 +69,7 @@
                 </TextBlock>
             </StackPanel>
 
-            <Border x:Name="LoginCard" Grid.Column="1" MinWidth="440" MaxWidth="650" MinHeight="770" MaxHeight="920" Width="Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center" Margin="30,20,8,20" Style="{StaticResource LoginCardChrome}" CornerRadius="28" Padding="56,56" Opacity="0" RenderTransformOrigin="0.5,0.5"><Border.Effect><DropShadowEffect Color="#129CFF" BlurRadius="24" ShadowDepth="0" Opacity="0.42"/></Border.Effect><Border.RenderTransform><TranslateTransform x:Name="LoginCardTranslate" X="26"/></Border.RenderTransform>
+            <Border x:Name="LoginCard" Grid.Column="1" MinWidth="440" MaxWidth="650" MinHeight="640" MaxHeight="780" Height="780" Width="Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center" Margin="30,8,8,8" Style="{StaticResource LoginCardChrome}" CornerRadius="28" Padding="56,36" Opacity="0" RenderTransformOrigin="0.5,0.5"><Border.Effect><DropShadowEffect Color="#129CFF" BlurRadius="24" ShadowDepth="0" Opacity="0.42"/></Border.Effect><Border.RenderTransform><TranslateTransform x:Name="LoginCardTranslate" X="26"/></Border.RenderTransform>
                 <StackPanel>
                     <Border x:Name="SecurityShield" Width="62" Height="62" CornerRadius="31" Background="#2B0E3C70" HorizontalAlignment="Center"><Icon:PackIconMaterial Kind="ShieldCheckOutline" Width="35" Height="35" Foreground="#53CFFF" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
                     <TextBlock Text="ĐĂNG NHẬP HỆ THỐNG" Foreground="#FFFFFF" FontSize="40" FontWeight="ExtraBold" HorizontalAlignment="Center" Margin="0,16,0,5"/>
@@ -78,7 +78,7 @@
                     <StackPanel><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Visible"/><Style.Triggers><DataTrigger Binding="{Binding IsProfileSelectionVisible}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
                         <TextBlock Text="Tên đăng nhập" Style="{StaticResource LoginLabel}" FontSize="17"/>
                         <Grid Height="56" Margin="0,0,0,17">
-                            <Border Style="{StaticResource LoginInputFrame}"/>
+                            <Border x:Name="UsernameInputFrame" Style="{StaticResource LoginInputFrame}"/>
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="48"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                 <Icon:PackIconMaterial Kind="AccountOutline" Width="21" Height="21" Foreground="#60CAFF" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False"/>

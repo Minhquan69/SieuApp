@@ -1208,6 +1208,7 @@
     <Resource Include="images\logo\*.*" />
     <Resource Include="images\login\login-background.png" />
     <Resource Include="Assets\Images\ivms-login-background-3d-1920x1080.png" />
+    <Resource Include="Assets\Images\login_background_light.png" />
     <Resource Include="Assets\Images\ai-monitoring-logo.png" />
     <EmbeddedResource Include="audios\abnormal_warning.wav" />
     <Resource Include="images\layout\layout_custom.png" />

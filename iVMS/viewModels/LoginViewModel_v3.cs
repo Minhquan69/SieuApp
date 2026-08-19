@@ -42,7 +42,7 @@ namespace V3SClient.viewModels
         public string StatusMessage { get { return _statusMessage; } private set { _statusMessage = value; OnPropertyChanged(); } }
         public bool IsBusy { get { return _isBusy; } private set { _isBusy = value; OnPropertyChanged(); LoginCommand.RaiseCanExecuteChanged(); ContinueCommand.RaiseCanExecuteChanged(); BackToLoginCommand.RaiseCanExecuteChanged(); } }
         public bool IsProfileSelectionVisible { get { return _isProfileSelectionVisible; } private set { _isProfileSelectionVisible = value; OnPropertyChanged(); LoginCommand.RaiseCanExecuteChanged(); ContinueCommand.RaiseCanExecuteChanged(); BackToLoginCommand.RaiseCanExecuteChanged(); } }
-        public ApiManager.ClientProfile SelectedProfile { get { return _selectedProfile; } set { _selectedProfile = value; OnPropertyChanged(); ContinueCommand.RaiseCanExecuteChanged(); } }
+        public ApiManager.ClientProfile SelectedProfile { get { return _selectedProfile; } set { _selectedProfile = value != null && value == (Profiles.Count > 0 ? Profiles[0] : null) ? FindRememberedProfile() ?? value : value; if (_selectedProfile != null) PersistSelectedProfile(); OnPropertyChanged(); ContinueCommand.RaiseCanExecuteChanged(); } }
 
         private async Task LoginAsync(object parameter)
         {
@@ -69,6 +69,7 @@ namespace V3SClient.viewModels
         private async Task ContinueAsync(object parameter)
         {
             // Defer the camera inventory load until the shell is visible.
+            PersistSelectedProfile();
             AuthenticationCompleted?.Invoke(this, EventArgs.Empty);
             await Task.CompletedTask;
             return;
@@ -135,6 +136,40 @@ namespace V3SClient.viewModels
                 "iVista VMS");
             Directory.CreateDirectory(directory);
             return Path.Combine(directory, "login.tmp");
+        }
+        private static string GetSelectedProfileCachePath()
+        {
+            var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "iVista VMS");
+            Directory.CreateDirectory(directory);
+            return Path.Combine(directory, "selected-profile.tmp");
+        }
+        private ApiManager.ClientProfile FindRememberedProfile()
+        {
+            try
+            {
+                var path = GetSelectedProfileCachePath();
+                if (!File.Exists(path)) return null;
+                var values = File.ReadAllText(path).Split('|');
+                Guid id;
+                if (values.Length > 0 && Guid.TryParse(values[0], out id))
+                    foreach (var profile in Profiles) if (profile.Id == id) return profile;
+                if (values.Length > 1)
+                {
+                    var name = Encoding.UTF8.GetString(Convert.FromBase64String(values[1]));
+                    foreach (var profile in Profiles) if (string.Equals(profile.Name, name, StringComparison.OrdinalIgnoreCase)) return profile;
+                }
+            }
+            catch { }
+            return null;
+        }
+        private void PersistSelectedProfile()
+        {
+            try
+            {
+                if (SelectedProfile != null)
+                    File.WriteAllText(GetSelectedProfileCachePath(), SelectedProfile.Id.ToString("D") + "|" + Convert.ToBase64String(Encoding.UTF8.GetBytes(SelectedProfile.Name ?? string.Empty)));
+            }
+            catch { }
         }
         public void Dispose() { _lifetime.Cancel(); _lifetime.Dispose(); }
     }
