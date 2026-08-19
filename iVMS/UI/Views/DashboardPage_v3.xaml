@@ -1581,7 +1581,7 @@
               </Grid>
               <StackPanel Grid.Row="2" Margin="14,0,14,10">
                 <TextBlock x:Name="AttentionCameraEmptyState" Text="Chưa có dữ liệu camera" Foreground="#FFB7CDE0" FontSize="11" HorizontalAlignment="Center" Margin="0,16" Visibility="Collapsed"/>
-                <Border x:Name="AttentionCamera1Row" Background="#FF0B2032" BorderBrush="#FF1D4562" BorderThickness="1" CornerRadius="7" Padding="11,8" Margin="0,3">
+                <Border x:Name="AttentionCamera1Row" Background="Transparent" BorderBrush="#FF1D4562" BorderThickness="0,0,0,1" Padding="11,9" Margin="0">
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="0.75*"/><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="1.35*"/></Grid.ColumnDefinitions>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -1595,7 +1595,7 @@
                     </Border>
                   </Grid>
                 </Border>
-                <Border x:Name="AttentionCamera2Row" Background="#FF0D2639" BorderBrush="#FF1D4562" BorderThickness="1" CornerRadius="7" Padding="11,8" Margin="0,3">
+                <Border x:Name="AttentionCamera2Row" Background="Transparent" BorderBrush="#FF1D4562" BorderThickness="0,0,0,1" Padding="11,9" Margin="0">
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="0.75*"/><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="1.35*"/></Grid.ColumnDefinitions>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -1609,7 +1609,7 @@
                     </Border>
                   </Grid>
                 </Border>
-                <Border x:Name="AttentionCamera3Row" Background="#FF0B2032" BorderBrush="#FF1D4562" BorderThickness="1" CornerRadius="7" Padding="11,8" Margin="0,3">
+                <Border x:Name="AttentionCamera3Row" Background="Transparent" BorderBrush="#FF1D4562" BorderThickness="0,0,0,1" Padding="11,9" Margin="0">
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="0.75*"/><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="1.35*"/></Grid.ColumnDefinitions>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -1623,7 +1623,7 @@
                     </Border>
                   </Grid>
                 </Border>
-                <Border x:Name="AttentionCamera4Row" Background="#FF0D2639" BorderBrush="#FF1D4562" BorderThickness="1" CornerRadius="7" Padding="11,8" Margin="0,3">
+                <Border x:Name="AttentionCamera4Row" Background="Transparent" BorderBrush="#FF1D4562" BorderThickness="0,0,0,1" Padding="11,9" Margin="0">
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="0.75*"/><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="1.35*"/></Grid.ColumnDefinitions>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -1637,7 +1637,7 @@
                     </Border>
                   </Grid>
                 </Border>
-                <Border x:Name="AttentionCamera5Row" Background="#FF0B2032" BorderBrush="#FF1D4562" BorderThickness="1" CornerRadius="7" Padding="11,8" Margin="0,3">
+                <Border x:Name="AttentionCamera5Row" Background="Transparent" BorderBrush="#FF1D4562" BorderThickness="0,0,0,1" Padding="11,9" Margin="0">
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="0.75*"/><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="1.35*"/></Grid.ColumnDefinitions>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -1651,7 +1651,7 @@
                     </Border>
                   </Grid>
                 </Border>
-                <Border x:Name="AttentionCamera6Row" Background="#FF0D2639" BorderBrush="#FF1D4562" BorderThickness="1" CornerRadius="7" Padding="11,8" Margin="0,3">
+                <Border x:Name="AttentionCamera6Row" Background="Transparent" BorderBrush="#FF1D4562" BorderThickness="0,0,0,1" Padding="11,9" Margin="0">
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="0.75*"/><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="1.35*"/></Grid.ColumnDefinitions>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Ellipse x:Name="AttentionCamera6Indicator" Width="7" Height="7" Fill="#FFFF5E77" Margin="0,0,9,0" VerticalAlignment="Center"/><TextBlock x:Name="AttentionCamera6IdCell" Foreground="#FFFF8FA1" FontFamily="Consolas" FontSize="11" FontWeight="SemiBold"/></StackPanel>
@@ -1660,7 +1660,7 @@
                     <Border x:Name="AttentionCamera6StatusBadge" Grid.Column="3" HorizontalAlignment="Left" BorderBrush="#FFFF8B9B" BorderThickness="1" CornerRadius="3" Padding="5,2"><TextBlock x:Name="AttentionCamera6StatusCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11" FontWeight="SemiBold"/></Border>
                   </Grid>
                 </Border>
-                <Border x:Name="AttentionCamera7Row" Background="#FF0B2032" BorderBrush="#FF1D4562" BorderThickness="1" CornerRadius="7" Padding="11,8" Margin="0,3">
+                <Border x:Name="AttentionCamera7Row" Background="Transparent" BorderBrush="#FF1D4562" BorderThickness="0,0,0,1" Padding="11,9" Margin="0">
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="0.75*"/><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="1.35*"/></Grid.ColumnDefinitions>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Ellipse x:Name="AttentionCamera7Indicator" Width="7" Height="7" Fill="#FFFF5E77" Margin="0,0,9,0" VerticalAlignment="Center"/><TextBlock x:Name="AttentionCamera7IdCell" Foreground="#FFFF8FA1" FontFamily="Consolas" FontSize="11" FontWeight="SemiBold"/></StackPanel>
@@ -1669,7 +1669,7 @@
                     <Border x:Name="AttentionCamera7StatusBadge" Grid.Column="3" HorizontalAlignment="Left" BorderBrush="#FFFF8B9B" BorderThickness="1" CornerRadius="3" Padding="5,2"><TextBlock x:Name="AttentionCamera7StatusCell" Foreground="#FFFFB0BD" FontFamily="Consolas" FontSize="11" FontWeight="SemiBold"/></Border>
                   </Grid>
                 </Border>
-                <Border x:Name="AttentionCamera8Row" Background="#FF0D2639" BorderBrush="#FF1D4562" BorderThickness="1" CornerRadius="7" Padding="11,8" Margin="0,3">
+                <Border x:Name="AttentionCamera8Row" Background="Transparent" BorderBrush="#FF1D4562" BorderThickness="0,0,0,1" Padding="11,9" Margin="0">
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="0.75*"/><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="1.35*"/></Grid.ColumnDefinitions>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Ellipse x:Name="AttentionCamera8Indicator" Width="7" Height="7" Fill="#FFFF5E77" Margin="0,0,9,0" VerticalAlignment="Center"/><TextBlock x:Name="AttentionCamera8IdCell" Foreground="#FFFF8FA1" FontFamily="Consolas" FontSize="11" FontWeight="SemiBold"/></StackPanel>

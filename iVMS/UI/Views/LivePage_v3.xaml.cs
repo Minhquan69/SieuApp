@@ -2441,8 +2441,10 @@ namespace V3SClient.UI.Views
             AiFeedCollapseIcon.Kind = MahApps.Metro.IconPacks.PackIconMaterialKind.Brain;
             AiFeedCollapseButton.ToolTip = _aiFeedCollapsed ? "Mở AI Feed" : "Thu gọn AI Feed";
             var controlsVisibility = _aiFeedCollapsed ? Visibility.Collapsed : Visibility.Visible;
-            AiFeedRefreshText.Visibility = controlsVisibility;
-            AiFeedRefreshUnitText.Visibility = controlsVisibility;
+            // Keep the automatic refresh interval and timer logic, but do not show
+            // the interval controls in the live AI Feed header.
+            AiFeedRefreshText.Visibility = Visibility.Collapsed;
+            AiFeedRefreshUnitText.Visibility = Visibility.Collapsed;
             AiFeedDetailButton.Visibility = controlsVisibility;
             AiFeedPauseButton.Visibility = controlsVisibility;
             AiFeedRefreshButton.Visibility = controlsVisibility;

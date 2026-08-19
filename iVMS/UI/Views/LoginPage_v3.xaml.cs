@@ -97,6 +97,7 @@ namespace V3SClient.UI.Views
             ApplyLoginThemeColors(LoginCard, _isLightLoginTheme);
             ApplyVisiblePasswordTheme();
             ApplyUsernameTheme();
+            ApplyLoginErrorTheme();
             ApplyProfileTheme(LoginCard);
         }
 
@@ -172,6 +173,23 @@ namespace V3SClient.UI.Views
                 glow.Color = _isLightLoginTheme ? Color.FromRgb(255, 159, 67) : Color.FromRgb(18, 156, 255);
                 LoginCard.Effect = glow;
             }
+            ApplyLoginErrorTheme();
+        }
+
+        private void ApplyLoginErrorTheme()
+        {
+            if (LoginErrorBanner == null || LoginErrorText == null) return;
+
+            LoginErrorBanner.Background = new SolidColorBrush(_isLightLoginTheme
+                ? Color.FromRgb(255, 248, 245)
+                : Color.FromArgb(77, 91, 20, 32));
+            LoginErrorBanner.BorderBrush = new SolidColorBrush(_isLightLoginTheme
+                ? Color.FromRgb(205, 166, 157)
+                : Color.FromArgb(217, 91, 36, 48));
+            LoginErrorText.Foreground = new SolidColorBrush(_isLightLoginTheme
+                ? Color.FromRgb(91, 67, 62)
+                : Color.FromRgb(229, 232, 232));
+            LoginErrorText.FontSize = _isLightLoginTheme ? 14 : 18;
         }
 
         private static string GetLoginThemePreferencePath()

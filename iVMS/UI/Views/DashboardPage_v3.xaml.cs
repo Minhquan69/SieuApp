@@ -514,13 +514,7 @@ namespace V3SClient.UI.Views
                 statusBadges[index].BorderBrush = statusBrush;
                 statusBadges[index].Background = camera == null ? Brushes.Transparent : new SolidColorBrush(Color.FromArgb(35, statusBrush.Color.R, statusBrush.Color.G, statusBrush.Color.B));
                 var neutralBrush = new SolidColorBrush(Color.FromRgb(213, 227, 238));
-                var uptimeBrush = camera == null || !camera.UptimePercent.HasValue
-                    ? neutralBrush
-                    : camera.UptimePercent.Value >= 90
-                        ? new SolidColorBrush(Color.FromRgb(39, 201, 109))
-                        : camera.UptimePercent.Value >= 50
-                            ? new SolidColorBrush(Color.FromRgb(255, 154, 61))
-                            : new SolidColorBrush(Color.FromRgb(255, 112, 133));
+                var uptimeBrush = GetUptimeBrush(camera);
                 cellRows[index][0].Foreground = neutralBrush;
                 cellRows[index][1].Foreground = uptimeBrush;
                 cellRows[index][2].Foreground = neutralBrush;
@@ -553,6 +547,24 @@ namespace V3SClient.UI.Views
             return camera.UptimePercent.Value >= 95
                 ? new SolidColorBrush(Color.FromRgb(255, 154, 61))
                 : new SolidColorBrush(Color.FromRgb(255, 112, 133));
+        }
+
+        private static SolidColorBrush GetUptimeBrush(ApiManager.CameraHealthAttentionCamera camera)
+        {
+            if (camera == null || !camera.UptimePercent.HasValue)
+                return new SolidColorBrush(Color.FromRgb(255, 154, 61));
+
+            var percent = Math.Max(0, Math.Min(100, camera.UptimePercent.Value));
+            // Smooth red -> amber -> green scale so the displayed color reflects the exact percentage.
+            var start = percent < 50 ? Color.FromRgb(255, 112, 133) : Color.FromRgb(255, 154, 61);
+            var end = percent < 50 ? Color.FromRgb(255, 154, 61) : Color.FromRgb(39, 201, 109);
+            var rangeStart = percent < 50 ? 0 : 50;
+            var range = percent < 50 ? 50 : 50;
+            var factor = (percent - rangeStart) / range;
+            return new SolidColorBrush(Color.FromRgb(
+                (byte)(start.R + (end.R - start.R) * factor),
+                (byte)(start.G + (end.G - start.G) * factor),
+                (byte)(start.B + (end.B - start.B) * factor)));
         }
 
         private static string FormatDuration(long totalSeconds)
